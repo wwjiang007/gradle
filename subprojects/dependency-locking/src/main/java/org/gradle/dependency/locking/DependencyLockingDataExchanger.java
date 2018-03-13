@@ -16,6 +16,8 @@
 
 package org.gradle.dependency.locking;
 
+import org.gradle.api.logging.Logger;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 class DependencyLockingDataExchanger {
+
+    private final Logger logger;
+
+    public DependencyLockingDataExchanger(Logger logger) {
+        this.logger = logger;
+    }
 
     enum LockfileHandling {
         VALIDATE,
@@ -61,8 +69,8 @@ class DependencyLockingDataExchanger {
         return upgradeModules.get();
     }
 
-    public void configurationResolved(String configurationName, Map<String, String> modules) {
-        if (lockfileHandling.get() != LockfileHandling.VALIDATE) {
+    public void configurationResolved(String configurationName, Map<String, String> modules, ConfigurationAfterResolveAction.LockValidationResult.LockValidationState validationResult) {
+        if (lockfileHandling.get() != LockfileHandling.VALIDATE || validationResult == ConfigurationAfterResolveAction.LockValidationResult.LockValidationState.VALID_APPENDED) {
             lockfileWriter.writeLockFile(configurationName, modules);
         } else {
             resolvedConfigurations.put(configurationName, modules);

@@ -30,10 +30,10 @@ import static java.util.Collections.emptyList;
 
 class LockFileReaderWriter implements LockfileReader, LockfileWriter {
 
-    private static final String FILE_SUFFIX = ".lockfile";
-    private static final String DEPENDENCY_LOCKING_FOLDER = "gradle/dependency-locks";
-    private static final Charset CHARSET = Charset.forName("UTF-8");
-    private static final String LOCKFILE_HEADER = "# This is a Gradle generated file for dependency locking.\n" +
+    static final String FILE_SUFFIX = ".lockfile";
+    static final String DEPENDENCY_LOCKING_FOLDER = "gradle/dependency-locks";
+    static final Charset CHARSET = Charset.forName("UTF-8");
+    static final String LOCKFILE_HEADER = "# This is a Gradle generated file for dependency locking.\n" +
                                                  "# Manual edits can break the build and are not advised.\n" +
                                                  "# This file is expected to be part of source control.\n";
 
@@ -75,7 +75,7 @@ class LockFileReaderWriter implements LockfileReader, LockfileWriter {
                 filterNonModuleLines(lines);
                 return lines;
             } else {
-                return emptyList();
+                return null;
             }
         } catch (IOException e) {
             throw new RuntimeException("Unable to load lock file");

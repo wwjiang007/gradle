@@ -31,7 +31,7 @@ public class DependencyLockingPlugin implements Plugin<ProjectInternal> {
 
     private static final Logger LOGGER = Logging.getLogger(DependencyLockingPlugin.class);
 
-    private final DependencyLockingDataExchanger dataExchanger = new DependencyLockingDataExchanger();
+    private final DependencyLockingDataExchanger dataExchanger = new DependencyLockingDataExchanger(LOGGER);
 
     private LockFileReaderWriter lockFileReaderWriter;
     private final DependencyFactory dependencyFactory;

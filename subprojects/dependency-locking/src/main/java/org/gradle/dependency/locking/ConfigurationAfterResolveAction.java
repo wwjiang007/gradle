@@ -25,9 +25,15 @@ import org.gradle.api.logging.Logging;
 import org.gradle.dependency.locking.DependencyLockingDataExchanger.LockfileHandling;
 import org.gradle.dependency.locking.exception.LockOutOfDateException;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+
+import static org.gradle.dependency.locking.exception.LockOutOfDateException.createLockOutOfDateException;
 
 class ConfigurationAfterResolveAction implements Action<ResolvableDependencies> {
 
@@ -45,28 +51,53 @@ class ConfigurationAfterResolveAction implements Action<ResolvableDependencies> 
     public void execute(ResolvableDependencies resolvableDependencies) {
         String configurationName = resolvableDependencies.getName();
         LOGGER.warn("Post resolve hook for {}", configurationName);
-        List<String> lines = lockfileReader.readLockFile(configurationName);
         Map<String, String> modules = getMapOfResolvedDependencies(resolvableDependencies);
         LockfileHandling lockFileHandling = dataExchanger.getLockFileHandling();
-        if (lockFileHandling != LockfileHandling.UPDATE_ALL) {
-            validateLockAligned(modules, lines);
+        LockValidationResult validationResult = validateLockAligned(lockFileHandling, modules, lockfileReader.readLockFile(configurationName));
+
+        switch(validationResult.state) {
+            case INVALID:
+                throw createLockOutOfDateException(validationResult.errors);
+            case VALID_APPENDED:
+                StringBuilder builder = new StringBuilder("Dependency lock found new modules:\n");
+                for (String extraModule : validationResult.extraModules) {
+                    builder.append("\t").append(extraModule).append("\n");
+                }
+                builder.append("\tLock file has been updated with these entries.");
+                LOGGER.lifecycle(builder.toString());
         }
 
-        dataExchanger.configurationResolved(configurationName, modules);
+        dataExchanger.configurationResolved(configurationName, modules, validationResult.state);
     }
 
-    private void validateLockAligned(Map<String, String> modules, List<String> lines) {
-        for (String line : lines) {
-            String module = line.substring(0, line.lastIndexOf(':'));
-            if (mustCheckModule(module)) {
-                String version = modules.get(module);
-                if (version == null) {
-                    throw new LockOutOfDateException("Lock file contained module '" + line + "' but it is not part of the resolved modules");
-                } else if (!line.contains(version)) {
-                    throw new LockOutOfDateException("Lock file expected '" + line + "' but resolution result was '" + module + ":" + version + "'");
+    private LockValidationResult validateLockAligned(LockfileHandling lockFileHandling, Map<String, String> modules, List<String> lines) {
+        LockValidationResult.LockValidationState state = LockValidationResult.LockValidationState.VALID;
+        if (lines == null) {
+            state = LockValidationResult.LockValidationState.NO_LOCK;
+        }
+        List<String> errors = new ArrayList<String>();
+        Set<String> extraModules = new HashSet<String>(modules.keySet());
+        if (state != LockValidationResult.LockValidationState.NO_LOCK && lockFileHandling != LockfileHandling.UPDATE_ALL) {
+            if (modules.keySet().size() > lines.size()) {
+                state = LockValidationResult.LockValidationState.VALID_APPENDED;
+            }
+            for (String line : lines) {
+                String module = line.substring(0, line.lastIndexOf(':'));
+                extraModules.remove(module);
+                if (mustCheckModule(module)) {
+                    String version = modules.get(module);
+                    if (version == null) {
+                        errors.add("Lock file contained '" + line + "' but it is not part of the resolved modules");
+                    } else if (!line.contains(version)) {
+                        errors.add("Lock file expected '" + line + "' but resolution result was '" + module + ":" + version + "'");
+                    }
                 }
             }
+            if (!errors.isEmpty()) {
+                state = LockValidationResult.LockValidationState.INVALID;
+            }
         }
+        return new LockValidationResult(state, errors, extraModules);
     }
 
     private boolean mustCheckModule(String module) {
@@ -83,5 +114,25 @@ class ConfigurationAfterResolveAction implements Action<ResolvableDependencies> 
         }
         LOGGER.warn("Found the following modules:\n\t{}", modules);
         return modules;
+    }
+
+
+    static class LockValidationResult {
+        enum LockValidationState {
+            VALID,
+            INVALID,
+            VALID_APPENDED,
+            NO_LOCK
+        }
+
+        final LockValidationState state;
+        final List<String> errors;
+        final Set<String> extraModules;
+
+        private LockValidationResult(LockValidationState state, List<String> errors, Set<String> extraModules) {
+            this.state = state;
+            this.errors = errors;
+            this.extraModules = extraModules;
+        }
     }
 }

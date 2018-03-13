@@ -16,8 +16,18 @@
 
 package org.gradle.dependency.locking.exception;
 
+import java.util.List;
+
 public class LockOutOfDateException extends RuntimeException {
-    public LockOutOfDateException(String message) {
-        super("Dependency lock out of date: " + message + ".");
+
+    public static LockOutOfDateException createLockOutOfDateException(List<String> errors) {
+        StringBuilder builder = new StringBuilder("Dependency lock out of date:\n");
+        for (String error : errors) {
+            builder.append("\t").append(error).append("\n");
+        }
+        return new LockOutOfDateException(builder.toString());
+    }
+    private LockOutOfDateException(String message) {
+        super(message);
     }
 }
