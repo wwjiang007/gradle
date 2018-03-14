@@ -16,6 +16,7 @@
 
 package org.gradle.dependency.locking;
 
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.internal.project.ProjectInternal;
 
 import java.io.IOException;
@@ -47,7 +48,7 @@ class LockFileReaderWriter implements LockfileReader, LockfileWriter {
         return lockFilesRoot.resolve(path);
     }
 
-    public void writeLockFile(String configurationName, Map<String, String> resolvedModules) {
+    public void writeLockFile(String configurationName, Map<String, ModuleComponentIdentifier> resolvedModules) {
         if (!Files.exists(lockFilesRoot)) {
             try {
                 Files.createDirectories(lockFilesRoot);
@@ -56,8 +57,8 @@ class LockFileReaderWriter implements LockfileReader, LockfileWriter {
             }
         }
         StringBuilder builder = new StringBuilder(LOCKFILE_HEADER);
-        for (Map.Entry<String, String> entry : resolvedModules.entrySet()) {
-            builder.append(entry.getKey()).append(':').append(entry.getValue()).append("\n");
+        for (Map.Entry<String, ModuleComponentIdentifier> entry : resolvedModules.entrySet()) {
+            builder.append(entry.getKey()).append(':').append(entry.getValue().getVersion()).append("\n");
         }
         try {
             Files.write(lockFilesRoot.resolve(configurationName + FILE_SUFFIX), builder.toString().getBytes(CHARSET));

@@ -16,10 +16,22 @@
 
 package org.gradle.dependency.locking;
 
-import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.Incubating;
 
-import java.util.Map;
+@Incubating
+public class DependencyLockingExtension {
 
-interface LockfileWriter {
-    void writeLockFile(String configurationName, Map<String, ModuleComponentIdentifier> resolvedModules);
+    private final DependencyLockingDataExchanger dataExchanger;
+
+    public DependencyLockingExtension(DependencyLockingDataExchanger dataExchanger) {
+        this.dataExchanger = dataExchanger;
+    }
+
+    public boolean isStrict() {
+        return dataExchanger.isStrict();
+    }
+
+    public void setStrict(boolean strict) {
+        dataExchanger.setStrict(strict);
+    }
 }

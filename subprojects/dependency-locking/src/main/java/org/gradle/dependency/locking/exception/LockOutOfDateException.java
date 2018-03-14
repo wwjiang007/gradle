@@ -16,17 +16,28 @@
 
 package org.gradle.dependency.locking.exception;
 
-import java.util.List;
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+
+import java.util.Collection;
 
 public class LockOutOfDateException extends RuntimeException {
 
-    public static LockOutOfDateException createLockOutOfDateException(List<String> errors) {
+    public static LockOutOfDateException createLockOutOfDateException(Iterable<String> errors) {
         StringBuilder builder = new StringBuilder("Dependency lock out of date:\n");
         for (String error : errors) {
             builder.append("\t").append(error).append("\n");
         }
         return new LockOutOfDateException(builder.toString());
     }
+
+    public static LockOutOfDateException createLockOutOfDateExceptionStrictMode(Collection<ModuleComponentIdentifier> extraModules) {
+        StringBuilder builder = new StringBuilder("Dependency lock out of date (strict mode):\n");
+        for (ModuleComponentIdentifier extraModule : extraModules) {
+            builder.append("Module missing from lock file: ").append(extraModule.getGroup()).append(":").append(extraModule.getModule()).append(":").append(extraModule.getVersion()).append("\n");
+        }
+        return new LockOutOfDateException(builder.toString());
+    }
+
     private LockOutOfDateException(String message) {
         super(message);
     }

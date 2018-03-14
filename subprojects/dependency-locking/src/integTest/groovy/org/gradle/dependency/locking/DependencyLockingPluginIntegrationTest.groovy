@@ -353,4 +353,41 @@ dependencies {
             "\tLock file expected 'org:foo:1.0' but resolution result was 'org:foo:1.1'")
     }
 
+    def 'fails in strict mode when new dependencies appear'() {
+        mavenRepo.module('org', 'foo', '1.0').publish()
+        mavenRepo.module('org', 'bar', '1.0').publish()
+
+        buildFile << """
+apply plugin: 'dependency-locking'
+
+repositories {
+    maven {
+        name 'repo'
+        url '${mavenRepo.uri}'
+    }
+}
+configurations {
+    lockedConf
+}
+
+dependencyLocking {
+    strict = true
+}
+
+dependencies {
+    lockedConf 'org:foo:1.+'
+    lockedConf 'org:bar:1.+'
+}
+"""
+
+        lockfileFixture.createLockfile('lockedConf',['org:foo:1.0'])
+
+        when:
+        fails 'dependencies'
+
+        then:
+        failure.assertHasCause("Dependency lock out of date (strict mode):\n" +
+            "Module missing from lock file: org:bar:1.0")
+    }
+
 }
