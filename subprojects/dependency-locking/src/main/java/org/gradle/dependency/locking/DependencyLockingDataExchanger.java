@@ -38,12 +38,10 @@ class DependencyLockingDataExchanger {
     private LockfileWriter lockfileWriter;
     private volatile boolean strict;
 
-    public boolean updateLockFileHandling(LockfileHandling updated) {
+    public void updateLockFileHandling(LockfileHandling updated) {
         if (lockfileHandling.compareAndSet(LockfileHandling.VALIDATE, updated)) {
             writePreviouslyResolvedConfigurations();
-            return true;
         }
-        return false;
     }
 
     private synchronized void writePreviouslyResolvedConfigurations() {
