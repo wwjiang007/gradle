@@ -52,10 +52,10 @@ public final class AggregatingProcessor extends DelegatingProcessor {
 
     private void recordAggregatedTypes(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
         if (getSupportedAnnotationTypes().contains("*")) {
-            result.addAggregatedTypes(ElementUtils.getTopLevelTypeNames(roundEnv.getRootElements()));
+            result.getAggregatedTypes().addAll(ElementUtils.getTopLevelTypeNames(roundEnv.getRootElements()));
         } else {
             for (TypeElement annotation : annotations) {
-                result.addAggregatedTypes(ElementUtils.getTopLevelTypeNames(roundEnv.getElementsAnnotatedWith(annotation)));
+                result.getAggregatedTypes().addAll(ElementUtils.getTopLevelTypeNames(roundEnv.getElementsAnnotatedWith(annotation)));
             }
         }
     }
