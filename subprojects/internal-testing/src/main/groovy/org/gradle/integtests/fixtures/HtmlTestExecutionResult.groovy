@@ -134,6 +134,10 @@ class HtmlTestExecutionResult implements TestExecutionResult {
             return this
         }
 
+        int getTestSkippedCount() {
+            return testsSkipped.size()
+        }
+
         TestClassExecutionResult assertTestPassed(String name) {
             assert testsSucceeded.contains(name);
             return this

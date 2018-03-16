@@ -138,6 +138,12 @@ class JUnitTestClassExecutionResult implements TestClassExecutionResult {
         this
     }
 
+    int getTestSkippedCount() {
+        return findTests().findAll { name, element ->
+            element."skipped".size() > 0 // Include only skipped test.
+        }.size()
+    }
+
     TestClassExecutionResult assertConfigMethodPassed(String name) {
         throw new UnsupportedOperationException();
     }
