@@ -73,6 +73,7 @@ public class IncrementalCompileFilesFactory {
         private final Map<File, IncludeDirectives> includeDirectivesMap = new HashMap<File, IncludeDirectives>();
         private final Map<File, FileDetails> visitedFiles = new HashMap<File, FileDetails>();
         private boolean hasUnresolvedHeaders;
+        private final ResolutionContext resolutionContext = new ResolutionContext(searchPath);
 
         DefaultIncementalCompileSourceProcessor(CompilationState previousCompileState) {
             this.previous = previousCompileState == null ? new CompilationState() : previousCompileState;
@@ -120,7 +121,7 @@ public class IncrementalCompileFilesFactory {
             if (fileDetails == null) {
                 Collection<FileVisitResult> fileDetailsCollection = sourceProcessorCache.get(file);
                 for (FileVisitResult candidate : fileDetailsCollection) {
-                    if (candidate.canReuse(new ResolutionContext(searchPath))) {
+                    if (candidate.canReuse(resolutionContext)) {
                         fileDetails = new FileDetails(null, null);
                         fileDetails.results = candidate;
                         visitedFiles.put(file, fileDetails);
@@ -224,7 +225,7 @@ public class IncrementalCompileFilesFactory {
      */
     private static class ResolutionContext {
         private final SourceIncludesSearchPath searchPath;
-        Set<File> visited = new HashSet<File>();
+        Map<File, Boolean> visited = new HashMap<File, Boolean>();
 
         ResolutionContext(SourceIncludesSearchPath searchPath) {
             this.searchPath = searchPath;
@@ -233,27 +234,28 @@ public class IncrementalCompileFilesFactory {
         /**
          * Returns {@code true} if the specified file haven't been check or {@code false} otherwise.
          */
-        public boolean canVisit(File file) {
-            return visited.add(file);
+        public Boolean getReuseResultFor(File file) {
+            return visited.get(file);
         }
 
         /**
          * Return {@code true} if the file match the previous resolution result or {@code false} otherwise.
          */
-        public boolean checkResolution(File sourceFile, SourceIncludesResolver.IncludeResolutionResult incFile) {
+        public boolean canReuseResolutionResult(File sourceFile, SourceIncludesResolver.IncludeResolutionResult incFile) {
             for (IncludeFile includeFile : incFile.getFiles()) {
                 IncludeFile foundFile;
                 if (includeFile.getIncludedType() == IncludeFile.IncludedType.QUOTED) {
-//                    SourceIncludesSearchPath quotedSearchPath = searchPath.asQuotedSearchPath(sourceFile);
                     foundFile = searchPath.searchForDependency(includeFile.getInclude(), sourceFile);
                 } else {
                     foundFile = searchPath.searchForDependency(includeFile.getInclude());
                 }
 
                 if (!includeFile.equals(foundFile)) {
+                    visited.put(sourceFile, false);
                     return false;
                 }
             }
+            visited.put(sourceFile, true);
             return true;
         }
     }
@@ -304,9 +306,12 @@ public class IncrementalCompileFilesFactory {
 
         @Override
         public boolean canReuse(ResolutionContext resolutionContext) {
-            if (resolutionContext.canVisit(file)) {
+            Boolean reuseResult = resolutionContext.getReuseResultFor(file);
+            if (reuseResult != null) {
+                return reuseResult;
+            } else {
                 for (SourceIncludesResolver.IncludeResolutionResult resolutionResult : includeFiles) {
-                    if (!resolutionContext.checkResolution(file, resolutionResult)) {
+                    if (!resolutionContext.canReuseResolutionResult(file, resolutionResult)) {
                         return false;
                     }
                 }
