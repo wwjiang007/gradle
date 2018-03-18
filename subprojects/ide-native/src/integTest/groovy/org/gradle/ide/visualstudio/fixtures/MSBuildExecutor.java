@@ -123,7 +123,7 @@ public class MSBuildExecutor {
                 System.out.println(error);
 
                 results.add(OutputScrapingExecutionResult.from(buildOutput, error));
-                output = output.substring(first + SEPARATOR.length());
+                output = output.substring(next + SEPARATOR.length());
             }
             error = "";
         }
