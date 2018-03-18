@@ -18,6 +18,7 @@ package org.gradle.ide.visualstudio
 
 import groovy.transform.NotYetImplemented
 import org.gradle.ide.visualstudio.fixtures.AbstractVisualStudioIntegrationSpec
+import org.gradle.integtests.fixtures.executer.InProcessGradleExecuter
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.fixtures.app.CppHelloWorldApp
 import org.gradle.util.Requires
@@ -303,6 +304,11 @@ class VisualStudioSingleProjectIntegrationTest extends AbstractVisualStudioInteg
         succeeds "visualStudio"
 
         when:
+        def stdout = System.out
+        def stderr = System.err
+        System.setOut(InProcessGradleExecuter.ORIGINAL_STD_OUT)
+        System.setErr(InProcessGradleExecuter.ORIGINAL_STD_OUT)
+
         debugBinaryLib.assertDoesNotExist()
         debugBinaryDll.assertDoesNotExist()
         def resultDebug = msbuild
@@ -311,10 +317,13 @@ class VisualStudioSingleProjectIntegrationTest extends AbstractVisualStudioInteg
             .succeeds()
 
         then:
+        System.setOut(stdout)
+        System.setErr(stderr)
+
         resultDebug.size() == 3
         resultDebug[0].assertTasksExecuted(':compileDebugStaticCpp', ':createDebugStatic')
-//        resultDebug[1].assertTasksExecuted()
-//        resultDebug[2].assertTasksExecuted(':compileDebugSharedCpp', ':linkDebugShared')
+        resultDebug[1].assertTasksExecuted()
+        resultDebug[2].assertTasksExecuted(':compileDebugSharedCpp', ':linkDebugShared')
         debugBinaryLib.assertExists()
         debugBinaryDll.assertExists()
     }

@@ -92,7 +92,10 @@ public class MSBuildExecutor {
     public List<ExecutionResult> succeeds(MSBuildAction action) {
         withArgument(toTargetArgument(action));
         ExecOutput result = findMSBuild().execute(args, buildEnvironment(workingDir));
+        System.out.println("--- OUTPUT ---");
         System.out.println(result.getOut());
+        System.out.println("--- ERROR ---");
+        System.out.println(result.getError());
         String output = trimLines(result.getOut());
         String error = trimLines(result.getError());
         List<ExecutionResult> results = new ArrayList<ExecutionResult>();
@@ -104,10 +107,22 @@ public class MSBuildExecutor {
         while (output.length() > 0) {
             int next = output.indexOf(SEPARATOR);
             if (next < 0) {
+                System.out.println("--- BUILD OUTPUT ---");
+                System.out.println(output);
+                System.out.println("--- BUILD ERROR ---");
+                System.out.println(error);
+
                 results.add(OutputScrapingExecutionResult.from(output, error));
                 output = "";
             } else {
-                results.add(OutputScrapingExecutionResult.from(output.substring(0, next), error));
+                String buildOutput = output.substring(0, next);
+
+                System.out.println("--- BUILD OUTPUT ---");
+                System.out.println(buildOutput);
+                System.out.println("--- BUILD ERROR ---");
+                System.out.println(error);
+
+                results.add(OutputScrapingExecutionResult.from(buildOutput, error));
                 output = output.substring(first + SEPARATOR.length());
             }
             error = "";

@@ -112,8 +112,8 @@ public class InProcessGradleExecuter extends AbstractGradleExecuter {
 
     public static final TestFile COMMON_TMP = new TestFile(new File("build/tmp"));
 
-    private final static PrintStream ORIGINAL_STD_OUT = System.out;
-    private final static PrintStream ORIGINAL_STD_ERR = System.err;
+    public final static PrintStream ORIGINAL_STD_OUT = System.out;
+    public final static PrintStream ORIGINAL_STD_ERR = System.err;
 
     static {
         LoggingManagerInternal loggingManager = GLOBAL_SERVICES.getFactory(LoggingManagerInternal.class).create();
