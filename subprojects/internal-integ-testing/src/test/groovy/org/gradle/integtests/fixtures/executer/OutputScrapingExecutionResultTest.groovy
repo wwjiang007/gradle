@@ -16,6 +16,7 @@
 
 package org.gradle.integtests.fixtures.executer
 
+import org.gradle.util.TextUtil
 import spock.lang.Specification
 
 
@@ -171,22 +172,22 @@ post build
 
         then:
         def e = thrown(AssertionError)
-        e.message.startsWith('''
+        e.message.startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a]
             Actual: [:a, :b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksExecuted(":a", ":b", ":c")
 
         then:
         def e2 = thrown(AssertionError)
-        e2.message.startsWith('''
+        e2.message.startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a, :b, :c]
             Actual: [:a, :b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksExecutedInOrder(":b", ":a")
@@ -200,110 +201,110 @@ post build
 
         then:
         def e4 = thrown(AssertionError)
-        e4.message.startsWith('''
+        e4.message.startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a]
             Actual: [:a, :b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksExecutedInOrder(":a", ":b", ":c")
 
         then:
         def e5 = thrown(AssertionError)
-        e5.message.startsWith('''
+        e5.message.startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a, :b, :c]
             Actual: [:a, :b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksSkipped()
 
         then:
         def e6 = thrown(AssertionError)
-        e6.message.startsWith('''
+        e6.message.startsWith(error('''
             Build output does not contain the expected skipped tasks.
             Expected: []
             Actual: [:b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksSkipped(":a")
 
         then:
         def e7 = thrown(AssertionError)
-        e7.message.startsWith('''
+        e7.message.startsWith(error('''
             Build output does not contain the expected skipped tasks.
             Expected: [:a]
             Actual: [:b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksSkipped(":b", ":c")
 
         then:
         def e8 = thrown(AssertionError)
-        e8.message.startsWith('''
+        e8.message.startsWith(error('''
             Build output does not contain the expected skipped tasks.
             Expected: [:b, :c]
             Actual: [:b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTaskSkipped(":a")
 
         then:
         def e9 = thrown(AssertionError)
-        e9.message.startsWith('''
+        e9.message.startsWith(error('''
             Build output does not contain the expected skipped task.
             Expected: :a
             Actual: [:b]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksNotSkipped()
 
         then:
         def e10 = thrown(AssertionError)
-        e10.message.startsWith('''
+        e10.message.startsWith(error('''
             Build output does not contain the expected non skipped tasks.
             Expected: []
             Actual: [:a]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksNotSkipped(":b")
 
         then:
         def e11 = thrown(AssertionError)
-        e11.message.startsWith('''
+        e11.message.startsWith(error('''
             Build output does not contain the expected non skipped tasks.
             Expected: [:b]
             Actual: [:a]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTasksNotSkipped(":a", ":c")
 
         then:
         def e12 = thrown(AssertionError)
-        e12.message.startsWith('''
+        e12.message.startsWith(error('''
             Build output does not contain the expected non skipped tasks.
             Expected: [:a, :c]
             Actual: [:a]
-        '''.stripIndent().trim())
+        '''))
 
         when:
         result.assertTaskNotSkipped(":b")
 
         then:
         def e13 = thrown(AssertionError)
-        e13.message.startsWith('''
+        e13.message.startsWith(error('''
             Build output does not contain the expected non skipped task.
             Expected: :b
             Actual: [:a]
-        '''.stripIndent().trim())
+        '''))
     }
 
     def "creates failure result"() {
@@ -319,5 +320,9 @@ post build
 
         then:
         result instanceof OutputScrapingExecutionFailure
+    }
+
+    def error(String text) {
+        return TextUtil.normaliseLineSeparators(text.stripIndent().trim())
     }
 }
