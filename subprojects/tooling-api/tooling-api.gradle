@@ -1,9 +1,28 @@
+import org.gradle.api.attributes.Attribute
 import org.gradle.gradlebuild.BuildEnvironment
+import org.gradle.gradlebuild.packaging.ShadeClassesTransform
 import org.gradle.gradlebuild.packaging.ShadedJar
 import org.gradle.gradlebuild.unittestandcompile.ModuleType
 
+def ARTIFACT_TYPE = Attribute.of('artifactType', String)
+
+
 configurations {
     testPublishRuntime
+    relocatedClasses {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+        extendsFrom(runtimeClasspath)
+        attributes.attribute(ARTIFACT_TYPE, 'relocated_classes')
+    }
+}
+
+task testResolution {
+    inputs.files(configurations.relocatedClasses)
+    doLast {
+        configurations.relocatedClasses.files.forEach {
+            println it
+        }
+    }
 }
 
 dependencies {
@@ -24,6 +43,19 @@ dependencies {
     crossVersionTestRuntime project(':buildComparison')
     crossVersionTestRuntime project(":ivy")
     crossVersionTestRuntime project(":maven")
+
+    registerTransform {
+        from.attribute(ARTIFACT_TYPE, 'jar')
+        to.attribute(ARTIFACT_TYPE, 'relocated_classes')
+        artifactTransform(ShadeClassesTransform) {
+            params(
+                "org.gradle.internal.impldep",
+                ["org.gradle.tooling"] as Set,
+                ["org.gradle", "org.slf4j", "sun.misc"] as Set,
+                ["org.gradle.tooling.provider.model"] as Set
+            )
+        }
+    }
 }
 
 gradlebuildJava {
