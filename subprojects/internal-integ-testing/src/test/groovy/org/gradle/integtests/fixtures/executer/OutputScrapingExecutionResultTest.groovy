@@ -16,11 +16,18 @@
 
 package org.gradle.integtests.fixtures.executer
 
-import org.gradle.util.TextUtil
-import spock.lang.Specification
+import spock.lang.Unroll
 
+class OutputScrapingExecutionResultTest extends AbstractExecutionResultTest {
+    def "can have empty output"() {
+        def result = OutputScrapingExecutionResult.from("", "")
 
-class OutputScrapingExecutionResultTest extends Specification {
+        expect:
+        result.output.empty
+        result.normalizedOutput.empty
+        result.error.empty
+    }
+
     def "normalizes line ending in output"() {
         def output = "\n\r\nabc\r\n\n"
         def error = "\r\n\nerror\n\r\n"
@@ -28,6 +35,7 @@ class OutputScrapingExecutionResultTest extends Specification {
 
         expect:
         result.output == "\n\nabc\n\n"
+        result.normalizedOutput == "\n\nabc\n\n"
         result.error == "\n\nerror\n\n"
     }
 
@@ -38,12 +46,14 @@ class OutputScrapingExecutionResultTest extends Specification {
 
         expect:
         result.output == output
+        result.normalizedOutput == output
         result.error == error
     }
 
     def "can assert build output is present in main content"() {
         def output = """
 message
+message 2
 
 BUILD SUCCESSFUL in 12s
 
@@ -54,27 +64,103 @@ post build
 
         then:
         result.assertOutputContains("message")
+        result.assertOutputContains("\nmessage\nmessage 2")
+        result.assertOutputContains("\nmessage\nmessage 2\n")
+        result.assertOutputContains("\r\nmessage\r\nmessage 2")
 
         when:
         result.assertOutputContains("missing")
 
         then:
         def e = thrown(AssertionError)
-        e.message.startsWith('Substring not found in build output')
+        error(e).startsWith(error('''
+            Did not find expected text in build output.
+            Expected: missing
+             
+            Build output:
+            =======
+             
+            message
+            message 2
+             
+            Output:
+        '''))
 
         when:
         result.assertOutputContains("post build")
 
         then:
         def e2 = thrown(AssertionError)
-        e2.message.startsWith('Substring not found in build output')
+        error(e2).startsWith(error('''
+            Did not find expected text in build output.
+            Expected: post build
+             
+            Build output:
+            =======
+             
+            message
+            message 2
+             
+            Output:
+        '''))
 
         when:
         result.assertOutputContains("BUILD")
 
         then:
         def e3 = thrown(AssertionError)
-        e3.message.startsWith('Substring not found in build output')
+        error(e3).startsWith(error('''
+            Did not find expected text in build output.
+            Expected: BUILD
+             
+            Build output:
+            =======
+             
+            message
+            message 2
+             
+            Output:
+        '''))
+
+        when:
+        result.assertOutputContains("message extra")
+
+        then:
+        def e4 = thrown(AssertionError)
+        error(e4).startsWith(error('''
+            Did not find expected text in build output.
+            Expected: message extra
+             
+            Build output:
+            =======
+             
+            message
+            message 2
+             
+            Output:
+        '''))
+
+        when:
+        result.assertOutputContains("\n\nmessage\n\n")
+
+        then:
+        def e6 = thrown(AssertionError)
+        error(e6).startsWith(error('''
+            Did not find expected text in build output.
+            Expected: 
+
+            message
+            
+            
+            
+            Build output:
+            =======
+             
+            message
+            message 2
+             
+            Output:
+        '''))
     }
 
     def "can assert post build output is present"() {
@@ -84,33 +170,153 @@ message
 BUILD SUCCESSFUL in 12s
 
 post build
+more post build
 """
         when:
         def result = OutputScrapingExecutionResult.from(output, "")
 
         then:
         result.assertHasPostBuildOutput("post build")
+        result.assertHasPostBuildOutput("post build\nmore post build\n")
+        result.assertHasPostBuildOutput("post build\r\nmore post build\r\n")
+        result.assertHasPostBuildOutput("\npost build\n")
+        result.assertHasPostBuildOutput("\r\npost build\r\nmore")
 
         when:
         result.assertHasPostBuildOutput("missing")
 
         then:
         def e = thrown(AssertionError)
-        e.message.startsWith('Substring not found in build output')
+        error(e).startsWith(error('''
+            Did not find expected text in post-build output.
+            Expected: missing
+            
+            Post-build output:
+            =======
+             
+            post build
+            more post build
+             
+            Output:
+        '''))
 
         when:
         result.assertHasPostBuildOutput("message")
 
         then:
         def e2 = thrown(AssertionError)
-        e2.message.startsWith('Substring not found in build output')
+        error(e2).startsWith(error('''
+            Did not find expected text in post-build output.
+            Expected: message
+            
+            Post-build output:
+            =======
+             
+            post build
+            more post build
+             
+            Output:
+        '''))
 
         when:
         result.assertHasPostBuildOutput("BUILD")
 
         then:
         def e3 = thrown(AssertionError)
-        e3.message.startsWith('Substring not found in build output')
+        error(e3).startsWith(error('''
+            Did not find expected text in post-build output.
+            Expected: BUILD
+            
+            Post-build output:
+            =======
+             
+            post build
+            more post build
+             
+            Output:
+        '''))
+
+        when:
+        result.assertHasPostBuildOutput("post build extra")
+
+        then:
+        def e4 = thrown(AssertionError)
+        error(e4).startsWith(error('''
+            Did not find expected text in post-build output.
+            Expected: post build extra
+            
+            Post-build output:
+            =======
+             
+            post build
+            more post build
+             
+            Output:
+        '''))
+
+        when:
+        result.assertHasPostBuildOutput("post build\n\n")
+
+        then:
+        def e5 = thrown(AssertionError)
+        error(e5).startsWith(error('''
+            Did not find expected text in post-build output.
+            Expected: post build
+
+
+            
+            Post-build output:
+            =======
+             
+            post build
+            more post build
+             
+            Output:
+        '''))
+    }
+
+    @Unroll
+    def "can assert output is not present = #text"() {
+        def output = """
+message
+
+BUILD SUCCESSFUL in 12s
+
+post build
+more post build
+"""
+        def errorOut = """
+broken
+"""
+        when:
+        def result = OutputScrapingExecutionResult.from(output, errorOut)
+
+        then:
+        result.assertNotOutput("missing")
+        result.assertNotOutput("missing extra")
+        result.assertNotOutput("missing\n\nBUILD FAILED")
+        result.assertNotOutput("missing\n\n\nBUILD")
+
+        when:
+        result.assertNotOutput(text)
+
+        then:
+        def e = thrown(AssertionError)
+        error(e).startsWith(error("""
+Found unexpected text in build output.
+Expected not present: ${text}
+
+Output:
+"""))
+
+        where:
+        text               | _
+        "message"          | _
+        "message\n\nBUILD" | _
+        "BUILD"            | _
+        "post"             | _
+        "broken"           | _
+        "broken\n"         | _
     }
 
     def "can assert task is present when task output is split into several groups"() {
@@ -172,7 +378,7 @@ post build
 
         then:
         def e = thrown(AssertionError)
-        e.message.startsWith(error('''
+        error(e).startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a]
             Actual: [:a, :b]
@@ -183,7 +389,7 @@ post build
 
         then:
         def e2 = thrown(AssertionError)
-        e2.message.startsWith(error('''
+        error(e2).startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a, :b, :c]
             Actual: [:a, :b]
@@ -201,7 +407,7 @@ post build
 
         then:
         def e4 = thrown(AssertionError)
-        e4.message.startsWith(error('''
+        error(e4).startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a]
             Actual: [:a, :b]
@@ -212,7 +418,7 @@ post build
 
         then:
         def e5 = thrown(AssertionError)
-        e5.message.startsWith(error('''
+        error(e5).startsWith(error('''
             Build output does not contain the expected tasks.
             Expected: [:a, :b, :c]
             Actual: [:a, :b]
@@ -223,7 +429,7 @@ post build
 
         then:
         def e6 = thrown(AssertionError)
-        e6.message.startsWith(error('''
+        error(e6).startsWith(error('''
             Build output does not contain the expected skipped tasks.
             Expected: []
             Actual: [:b]
@@ -234,7 +440,7 @@ post build
 
         then:
         def e7 = thrown(AssertionError)
-        e7.message.startsWith(error('''
+        error(e7).startsWith(error('''
             Build output does not contain the expected skipped tasks.
             Expected: [:a]
             Actual: [:b]
@@ -245,7 +451,7 @@ post build
 
         then:
         def e8 = thrown(AssertionError)
-        e8.message.startsWith(error('''
+        error(e8).startsWith(error('''
             Build output does not contain the expected skipped tasks.
             Expected: [:b, :c]
             Actual: [:b]
@@ -256,7 +462,7 @@ post build
 
         then:
         def e9 = thrown(AssertionError)
-        e9.message.startsWith(error('''
+        error(e9).startsWith(error('''
             Build output does not contain the expected skipped task.
             Expected: :a
             Actual: [:b]
@@ -267,7 +473,7 @@ post build
 
         then:
         def e10 = thrown(AssertionError)
-        e10.message.startsWith(error('''
+        error(e10).startsWith(error('''
             Build output does not contain the expected non skipped tasks.
             Expected: []
             Actual: [:a]
@@ -278,7 +484,7 @@ post build
 
         then:
         def e11 = thrown(AssertionError)
-        e11.message.startsWith(error('''
+        error(e11).startsWith(error('''
             Build output does not contain the expected non skipped tasks.
             Expected: [:b]
             Actual: [:a]
@@ -289,7 +495,7 @@ post build
 
         then:
         def e12 = thrown(AssertionError)
-        e12.message.startsWith(error('''
+        error(e12).startsWith(error('''
             Build output does not contain the expected non skipped tasks.
             Expected: [:a, :c]
             Actual: [:a]
@@ -300,7 +506,7 @@ post build
 
         then:
         def e13 = thrown(AssertionError)
-        e13.message.startsWith(error('''
+        error(e13).startsWith(error('''
             Build output does not contain the expected non skipped task.
             Expected: :b
             Actual: [:a]
@@ -320,9 +526,5 @@ post build
 
         then:
         result instanceof OutputScrapingExecutionFailure
-    }
-
-    def error(String text) {
-        return TextUtil.normaliseLineSeparators(text.stripIndent().trim())
     }
 }
