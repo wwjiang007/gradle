@@ -23,6 +23,7 @@ import org.gradle.testkit.runner.fixtures.InspectsExecutedTasks
 
 import static org.gradle.testkit.runner.TaskOutcome.FAILED
 import static org.gradle.testkit.runner.TaskOutcome.SUCCESS
+import static org.gradle.util.TextUtil.normaliseLineSeparators
 
 class GradleRunnerBuildFailureIntegrationTest extends BaseGradleRunnerIntegrationTest {
 
@@ -101,7 +102,7 @@ $t.buildResult.output"""
         buildOutput.assertTasksExecuted(":helloWorld")
         buildOutput.groupedOutput.task(":helloWorld").output == "Hello world!"
 
-        t.message.startsWith(expectedMessage)
+        normaliseLineSeparators(t.message).startsWith(normaliseLineSeparators(expectedMessage))
         t.buildResult.taskPaths(SUCCESS) == [':helloWorld']
     }
 
@@ -151,7 +152,7 @@ $t.buildResult.output"""
         failure.assertHasDescription("Execution failed for task ':helloWorld'.")
         failure.assertHasCause('Unexpected exception')
 
-        t.message.startsWith(expectedMessage)
+        normaliseLineSeparators(t.message).startsWith(normaliseLineSeparators(expectedMessage))
         t.buildResult.taskPaths(FAILED) == [':helloWorld']
     }
 
