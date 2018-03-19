@@ -212,7 +212,7 @@ class AbstractIntegrationSpec extends Specification {
 
     protected void skipped(String... tasks) {
         tasks.each {
-            result.assertTasksSkipped(it)
+            result.assertTaskSkipped(it)
         }
     }
 
