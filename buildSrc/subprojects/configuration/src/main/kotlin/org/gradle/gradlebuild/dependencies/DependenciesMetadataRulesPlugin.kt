@@ -15,186 +15,208 @@
  */
 package org.gradle.gradlebuild.dependencies
 
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.google.gson.stream.JsonReader
 import library
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.artifacts.DirectDependenciesMetadata
+import org.gradle.api.artifacts.ComponentMetadataContext
+import org.gradle.api.artifacts.ComponentMetadataRule
+import org.gradle.api.artifacts.ConfigurationContainer
 import org.gradle.api.artifacts.dsl.ComponentMetadataHandler
 import org.gradle.kotlin.dsl.dependencies
+import java.io.File
+import javax.inject.Inject
+import kotlin.reflect.KClass
+
 
 open class DependenciesMetadataRulesPlugin : Plugin<Project> {
     override fun apply(project: Project): Unit = project.run {
         dependencies {
             components {
                 // Gradle distribution - minify: remove unused transitive dependencies
-                withLibraryDependencies(library("maven3")) {
-                    removeAll {
-                        it.name != "maven-settings-builder" &&
-                            it.name != "maven-model" &&
-                            it.name != "maven-model-builder" &&
-                            it.name != "maven-artifact" &&
-                            it.name != "maven-aether-provider" &&
-                            it.group != "org.sonatype.aether"
-                    }
-                }
-                withLibraryDependencies(library("awsS3_core")) {
-                    removeAll { it.name == "jackson-dataformat-cbor" }
-                }
-                withLibraryDependencies(library("jgit")) {
-                    removeAll { it.group == "com.googlecode.javaewah" }
-                }
-                withLibraryDependencies(library("maven3_wagon_http_shared4")) {
-                    removeAll { it.group == "org.jsoup" }
-                }
-                withLibraryDependencies(library("aether_connector")) {
-                    removeAll { it.group == "org.sonatype.sisu" }
-                }
-                withLibraryDependencies(library("maven3_compat")) {
-                    removeAll { it.group == "org.sonatype.sisu" }
-                }
-                withLibraryDependencies(library("maven3_plugin_api")) {
-                    removeAll { it.group == "org.sonatype.sisu" }
-                }
+                withModule(library("maven3"), MavenDependencyCleaningRule::class.java)
+                withLibraryDependencies(library("awsS3_core"), DependencyRemovalByNameRule::class, setOf("jackson-dataformat-cbor"))
+                withLibraryDependencies(library("jgit"), DependencyRemovalByGroupRule::class, setOf("com.googlecode.javaewah"))
+                withLibraryDependencies(library("maven3_wagon_http_shared4"), DependencyRemovalByGroupRule::class, setOf("org.jsoup"))
+                withLibraryDependencies(library("aether_connector"), DependencyRemovalByGroupRule::class, setOf("org.sonatype.sisu"))
+                withLibraryDependencies(library("maven3_compat"), DependencyRemovalByGroupRule::class, setOf("org.sonatype.sisu"))
+                withLibraryDependencies(library("maven3_plugin_api"), DependencyRemovalByGroupRule::class, setOf("org.sonatype.sisu"))
 
-                // Gradle distribution - replace similar library with different coordinates
-                replaceGoogleCollectionsWithGuava("org.codehaus.plexus:plexus-container-default")
+                // Read capabilities declared in capabilities.json
+                readCapabilitiesFromJson()
 
-                replaceJunitDepWithJunit("org.jmock:jmock-junit4")
-
-                replaceBeanshellWithApacheBeanshell("org.testng:testng")
-
-                replaceLog4JWithAdapter("org.apache.xbean:xbean-reflect")
-
-                replaceJCLWithAdapter("org.apache.xbean:xbean-reflect")
-                replaceJCLWithAdapter("org.apache.httpcomponents:httpclient")
-                replaceJCLWithAdapter("com.amazonaws:aws-java-sdk-core")
-                replaceJCLWithAdapter("org.apache.httpcomponents:httpmime")
-                replaceJCLWithAdapter("net.sourceforge.htmlunit:htmlunit")
-                replaceJCLWithAdapter("org.apache.maven.wagon:wagon-http")
-                replaceJCLWithAdapter("org.apache.maven.wagon:wagon-http-shared4")
-
-                replaceJCLConstraintWithAdapter("org.codehaus.groovy:groovy-all")
-
-                replaceAsmWithOW2Asm("com.google.code.findbugs:findbugs")
-                replaceAsmWithOW2Asm("org.parboiled:parboiled-java")
+                withModule("org.spockframework:spock-core", ReplaceCglibNodepWithCglibRule::class.java)
+                withModule("org.jmock:jmock-legacy", ReplaceCglibNodepWithCglibRule::class.java)
 
                 //TODO check if we can upgrade the following dependencies and remove the rules
-                downgradeIvy("org.codehaus.groovy:groovy-all")
-                downgradeTestNG("org.codehaus.groovy:groovy-all")
+                withModule("org.codehaus.groovy:groovy-all", DowngradeIvyRule::class.java)
+                withModule("org.codehaus.groovy:groovy-all", DowngradeTestNGRule::class.java)
 
-                downgradeXmlApis("jaxen:jaxen")
-                downgradeXmlApis("jdom:jdom")
-                downgradeXmlApis("xalan:xalan")
-                downgradeXmlApis("jaxen:jaxen")
+                withModule("jaxen:jaxen", DowngradeXmlApisRule::class.java)
+                withModule("jdom:jdom", DowngradeXmlApisRule::class.java)
+                withModule("xalan:xalan", DowngradeXmlApisRule::class.java)
+                withModule("jaxen:jaxen", DowngradeXmlApisRule::class.java)
+
+                // Test dependencies - minify: remove unused transitive dependencies
+                withLibraryDependencies("org.littleshoot:littleproxy", DependencyRemovalByNameRule::class,
+                    setOf("barchart-udt-bundle", "guava", "commons-cli"))
+            }
+        }
+    }
+
+    private
+    fun Project.readCapabilitiesFromJson() {
+        val capabilitiesFile = gradle.rootProject.file("gradle/dependency-management/capabilities.json")
+        if (capabilitiesFile.exists()) {
+            readCapabilities(capabilitiesFile).forEach {
+                it.configure(dependencies.components, configurations)
+            }
+        }
+    }
+
+    private
+    fun readCapabilities(source: File): List<CapabilitySpec> {
+        val gson = Gson()
+        val reader = JsonReader(source.reader(Charsets.UTF_8))
+        try {
+            reader.isLenient = true
+            return gson.fromJson<List<CapabilitySpec>>(reader)
+        } finally {
+            reader.close()
+        }
+    }
+}
+
+
+inline
+fun <reified T> Gson.fromJson(json: JsonReader) = this.fromJson<T>(json, object : TypeToken<T>() {}.type)
+
+
+open class CapabilityRule @Inject constructor(
+    val name: String,
+    val version: String
+) : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
+            withCapabilities {
+                addCapability("org.gradle.internal.capability", name, version)
             }
         }
     }
 }
 
-fun ComponentMetadataHandler.withLibraryDependencies(module: String, action: DirectDependenciesMetadata.() -> Any) {
-    withModule(module) {
-        allVariants {
-            withDependencies {
-                action()
+
+class CapabilitySpec {
+    lateinit var name: String
+    lateinit var providedBy: List<String>
+    lateinit var selected: String
+    var upgrade: String? = null
+
+    internal
+    fun configure(components: ComponentMetadataHandler, configurations: ConfigurationContainer) {
+        if (upgrade != null) {
+            configurations.forceUpgrade(selected, upgrade!!)
+        } else {
+            providedBy.forEachIndexed { idx, provider ->
+                if (provider != selected) {
+                    components.declareSyntheticCapability(provider, idx.toString())
+                }
+            }
+            components.declareCapabilityPreference(selected)
+        }
+    }
+
+    private
+    fun ComponentMetadataHandler.declareSyntheticCapability(provider: String, version: String) {
+        withModule(provider, CapabilityRule::class.java, {
+            params(name)
+            params(version)
+        })
+    }
+
+    private
+    fun ComponentMetadataHandler.declareCapabilityPreference(module: String) {
+        withModule(module, CapabilityRule::class.java, {
+            params(name)
+            params("${providedBy.size + 1}")
+        })
+    }
+
+    /**
+     * For all modules providing a capability, always use the preferred module, even if there's no conflict.
+     * In other words, will forcefully upgrade all modules providing a capability to a selected module.
+     *
+     * @param to the preferred module
+     */
+    private
+    fun ConfigurationContainer.forceUpgrade(to: String, version: String) = all {
+        resolutionStrategy.dependencySubstitution {
+            providedBy.forEach { source ->
+                substitute(module(source))
+                    .because("Forceful upgrade of capability $name")
+                    .with(module("$to:$version"))
             }
         }
     }
 }
 
-fun ComponentMetadataHandler.replaceJCLWithAdapter(module: String) {
-    withModule(module) {
-        allVariants {
+
+open class DependencyRemovalByNameRule @Inject constructor(
+    val moduleToRemove: Set<String>
+) : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
             withDependencies {
-                removeAll { it.group == "commons-logging" }
-                add("org.slf4j:jcl-over-slf4j:1.7.10") {
-                    because("We do not want non-slf4j logging implementations on the classpath")
+                removeAll { moduleToRemove.contains(it.name) }
+            }
+        }
+    }
+}
+
+
+open class DependencyRemovalByGroupRule @Inject constructor(
+    val groupsToRemove: Set<String>
+) : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
+            withDependencies {
+                removeAll { groupsToRemove.contains(it.group) }
+            }
+        }
+    }
+}
+
+
+open class MavenDependencyCleaningRule : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
+            withDependencies {
+                removeAll {
+                    it.name != "maven-settings-builder" &&
+                        it.name != "maven-model" &&
+                        it.name != "maven-model-builder" &&
+                        it.name != "maven-artifact" &&
+                        it.name != "maven-aether-provider" &&
+                        it.group != "org.sonatype.aether"
                 }
             }
         }
     }
 }
 
-fun ComponentMetadataHandler.replaceJCLConstraintWithAdapter(module: String) {
-    withModule(module) {
-        allVariants {
-            withDependencyConstraints {
-                removeAll { it.group == "commons-logging" }
-                add("org.slf4j:jcl-over-slf4j:1.7.10") {
-                    because("We do not want non-slf4j logging implementations on the classpath")
-                }
-            }
-        }
-    }
+
+fun ComponentMetadataHandler.withLibraryDependencies(module: String, kClass: KClass<out ComponentMetadataRule>, modulesToRemove: Set<String>) {
+    withModule(module, kClass.java, {
+        params(modulesToRemove)
+    })
 }
 
-fun ComponentMetadataHandler.replaceLog4JWithAdapter(module: String) {
-    withModule(module) {
-        allVariants {
-            withDependencies {
-                removeAll { it.group == "log4j" }
-                add("org.slf4j:log4j-over-slf4j:1.7.16") {
-                    because("We do not want non-slf4j logging implementations on the classpath")
-                }
-            }
-        }
-    }
-}
 
-fun ComponentMetadataHandler.replaceGoogleCollectionsWithGuava(module: String) {
-    withModule(module) {
-        allVariants {
-            withDependencies {
-                removeAll { it.group == "com.google.collections" }
-                add("com.google.guava:guava-jdk5:17.0") {
-                    because("Guava replaces google collections")
-                }
-            }
-        }
-    }
-}
-
-fun ComponentMetadataHandler.replaceJunitDepWithJunit(module: String) {
-    withModule(module) {
-        allVariants {
-            withDependencies {
-                removeAll { it.group == "junit" }
-                add("junit:junit:4.12") {
-                    because("junit:junit replaced junit:junit-dep")
-                }
-            }
-        }
-    }
-}
-
-fun ComponentMetadataHandler.replaceAsmWithOW2Asm(module: String) {
-    withModule(module) {
-        allVariants {
-            withDependencies {
-                filter { it.group == "asm" }.forEach {
-                    add("org.ow2.asm:${it.name}")
-                }
-                removeAll { it.group == "asm" }
-            }
-        }
-    }
-}
-
-fun ComponentMetadataHandler.replaceBeanshellWithApacheBeanshell(module: String) {
-    withModule(module) {
-        allVariants {
-            withDependencies {
-                removeAll { it.group == "org.beanshell" }
-                add("org.apache-extras.beanshell:bsh:2.0b6") {
-                    because("org.apache-extras.beanshell:bsh replaced junit:junit-dep")
-                }
-            }
-        }
-    }
-}
-
-fun ComponentMetadataHandler.downgradeIvy(module: String) {
-    withModule(module) {
-        allVariants {
+open class DowngradeIvyRule : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
             withDependencyConstraints {
                 filter { it.group == "org.apache.ivy" }.forEach {
                     it.version { prefer("2.2.0") }
@@ -205,9 +227,10 @@ fun ComponentMetadataHandler.downgradeIvy(module: String) {
     }
 }
 
-fun ComponentMetadataHandler.downgradeTestNG(module: String) {
-    withModule(module) {
-        allVariants {
+
+open class DowngradeTestNGRule : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
             withDependencyConstraints {
                 filter { it.group == "org.testng" }.forEach {
                     it.version { prefer("6.3.1") }
@@ -218,9 +241,10 @@ fun ComponentMetadataHandler.downgradeTestNG(module: String) {
     }
 }
 
-fun ComponentMetadataHandler.downgradeXmlApis(module: String) {
-    withModule(module) {
-        allVariants {
+
+open class DowngradeXmlApisRule : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
             withDependencies {
                 filter { it.group == "xml-apis" }.forEach {
                     it.version { prefer("1.4.01") }
@@ -231,3 +255,16 @@ fun ComponentMetadataHandler.downgradeXmlApis(module: String) {
     }
 }
 
+
+open class ReplaceCglibNodepWithCglibRule : ComponentMetadataRule {
+    override fun execute(context: ComponentMetadataContext) {
+        context.details.allVariants {
+            withDependencies {
+                filter { it.name == "cglib-nodep" }.forEach {
+                    add("${it.group}:cglib:3.2.6")
+                }
+                removeAll { it.name == "cglib-nodep" }
+            }
+        }
+    }
+}

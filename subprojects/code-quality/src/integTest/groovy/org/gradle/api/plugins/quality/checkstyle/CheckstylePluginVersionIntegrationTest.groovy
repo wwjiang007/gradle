@@ -20,6 +20,7 @@ import org.gradle.integtests.fixtures.MultiVersionIntegrationSpec
 import org.gradle.integtests.fixtures.TargetCoverage
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.quality.integtest.fixtures.CheckstyleCoverage
+import org.gradle.util.Matchers
 import org.gradle.util.Resources
 import org.gradle.util.ToBeImplemented
 import org.hamcrest.Matcher
@@ -125,7 +126,11 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
 
         expect:
         succeeds("check")
+        // Issue #881:
+        // Checkstyle violations are reported even when build passing with ignoreFailures
         output.contains("Checkstyle rule violations were found. See the report at:")
+        output.contains("Checkstyle files with violations: 2")
+        output.contains("Checkstyle violations by severity: [error:2]")
         file("build/reports/checkstyle/main.xml").assertContents(containsClass("org.gradle.class1"))
         file("build/reports/checkstyle/main.xml").assertContents(containsClass("org.gradle.class2"))
 
@@ -143,6 +148,12 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
 
         expect:
         succeeds("check")
+        // Issue #881:
+        // Checkstyle violations are reported even when build passing due to error/warning thresholds
+        output.contains("Checkstyle rule violations were found. See the report at:")
+        output.contains("Checkstyle files with violations: 2")
+        output.contains("Checkstyle violations by severity: [error:2]")
+
         file("build/reports/checkstyle/main.xml").assertContents(containsClass("org.gradle.class1"))
         file("build/reports/checkstyle/main.xml").assertContents(containsClass("org.gradle.class2"))
 
@@ -166,6 +177,8 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         fails("check")
         failure.assertHasDescription("Execution failed for task ':checkstyleMain'.")
         failure.assertThatCause(startsWith("Checkstyle rule violations were found. See the report at:"))
+        failure.assertThatCause(Matchers.containsText("Checkstyle files with violations: 2"))
+        failure.assertThatCause(Matchers.containsText("Checkstyle violations by severity: [warning:2]"))
         file("build/reports/checkstyle/main.xml").assertContents(containsClass("org.gradle.class1"))
         file("build/reports/checkstyle/main.xml").assertContents(containsClass("org.gradle.class2"))
 
@@ -263,7 +276,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         and:
         succeeds "checkstyleMain"
         then:
-        result.executedTasks.contains(":checkstyleMain")
+        result.assertTaskExecuted(":checkstyleMain")
     }
 
     def "can change built-in config_loc"() {
@@ -282,7 +295,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         succeeds "checkstyleMain"
         then:
         suppressionsXml.assertDoesNotExist()
-        result.executedTasks.contains(":checkstyleMain")
+        result.assertTaskExecuted(":checkstyleMain")
 
         when:
         file("config/checkstyle/newFile.xml") << "<!-- This is a new file -->"
@@ -310,8 +323,8 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         executer.expectDeprecationWarning()
         succeeds "checkstyleMain"
         then:
-        result.assertOutputContains("Adding 'config_loc' to checkstyle.configProperties has been deprecated and is scheduled to be removed in Gradle 5.0. Use checkstyle.configDir instead as this will behave better with up-to-date checks.")
-        result.executedTasks.contains(":checkstyleMain")
+        outputContains("Adding 'config_loc' to checkstyle.configProperties has been deprecated and is scheduled to be removed in Gradle 5.0. Use checkstyle.configDir instead as this will behave better with up-to-date checks.")
+        result.assertTaskExecuted(":checkstyleMain")
     }
 
     @Issue("https://github.com/gradle/gradle/issues/2326")

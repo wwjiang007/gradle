@@ -25,7 +25,7 @@ import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.attributes.AttributeContainer;
 import org.gradle.api.attributes.Usage;
-import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact;
+import org.gradle.api.internal.artifacts.dsl.LazyPublishArtifact;
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
 import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.internal.project.ProjectInternal;
@@ -34,6 +34,7 @@ import org.gradle.api.plugins.AppliedPlugin;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.provider.ProviderFactory;
 import org.gradle.api.tasks.TaskContainer;
+import org.gradle.api.tasks.TaskProvider;
 import org.gradle.api.tasks.bundling.Zip;
 import org.gradle.language.cpp.CppLibrary;
 import org.gradle.language.cpp.CppPlatform;
@@ -156,8 +157,8 @@ public class CppLibraryPlugin implements Plugin<ProjectInternal> {
                             linkAttributes.attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, operatingSystem);
 
                             NativeVariantIdentity variantIdentity = new NativeVariantIdentity(variantName, library.getBaseName(), group, version, buildType.isDebuggable(), buildType.isOptimized(), operatingSystem,
-                                new DefaultUsageContext(variantName + "-link", linkUsage, linkAttributes),
-                                new DefaultUsageContext(variantName + "-runtime", runtimeUsage, runtimeAttributes));
+                                new DefaultUsageContext(variantName + "Link", linkUsage, linkAttributes),
+                                new DefaultUsageContext(variantName + "Runtime", runtimeUsage, runtimeAttributes));
 
                             if (DefaultNativePlatform.getCurrentOperatingSystem().toFamilyName().equals(operatingSystem.getName())) {
                                 ToolChainSelector.Result<CppPlatform> result = toolChainSelector.select(CppPlatform.class);
@@ -205,13 +206,17 @@ public class CppLibraryPlugin implements Plugin<ProjectInternal> {
                 project.getPluginManager().withPlugin("maven-publish", new Action<AppliedPlugin>() {
                     @Override
                     public void execute(AppliedPlugin appliedPlugin) {
-                        final Zip headersZip = tasks.create("cppHeaders", Zip.class);
-                        headersZip.from(library.getPublicHeaderFiles());
-                        // TODO - should track changes to build directory
-                        headersZip.setDestinationDir(new File(project.getBuildDir(), "headers"));
-                        headersZip.setClassifier("cpp-api-headers");
-                        headersZip.setArchiveName("cpp-api-headers.zip");
-                        mainVariant.addArtifact(new ArchivePublishArtifact(headersZip));
+                        final TaskProvider<Zip> headersZip = tasks.register("cppHeaders", Zip.class, new Action<Zip>() {
+                            @Override
+                            public void execute(Zip headersZip) {
+                                headersZip.from(library.getPublicHeaderFiles());
+                                // TODO - should track changes to build directory
+                                headersZip.setDestinationDir(new File(project.getBuildDir(), "headers"));
+                                headersZip.setClassifier("cpp-api-headers");
+                                headersZip.setArchiveName("cpp-api-headers.zip");
+                            }
+                        });
+                        mainVariant.addArtifact(new LazyPublishArtifact(headersZip));
                     }
                 });
 

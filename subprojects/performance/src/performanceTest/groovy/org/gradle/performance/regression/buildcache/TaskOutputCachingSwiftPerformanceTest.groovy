@@ -17,18 +17,16 @@
 package org.gradle.performance.regression.buildcache
 
 import org.gradle.initialization.ParallelismBuildOptions
-import spock.lang.Ignore
 import spock.lang.Unroll
 
 class TaskOutputCachingSwiftPerformanceTest extends AbstractTaskOutputCachingPerformanceTest {
 
     def setup() {
         runner.minimumVersion = "4.5"
-        runner.targetVersions = ["4.7-20180308002700+0000"]
+        runner.targetVersions = ["4.9-20180620235919+0000"]
         runner.args += ["--parallel", "--${ParallelismBuildOptions.MaxWorkersOption.LONG_OPTION}=6"]
     }
 
-    @Ignore("https://github.com/gradle/gradle-native-private/issues/92")
     @Unroll
     def "clean #task on #testProject with local cache"() {
         given:
@@ -45,7 +43,6 @@ class TaskOutputCachingSwiftPerformanceTest extends AbstractTaskOutputCachingPer
         where:
         testProject        | task       | maxMemory
         'mediumSwiftMulti' | 'assemble' | '1G'
-        // TODO: Disable this temporarily
-        // 'bigSwiftApp'      | 'assemble' | '1G'
+        'bigSwiftApp'      | 'assemble' | '1G'
     }
 }

@@ -22,10 +22,19 @@ import org.gradle.api.Named
 import org.gradle.api.file.FileCollection
 import org.gradle.api.internal.TaskInternal
 import org.gradle.api.internal.file.TestFiles
-import org.gradle.api.internal.file.collections.SimpleFileCollection
+import org.gradle.api.internal.file.collections.ImmutableFileCollection
 import org.gradle.api.internal.tasks.DefaultPropertySpecFactory
 import org.gradle.api.internal.tasks.properties.annotations.PropertyAnnotationHandler
-import org.gradle.api.tasks.*
+import org.gradle.api.tasks.Destroys
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.LocalState
+import org.gradle.api.tasks.Nested
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.OutputFile
 import org.gradle.test.fixtures.AbstractProjectBuilderSpec
 
 class DefaultPropertyWalkerTest extends AbstractProjectBuilderSpec {
@@ -65,7 +74,7 @@ class DefaultPropertyWalkerTest extends AbstractProjectBuilderSpec {
         File inputFile = new File("some-location")
 
         @InputFiles
-        FileCollection inputFiles = new SimpleFileCollection([new File("files")])
+        FileCollection inputFiles = ImmutableFileCollection.of(new File("files"))
 
         @OutputFile
         File outputFile = new File("output")
@@ -163,6 +172,22 @@ class DefaultPropertyWalkerTest extends AbstractProjectBuilderSpec {
         then:
         1 * visitor.visitInputProperty({ it.propertyName == 'nested.name$0'})
         1 * visitor.visitInputProperty({ it.propertyName == 'nested.name$1'})
+    }
+
+    def "providers are unpacked"() {
+        def task = project.tasks.create("myTask", TaskWithNestedObject)
+        task.nested = project.provider { new NestedBean() }
+
+        when:
+        visitProperties(task)
+
+        then:
+        1 * visitor.visitInputProperty({ it.propertyName == "nested" })
+        1 * visitor.visitInputProperty({ it.propertyName == "nested.nestedInput" })
+        1 * visitor.visitInputFileProperty({ it.propertyName == "nested.inputDir" })
+        1 * visitor.visitOutputFileProperty({ it.propertyName == "nested.outputDir" })
+
+        0 * _
     }
 
     static class NamedNestedBean implements Named {

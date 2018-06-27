@@ -21,13 +21,18 @@ import org.gradle.internal.classloader.ClassLoaderHierarchyHasher
 import org.gradle.internal.classloader.ClassLoaderVisitor
 import java.net.URLClassLoader
 
-class Visitor(private val buildScan: BuildScanExtension, private val hasher: ClassLoaderHierarchyHasher, private val prefix: String) : ClassLoaderVisitor() {
+
+class Visitor(
+    private val buildScan: BuildScanExtension,
+    private val hasher: ClassLoaderHierarchyHasher,
+    private val prefix: String
+) : ClassLoaderVisitor() {
+
     private
     var counter = 0
 
     constructor(buildScan: BuildScanExtension, hasher: ClassLoaderHierarchyHasher, task: Task) :
         this(buildScan, hasher, "${task.path}-classloader")
-
 
     private
     fun classloaderHash(loader: ClassLoader): String? {
@@ -46,4 +51,3 @@ class Visitor(private val buildScan: BuildScanExtension, private val hasher: Cla
         super.visit(classLoader)
     }
 }
-

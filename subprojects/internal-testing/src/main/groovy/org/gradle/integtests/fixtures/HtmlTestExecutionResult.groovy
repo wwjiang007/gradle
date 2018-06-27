@@ -165,6 +165,10 @@ class HtmlTestExecutionResult implements TestExecutionResult {
             return this
         }
 
+        int getTestSkippedCount() {
+            return testsSkipped.size()
+        }
+
         TestClassExecutionResult assertTestPassed(String name) {
             assert testsSucceeded.contains(new TestCase(name))
             return this
@@ -209,7 +213,7 @@ class HtmlTestExecutionResult implements TestExecutionResult {
         }
 
         TestClassExecutionResult assertExecutionFailedWithCause(Matcher<? super String> causeMatcher) {
-            String failureMethodName = "execution failure"
+            String failureMethodName = EXECUTION_FAILURE
             def testCase = testsFailures.find { it.name == failureMethodName }
             assert testCase
 

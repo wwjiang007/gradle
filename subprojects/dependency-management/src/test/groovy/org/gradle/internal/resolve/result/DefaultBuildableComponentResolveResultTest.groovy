@@ -19,6 +19,7 @@ package org.gradle.internal.resolve.result
 import org.gradle.api.artifacts.ModuleVersionIdentifier
 import org.gradle.api.artifacts.ModuleVersionSelector
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.dependencies.DefaultMutableVersionConstraint
 import org.gradle.internal.component.external.model.ModuleComponentResolveMetadata
 import org.gradle.internal.component.model.ComponentResolveMetadata
@@ -34,20 +35,20 @@ class DefaultBuildableComponentResolveResultTest extends Specification {
     def "can query id and meta-data when resolved"() {
         ModuleVersionIdentifier id = Stub()
         ModuleComponentResolveMetadata metaData = Stub() {
-            getId() >> id
+            getModuleVersionId() >> id
         }
 
         when:
         result.resolved(metaData)
 
         then:
-        result.id == id
-        result.metaData == metaData
+        result.moduleVersionId == id
+        result.metadata == metaData
     }
 
     def "cannot get id when no result has been specified"() {
         when:
-        result.id
+        result.moduleVersionId
 
         then:
         IllegalStateException e = thrown()
@@ -56,7 +57,7 @@ class DefaultBuildableComponentResolveResultTest extends Specification {
 
     def "cannot get meta-data when no result has been specified"() {
         when:
-        result.metaData
+        result.metadata
 
         then:
         IllegalStateException e = thrown()
@@ -73,11 +74,11 @@ class DefaultBuildableComponentResolveResultTest extends Specification {
     }
 
     def "cannot get id when resolve failed"() {
-        def failure = new ModuleVersionResolveException(newSelector("a", "b", new DefaultMutableVersionConstraint("c")), "broken")
+        def failure = new ModuleVersionResolveException(newSelector(DefaultModuleIdentifier.newId("a", "b"), new DefaultMutableVersionConstraint("c")), "broken")
 
         when:
         result.failed(failure)
-        result.id
+        result.moduleVersionId
 
         then:
         ModuleVersionResolveException e = thrown()
@@ -85,11 +86,11 @@ class DefaultBuildableComponentResolveResultTest extends Specification {
     }
 
     def "cannot get meta-data when resolve failed"() {
-        def failure = new ModuleVersionResolveException(newSelector("a", "b", new DefaultMutableVersionConstraint("c")), "broken")
+        def failure = new ModuleVersionResolveException(newSelector(DefaultModuleIdentifier.newId("a", "b"), new DefaultMutableVersionConstraint("c")), "broken")
 
         when:
         result.failed(failure)
-        result.metaData
+        result.metadata
 
         then:
         ModuleVersionResolveException e = thrown()

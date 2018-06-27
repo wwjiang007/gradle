@@ -23,12 +23,14 @@ import javax.annotation.processing.Processor
 import javax.annotation.processing.RoundEnvironment
 import javax.lang.model.element.Name
 import javax.lang.model.element.TypeElement
+import java.lang.annotation.Retention
+import java.lang.annotation.RetentionPolicy
 
 class AggregatingProcessorTest extends Specification {
 
     Set<TypeElement> annotationTypes = [
-        type("Helper"),
-        type("Service")
+        annotation("Helper"),
+        annotation("Service")
     ] as Set
 
     RoundEnvironment roundEnvironment = Stub(RoundEnvironment) {
@@ -68,12 +70,38 @@ class AggregatingProcessorTest extends Specification {
         result.getAggregatedTypes() == ["A", "B"] as Set
     }
 
+    def "aggregating processors do not work with source retention annotations"() {
+        given:
+        def sourceRetentionAnnotation = annotation("Broken", RetentionPolicy.SOURCE)
 
-    TypeElement type(String typeName) {
+        when:
+        processor.process([sourceRetentionAnnotation] as Set, roundEnvironment)
+
+        then:
+        result.fullRebuildCause.contains("'@Broken' has source retention.")
+    }
+
+
+    TypeElement annotation(String name, RetentionPolicy retentionPolicy = RetentionPolicy.CLASS) {
         Stub(TypeElement) {
             getEnclosingElement() >> null
             getQualifiedName() >> Stub(Name) {
-                toString() >> typeName
+                toString() >> name
+            }
+            getSimpleName() >> Stub(Name) {
+                toString() >> name
+            }
+            getAnnotation(Retention) >> Stub(Retention) {
+                value() >> retentionPolicy
+            }
+        }
+    }
+
+    TypeElement type(String name) {
+        Stub(TypeElement) {
+            getEnclosingElement() >> null
+            getQualifiedName() >> Stub(Name) {
+                toString() >> name
             }
         }
     }

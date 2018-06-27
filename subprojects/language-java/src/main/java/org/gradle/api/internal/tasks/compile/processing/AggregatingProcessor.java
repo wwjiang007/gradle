@@ -30,33 +30,25 @@ import java.util.Set;
  */
 public final class AggregatingProcessor extends DelegatingProcessor {
 
-    private final AnnotationProcessingResult result;
+    private final IncrementalProcessingStrategy strategy;
 
     public AggregatingProcessor(Processor delegate, AnnotationProcessingResult result) {
         super(delegate);
-        this.result = result;
+        this.strategy = new AggregatingProcessingStrategy(result);
     }
 
     @Override
     public final void init(ProcessingEnvironment processingEnv) {
-        IncrementalFiler incrementalFiler = new AggregatingFiler(processingEnv.getFiler(), result, processingEnv.getMessager());
+        IncrementalFiler incrementalFiler = new IncrementalFiler(processingEnv.getFiler(), strategy);
         IncrementalProcessingEnvironment incrementalProcessingEnvironment = new IncrementalProcessingEnvironment(processingEnv, incrementalFiler);
         super.init(incrementalProcessingEnvironment);
     }
 
     @Override
     public final boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        recordAggregatedTypes(annotations, roundEnv);
+        strategy.recordProcessingInputs(getSupportedAnnotationTypes(), annotations, roundEnv);
         return super.process(annotations, roundEnv);
     }
 
-    private void recordAggregatedTypes(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        if (getSupportedAnnotationTypes().contains("*")) {
-            result.addAggregatedTypes(ElementUtils.getTopLevelTypeNames(roundEnv.getRootElements()));
-        } else {
-            for (TypeElement annotation : annotations) {
-                result.addAggregatedTypes(ElementUtils.getTopLevelTypeNames(roundEnv.getElementsAnnotatedWith(annotation)));
-            }
-        }
-    }
+
 }

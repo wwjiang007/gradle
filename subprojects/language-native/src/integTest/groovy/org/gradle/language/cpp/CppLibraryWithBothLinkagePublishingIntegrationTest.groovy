@@ -16,6 +16,7 @@
 
 package org.gradle.language.cpp
 
+import org.gradle.integtests.fixtures.FeaturePreviewsFixture
 import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationSpec
 import org.gradle.nativeplatform.fixtures.app.CppAppWithLibraryAndOptionalFeature
 import org.gradle.nativeplatform.fixtures.app.CppLib
@@ -23,6 +24,11 @@ import org.gradle.test.fixtures.archive.ZipTestFixture
 import org.gradle.test.fixtures.maven.MavenFileRepository
 
 class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstalledToolChainIntegrationSpec implements CppTaskNames {
+
+    def setup() {
+        FeaturePreviewsFixture.enableStablePublishing(settingsFile)
+    }
+
     def "can publish the binaries and headers of a library to a Maven repository"() {
         def lib = new CppLib()
         assert !lib.publicHeaders.files.empty
@@ -92,14 +98,14 @@ class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstall
         api.files.size() == 1
         api.files[0].name == 'cpp-api-headers.zip'
         api.files[0].url == 'test-1.2-cpp-api-headers.zip'
-        mainMetadata.variant("debugShared-link").availableAt.coords == "some.group:test_debug_shared:1.2"
-        mainMetadata.variant("debugShared-runtime").availableAt.coords == "some.group:test_debug_shared:1.2"
-        mainMetadata.variant("debugStatic-link").availableAt.coords == "some.group:test_debug_static:1.2"
-        mainMetadata.variant("debugStatic-runtime").availableAt.coords == "some.group:test_debug_static:1.2"
-        mainMetadata.variant("releaseShared-link").availableAt.coords == "some.group:test_release_shared:1.2"
-        mainMetadata.variant("releaseShared-runtime").availableAt.coords == "some.group:test_release_shared:1.2"
-        mainMetadata.variant("releaseStatic-link").availableAt.coords == "some.group:test_release_static:1.2"
-        mainMetadata.variant("releaseStatic-runtime").availableAt.coords == "some.group:test_release_static:1.2"
+        mainMetadata.variant("debugSharedLink").availableAt.coords == "some.group:test_debug_shared:1.2"
+        mainMetadata.variant("debugSharedRuntime").availableAt.coords == "some.group:test_debug_shared:1.2"
+        mainMetadata.variant("debugStaticLink").availableAt.coords == "some.group:test_debug_static:1.2"
+        mainMetadata.variant("debugStaticRuntime").availableAt.coords == "some.group:test_debug_static:1.2"
+        mainMetadata.variant("releaseSharedLink").availableAt.coords == "some.group:test_release_shared:1.2"
+        mainMetadata.variant("releaseSharedRuntime").availableAt.coords == "some.group:test_release_shared:1.2"
+        mainMetadata.variant("releaseStaticLink").availableAt.coords == "some.group:test_release_static:1.2"
+        mainMetadata.variant("releaseStaticRuntime").availableAt.coords == "some.group:test_release_static:1.2"
 
         def debugShared = repo.module('some.group', 'test_debug_shared', '1.2')
         debugShared.assertPublished()
@@ -111,8 +117,8 @@ class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstall
 
         def debugSharedMetadata = debugShared.parsedModuleMetadata
         debugSharedMetadata.variants.size() == 2
-        debugSharedMetadata.variant('debugShared-link')
-        debugSharedMetadata.variant('debugShared-runtime')
+        debugSharedMetadata.variant('debugSharedLink')
+        debugSharedMetadata.variant('debugSharedRuntime')
 
         def debugStatic = repo.module('some.group', 'test_debug_static', '1.2')
         debugStatic.assertPublished()
@@ -123,8 +129,8 @@ class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstall
 
         def debugStaticMetadata = debugStatic.parsedModuleMetadata
         debugStaticMetadata.variants.size() == 2
-        debugStaticMetadata.variant('debugStatic-link')
-        debugStaticMetadata.variant('debugStatic-runtime')
+        debugStaticMetadata.variant('debugStaticLink')
+        debugStaticMetadata.variant('debugStaticRuntime')
 
         def releaseShared = repo.module('some.group', 'test_release_shared', '1.2')
         releaseShared.assertPublished()
@@ -136,8 +142,8 @@ class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstall
 
         def releaseSharedMetadata = releaseShared.parsedModuleMetadata
         releaseSharedMetadata.variants.size() == 2
-        releaseSharedMetadata.variant('releaseShared-link')
-        releaseSharedMetadata.variant('releaseShared-runtime')
+        releaseSharedMetadata.variant('releaseSharedLink')
+        releaseSharedMetadata.variant('releaseSharedRuntime')
 
         def releaseStatic = repo.module('some.group', 'test_release_static', '1.2')
         releaseStatic.assertPublished()
@@ -148,8 +154,8 @@ class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstall
 
         def releaseStaticMetadata = releaseStatic.parsedModuleMetadata
         releaseStaticMetadata.variants.size() == 2
-        releaseStaticMetadata.variant('releaseStatic-link')
-        releaseStaticMetadata.variant('releaseStatic-runtime')
+        releaseStaticMetadata.variant('releaseStaticLink')
+        releaseStaticMetadata.variant('releaseStaticRuntime')
     }
 
     def "correct variant of published library is selected when resolving"() {
@@ -157,6 +163,8 @@ class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstall
 
         def repoDir = file("repo")
         def producer = file("greeting")
+        def producerSettings = producer.file("settings.gradle")
+        FeaturePreviewsFixture.enableStablePublishing(producerSettings)
         producer.file("build.gradle") << """
             apply plugin: 'cpp-library'
             apply plugin: 'maven-publish'
@@ -182,6 +190,7 @@ class CppLibraryWithBothLinkagePublishingIntegrationTest extends AbstractInstall
         run('publish')
 
         def consumer = file("consumer").createDir()
+        consumer.file("settings.gradle") << ""
         consumer.file("build.gradle") << """
             apply plugin: 'cpp-application'
             repositories { maven { url '${repoDir.toURI()}' } }

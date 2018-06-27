@@ -27,6 +27,12 @@ public class DefaultResolvedVersionConstraint extends DefaultImmutableVersionCon
     private final VersionSelector preferredVersionSelector;
     private final VersionSelector rejectedVersionsSelector;
 
+    public DefaultResolvedVersionConstraint(VersionSelector preferredVersionSelector, VersionSelector rejectedVersionsSelector) {
+        super(preferredVersionSelector.getSelector());
+        this.preferredVersionSelector = preferredVersionSelector;
+        this.rejectedVersionsSelector = rejectedVersionsSelector;
+    }
+
     public DefaultResolvedVersionConstraint(VersionConstraint parent, VersionSelectorScheme scheme) {
         super(parent.getPreferredVersion(), parent.getRejectedVersions());
 
@@ -51,5 +57,20 @@ public class DefaultResolvedVersionConstraint extends DefaultImmutableVersionCon
     @Override
     public VersionSelector getRejectedSelector() {
         return rejectedVersionsSelector;
+    }
+
+    @Override
+    public boolean isRejectAll() {
+        return "".equals(getPreferredVersion())
+            && hasMatchAllSelector(getRejectedVersions());
+    }
+
+    private static boolean hasMatchAllSelector(List<String> rejectedVersions) {
+        for (String version : rejectedVersions) {
+            if ("+".equals(version)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

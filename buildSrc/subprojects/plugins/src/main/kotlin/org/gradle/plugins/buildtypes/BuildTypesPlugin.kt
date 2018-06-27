@@ -18,27 +18,8 @@ class BuildTypesPlugin : Plugin<Project> {
     }
 
     private
-    fun Project.register(buildType: BuildType) =
-        tasks.create(buildType.name) {
-
-            val invokedTaskNames = gradle.startParameter.taskNames
-            buildType.findUsedTaskNameAndIndexIn(invokedTaskNames)?.let { (usedName, index) ->
-                require(usedName.isNotEmpty())
-                if (!isTaskHelpInvocation(invokedTaskNames, index)) {
-                    buildType.active = true
-                    buildType.onProjectProperties = { properties: ProjectProperties ->
-                        properties.forEach(project::setOrCreateProperty)
-                    }
-                    afterEvaluate {
-                        invokedTaskNames.removeAt(index)
-
-                        val subproject = usedName.substringBeforeLast(":", "")
-                        insertBuildTypeTasksInto(invokedTaskNames, index, buildType, subproject)
-
-                        gradle.startParameter.setTaskNames(invokedTaskNames)
-                    }
-                }
-            }
+    fun Project.register(buildType: BuildType) {
+        tasks.register(buildType.name) {
 
             group = "Build Type"
 
@@ -48,6 +29,26 @@ class BuildTypesPlugin : Plugin<Project> {
                 throw GradleException("'$name' is a build type and must be invoked directly, and its name can only be abbreviated to '${buildType.abbreviation}'.")
             }
         }
+
+        val invokedTaskNames = gradle.startParameter.taskNames
+        buildType.findUsedTaskNameAndIndexIn(invokedTaskNames)?.let { (usedName, index) ->
+            require(usedName.isNotEmpty())
+            if (!isTaskHelpInvocation(invokedTaskNames, index)) {
+                buildType.active = true
+                buildType.onProjectProperties = { properties: ProjectProperties ->
+                    properties.forEach(project::setOrCreateProperty)
+                }
+                afterEvaluate {
+                    invokedTaskNames.removeAt(index)
+
+                    val subproject = usedName.substringBeforeLast(":", "")
+                    insertBuildTypeTasksInto(invokedTaskNames, index, buildType, subproject)
+
+                    gradle.startParameter.setTaskNames(invokedTaskNames)
+                }
+            }
+        }
+    }
 
     private
     fun BuildType.findUsedTaskNameAndIndexIn(taskNames: List<String>): Pair<String, Int>? {
@@ -79,7 +80,8 @@ fun Project.insertBuildTypeTasksInto(
     taskList: MutableList<String>,
     index: Int,
     buildType: BuildType,
-    subproject: String) {
+    subproject: String
+) {
 
     fun insert(task: String) =
         taskList.add(index, task)
@@ -88,7 +90,7 @@ fun Project.insertBuildTypeTasksInto(
         buildType.tasks.reversed().forEach(act)
 
     when {
-        subproject.isEmpty()            ->
+        subproject.isEmpty() ->
             forEachBuildTypeTask(::insert)
 
         findProject(subproject) != null ->
@@ -100,8 +102,9 @@ fun Project.insertBuildTypeTasksInto(
                     println("Skipping task '$taskPath' requested by build type ${buildType.name}, as it does not exist.")
                 }
             }
-        else                            ->
+        else -> {
             println("Skipping execution of build type '${buildType.name}'. Project '$subproject' not found in root project '$name'.")
+        }
     }
 
     if (taskList.isEmpty()) {
@@ -113,6 +116,6 @@ fun Project.insertBuildTypeTasksInto(
 fun Project.setOrCreateProperty(propertyName: String, value: Any) {
     when {
         hasProperty(propertyName) -> setProperty(propertyName, value)
-        else                      -> extra.set(propertyName, value)
+        else -> extra.set(propertyName, value)
     }
 }

@@ -24,7 +24,8 @@ import org.gradle.api.plugins.JavaLibraryPlugin
 import org.gradle.api.tasks.testing.Test
 import org.gradle.plugin.devel.tasks.ValidateTaskProperties
 
-import accessors.*
+import accessors.java
+import accessors.reporting
 
 import org.gradle.kotlin.dsl.*
 
@@ -58,7 +59,7 @@ fun Project.validateTaskPropertiesForConfiguration(configuration: Configuration)
         // TODO Add a comment on why those projects.
         when (this) {
             coreProject -> addValidateTask()
-            else        -> {
+            else -> {
                 configuration.dependencies.withType<ProjectDependency>()
                     .matching { it.dependencyProject == coreProject }
                     .all {
@@ -75,7 +76,7 @@ fun Project.addValidateTask() =
         // This block gets called twice for the core project as core applies the base as well as the library plugin. That is why we need to check
         // whether the task already exists.
         if (tasks.findByName(validateTaskName) == null) {
-            val validateTask = tasks.create<ValidateTaskProperties>(validateTaskName) {
+            val validateTask = tasks.register(validateTaskName, ValidateTaskProperties::class.java) {
                 val main by java.sourceSets
                 dependsOn(main.output)
                 classes = main.output.classesDirs
@@ -84,13 +85,11 @@ fun Project.addValidateTask() =
                 outputFile.set(reporting.baseDirectory.file(reportFileName))
                 failOnWarning = true
             }
-            tasks {
-                "codeQuality" {
-                    dependsOn(validateTask)
-                }
-                withType<Test> {
-                    shouldRunAfter(validateTask)
-                }
+            tasks.named("codeQuality").configure {
+                dependsOn(validateTask)
+            }
+            tasks.withType(Test::class.java).configureEach {
+                shouldRunAfter(validateTask)
             }
         }
     }

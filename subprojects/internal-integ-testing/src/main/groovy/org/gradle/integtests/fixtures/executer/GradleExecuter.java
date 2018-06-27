@@ -438,4 +438,20 @@ public interface GradleExecuter extends Stoppable {
      * Execute the builds without adding the {@code "--stacktrace"} argument.
      */
     GradleExecuter withStacktraceDisabled();
+
+    /**
+     * Renders the welcome message users see upon first invocation of a Gradle distribution with a given Gradle user home directory.
+     * By default the message is never rendered.
+     */
+    GradleExecuter withWelcomeMessageEnabled();
+
+    /**
+     * Specifies we should use a test console that has both stdout and stderr attached.
+     */
+    GradleExecuter withTestConsoleAttached();
+
+    /**
+     * Specifies we should use a test console that only has stdout attached.
+     */
+    GradleExecuter withTestConsoleAttached(ConsoleAttachment consoleAttachment);
 }

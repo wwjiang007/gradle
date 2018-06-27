@@ -2,32 +2,38 @@ package org.gradle.plugins.performance
 
 import accessors.groovy
 import accessors.java
-
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
-import org.gradle.api.tasks.*
+import org.gradle.api.tasks.Delete
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.SourceSet
+import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.api.tasks.bundling.Zip
 import org.gradle.api.tasks.testing.junit.JUnitOptions
-
 import org.gradle.internal.hash.HashUtil
-
-import org.gradle.kotlin.dsl.*
-
 import org.gradle.plugins.ide.eclipse.EclipsePlugin
 import org.gradle.plugins.ide.eclipse.model.EclipseModel
 import org.gradle.plugins.ide.idea.IdeaPlugin
 import org.gradle.plugins.ide.idea.model.IdeaModel
-
 import org.gradle.testing.DistributedPerformanceTest
 import org.gradle.testing.PerformanceTest
-import org.gradle.testing.performance.generator.tasks.*
+import org.gradle.testing.RebaselinePerformanceTests
+import org.gradle.testing.performance.generator.tasks.AbstractProjectGeneratorTask
+import org.gradle.testing.performance.generator.tasks.JavaExecProjectGeneratorTask
+import org.gradle.testing.performance.generator.tasks.JvmProjectGeneratorTask
+import org.gradle.testing.performance.generator.tasks.ProjectGeneratorTask
+import org.gradle.testing.performance.generator.tasks.RemoteProject
+import org.gradle.testing.performance.generator.tasks.TemplateProjectGeneratorTask
 
 import org.w3c.dom.Document
-
 import java.io.File
-
 import javax.xml.parsers.DocumentBuilderFactory
+
+import org.gradle.kotlin.dsl.*
 
 
 private
@@ -37,8 +43,7 @@ object PropertyNames {
     const val dbUsername = "org.gradle.performance.db.username"
     const val dbPassword = "org.gradle.performance.db.password"
 
-    const val useYourkit = "org.gradle.performance.use_yourkit"
-    const val honestProfiler = "org.gradle.performance.honestprofiler"
+    const val flameGraphTargetDir = "org.gradle.performance.flameGraphTargetDir"
 
     const val workerTestTaskName = "org.gradle.performance.workerTestTaskName"
     const val channel = "org.gradle.performance.execution.channel"
@@ -94,7 +99,16 @@ class PerformanceTestPlugin : Plugin<Project> {
         createLocalPerformanceTestTasks(performanceTestSourceSet, prepareSamplesTask, performanceReportTask)
         createDistributedPerformanceTestTasks(performanceTestSourceSet, prepareSamplesTask, performanceReportTask)
 
+        createRebaselineTask(performanceTestSourceSet)
+
         configureIdePlugins(performanceTestSourceSet)
+    }
+
+    private
+    fun Project.createRebaselineTask(performanceTestSourceSet: SourceSet) {
+        project.tasks.register("rebaselinePerformanceTests", RebaselinePerformanceTests::class.java) {
+            source(performanceTestSourceSet.allSource)
+        }
     }
 
     private
@@ -142,7 +156,7 @@ class PerformanceTestPlugin : Plugin<Project> {
 
     private
     fun Project.createCheckNoIdenticalBuildFilesTask() {
-        tasks.create("checkNoIdenticalBuildFiles") {
+        tasks.register("checkNoIdenticalBuildFiles") {
             doLast {
                 val filesBySha1 = mutableMapOf<String, MutableList<File>>()
                 buildDir.walkTopDown().forEach { file ->
@@ -158,7 +172,7 @@ class PerformanceTestPlugin : Plugin<Project> {
 
                 filesBySha1.forEach { hash, candidates ->
                     if (candidates.size > 1) {
-                        println("Duplicate build files found for hash '$hash' : $candidates")
+                        logger.lifecycle("Duplicate build files found for hash '$hash' : $candidates")
                     }
                 }
             }
@@ -168,28 +182,28 @@ class PerformanceTestPlugin : Plugin<Project> {
     private
     fun Project.configureGeneratorTasks() {
 
-        tasks.withType<ProjectGeneratorTask> {
+        tasks.withType<ProjectGeneratorTask>().configureEach {
             group = "Project setup"
         }
 
-        tasks.withType<AbstractProjectGeneratorTask> {
+        tasks.withType<AbstractProjectGeneratorTask>().configureEach {
             (project.findProperty("maxProjects") as? Int)?.let { maxProjects ->
                 setProjects(maxProjects)
             }
         }
 
-        tasks.withType<JvmProjectGeneratorTask> {
+        tasks.withType<JvmProjectGeneratorTask>().configureEach {
             testDependencies = configurations["junit"]
         }
 
-        tasks.withType<TemplateProjectGeneratorTask> {
+        tasks.withType<TemplateProjectGeneratorTask>().configureEach {
             sharedTemplateDirectory = project(":internalPerformanceTesting").file("src/templates")
         }
     }
 
     private
-    fun Project.createPrepareSamplesTask(): Task =
-        tasks.create("prepareSamples") {
+    fun Project.createPrepareSamplesTask(): TaskProvider<Task> =
+        tasks.register("prepareSamples") {
             group = "Project Setup"
             description = "Generates all sample projects for automated performance tests"
             dependsOn(tasks.withType<ProjectGeneratorTask>())
@@ -198,16 +212,16 @@ class PerformanceTestPlugin : Plugin<Project> {
         }
 
     private
-    fun Project.createCleanSamplesTask(): Task =
-        tasks.create<Delete>("cleanSamples") {
+    fun Project.createCleanSamplesTask() =
+        tasks.register("cleanSamples", Delete::class.java) {
             delete(deferred { tasks.withType<ProjectGeneratorTask>().map { it.outputs } })
             delete(deferred { tasks.withType<RemoteProject>().map { it.outputDirectory } })
             delete(deferred { tasks.withType<JavaExecProjectGeneratorTask>().map { it.outputs } })
         }
 
     private
-    fun Project.createPerformanceReportTask(performanceTestSourceSet: SourceSet): PerformanceReport =
-        tasks.create<PerformanceReport>("performanceReport") {
+    fun Project.createPerformanceReportTask(performanceTestSourceSet: SourceSet): TaskProvider<PerformanceReport> =
+        tasks.register("performanceReport", PerformanceReport::class.java) {
             systemProperties(propertiesForPerformanceDb())
             classpath = performanceTestSourceSet.runtimeClasspath
             resultStoreClass = "org.gradle.performance.results.AllResultsStore"
@@ -218,12 +232,12 @@ class PerformanceTestPlugin : Plugin<Project> {
     private
     fun Project.createLocalPerformanceTestTasks(
         performanceSourceSet: SourceSet,
-        prepareSamplesTask: Task,
-        performanceReportTask: PerformanceReport) {
+        prepareSamplesTask: TaskProvider<Task>,
+        performanceReportTask: TaskProvider<PerformanceReport>
+    ) {
 
         fun create(name: String, configure: PerformanceTest.() -> Unit = {}) {
-            createLocalPerformanceTestTask(name, performanceSourceSet, prepareSamplesTask, performanceReportTask)
-                .configure()
+            createLocalPerformanceTestTask(name, performanceSourceSet, prepareSamplesTask, performanceReportTask).configure(configure)
         }
 
         create("performanceTest") {
@@ -245,12 +259,12 @@ class PerformanceTestPlugin : Plugin<Project> {
     private
     fun Project.createDistributedPerformanceTestTasks(
         performanceSourceSet: SourceSet,
-        prepareSamplesTask: Task,
-        performanceReportTask: PerformanceReport) {
+        prepareSamplesTask: TaskProvider<Task>,
+        performanceReportTask: TaskProvider<PerformanceReport>
+    ) {
 
         fun create(name: String, configure: PerformanceTest.() -> Unit = {}) {
-            createDistributedPerformanceTestTask(name, performanceSourceSet, prepareSamplesTask, performanceReportTask)
-                .configure()
+            createDistributedPerformanceTestTask(name, performanceSourceSet, prepareSamplesTask, performanceReportTask).configure(configure)
         }
 
         create("distributedPerformanceTest") {
@@ -301,10 +315,11 @@ class PerformanceTestPlugin : Plugin<Project> {
     fun Project.createDistributedPerformanceTestTask(
         name: String,
         performanceSourceSet: SourceSet,
-        prepareSamplesTask: Task,
-        performanceReportTask: PerformanceReport): DistributedPerformanceTest =
+        prepareSamplesTask: TaskProvider<Task>,
+        performanceReportTask: TaskProvider<PerformanceReport>
+    ): TaskProvider<DistributedPerformanceTest> {
 
-        tasks.create<DistributedPerformanceTest>(name) {
+        val result = tasks.register(name, DistributedPerformanceTest::class.java) {
             configureForAnyPerformanceTestTask(this, performanceSourceSet, prepareSamplesTask, performanceReportTask)
             scenarioList = buildDir / Config.performanceTestScenarioListFileName
             scenarioReport = buildDir / Config.performanceTestScenarioReportFileName
@@ -315,60 +330,55 @@ class PerformanceTestPlugin : Plugin<Project> {
             teamCityUrl = Config.teamCityUrl
             teamCityUsername = stringPropertyOrNull(PropertyNames.teamCityUsername)
             teamCityPassword = stringPropertyOrNull(PropertyNames.teamCityPassword)
-            afterEvaluate {
+        }
+
+        afterEvaluate {
+            result.configure {
                 branchName?.takeIf { it.isNotEmpty() }?.let { branchName ->
                     channel = channel + "-" + branchName
                 }
             }
         }
 
+        return result
+    }
+
     private
     fun Project.createLocalPerformanceTestTask(
         name: String,
         performanceSourceSet: SourceSet,
-        prepareSamplesTask: Task,
-        performanceReportTask: PerformanceReport): PerformanceTest {
+        prepareSamplesTask: TaskProvider<Task>,
+        performanceReportTask: TaskProvider<PerformanceReport>
+    ): TaskProvider<PerformanceTest> {
 
-        val cleanTaskName = "clean${name.capitalize()}"
-
-        val task = tasks.create<PerformanceTest>(name) {
-
+        val performanceTest = tasks.register(name, PerformanceTest::class.java) {
             configureForAnyPerformanceTestTask(this, performanceSourceSet, prepareSamplesTask, performanceReportTask)
 
-            if (project.hasProperty(PropertyNames.useYourkit)) {
-                testLogging.showStandardStreams = true
-                systemProperties[PropertyNames.useYourkit] = "1"
-                outputs.upToDateWhen { false }
-            }
-            if (project.hasProperty(PropertyNames.honestProfiler)) {
-                systemProperties[PropertyNames.honestProfiler] = "1"
-            }
             if (project.hasProperty(PropertyNames.performanceTestVerbose)) {
                 testLogging.showStandardStreams = true
             }
+        }
 
-            val testResultsZipTask = testResultsZipTaskFor(this, name)
+        val testResultsZipTask = testResultsZipTaskFor(performanceTest, name)
+
+        performanceTest.configure {
             finalizedBy(testResultsZipTask)
-            val cleanTestResultsZipTask = tasks.create<Delete>("clean${testResultsZipTask.name.capitalize()}") {
-                delete(testResultsZipTask.archivePath)
-            }
-            tasks.getByName(cleanTaskName) {
-                dependsOn(cleanTestResultsZipTask)
-            }
         }
 
-        tasks.getByName(cleanTaskName) {
-            delete(task.outputs)
-            dependsOn("clean${performanceReportTask.name.capitalize()}")
+        // TODO: Make this lazy, see https://github.com/gradle/gradle-native/issues/718
+        tasks.getByName("clean${name.capitalize()}") {
+            delete(performanceTest)
+            dependsOn("clean${testResultsZipTask.get().name.capitalize()}")
+            dependsOn("clean${performanceReportTask.get().name.capitalize()}")
         }
 
-        return task
+        return performanceTest
     }
 
     private
-    fun Project.testResultsZipTaskFor(performanceTest: PerformanceTest, name: String): Zip {
-        val junitXmlDir = performanceTest.reports.junitXml.destination
-        return tasks.create<Zip>("${name}ResultsZip") {
+    fun Project.testResultsZipTaskFor(performanceTest: TaskProvider<PerformanceTest>, name: String): TaskProvider<Zip> {
+        return tasks.register("${name}ResultsZip", Zip::class.java) {
+            val junitXmlDir = performanceTest.get().reports.junitXml.destination
             from(junitXmlDir) {
                 include("**/TEST-*.xml")
                 includeEmptyDirs = false
@@ -383,7 +393,7 @@ class PerformanceTestPlugin : Plugin<Project> {
                     }
                 }
             }
-            from(performanceTest.debugArtifactsDirectory)
+            from(performanceTest.get().debugArtifactsDirectory)
             destinationDir = buildDir
             archiveName = "test-results-${junitXmlDir.name}.zip"
         }
@@ -393,8 +403,9 @@ class PerformanceTestPlugin : Plugin<Project> {
     fun Project.configureForAnyPerformanceTestTask(
         task: PerformanceTest,
         performanceSourceSet: SourceSet,
-        prepareSamplesTask: Task,
-        performanceReportTask: PerformanceReport) {
+        prepareSamplesTask: TaskProvider<Task>,
+        performanceReportTask: TaskProvider<PerformanceReport>
+    ) {
 
         task.apply {
             group = "verification"
@@ -410,6 +421,8 @@ class PerformanceTestPlugin : Plugin<Project> {
                 systemProperty(PropertyNames.baselines, baselines)
             }
 
+            jvmArgs("-Xmx3g", "-XX:+HeapDumpOnOutOfMemoryError")
+
             dependsOn(prepareSamplesTask)
             finalizedBy(performanceReportTask)
 
@@ -419,7 +432,7 @@ class PerformanceTestPlugin : Plugin<Project> {
 
             doFirst {
                 channel?.let { channel ->
-                    performanceReportTask.systemProperty(PropertyNames.channel, channel)
+                    performanceReportTask.get().systemProperty(PropertyNames.channel, channel)
                 }
             }
         }
@@ -466,4 +479,3 @@ fun parseXmlFile(file: File): Document =
 private
 fun sha1StringFor(file: File) =
     HashUtil.createHash(file, "sha1").asHexString()
-

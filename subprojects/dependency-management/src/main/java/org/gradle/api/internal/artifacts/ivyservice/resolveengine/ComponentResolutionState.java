@@ -16,16 +16,23 @@
 package org.gradle.api.internal.artifacts.ivyservice.resolveengine;
 
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
-import org.gradle.api.internal.artifacts.ResolvedVersionConstraint;
+import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.StringVersioned;
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.selectors.ResolvableSelectorState;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionDescriptorInternal;
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasonInternal;
 import org.gradle.internal.component.model.ComponentResolveMetadata;
+import org.gradle.internal.resolve.RejectedBySelectorVersion;
+import org.gradle.internal.resolve.RejectedVersion;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
 
 public interface ComponentResolutionState extends StringVersioned {
+    ComponentIdentifier getComponentId();
+
     ModuleVersionIdentifier getId();
+
+    void selectedBy(ResolvableSelectorState selectorState);
 
     /**
      * Returns the meta-data for the component. Resolves if not already resolved.
@@ -35,12 +42,13 @@ public interface ComponentResolutionState extends StringVersioned {
     @Nullable
     ComponentResolveMetadata getMetadata();
 
-    ResolvedVersionConstraint getVersionConstraint();
-
-    boolean isResolved();
-
-    ComponentSelectionReasonInternal getSelectionReason();
-
     void addCause(ComponentSelectionDescriptorInternal componentSelectionDescription);
 
+    void reject();
+
+    boolean isRejected();
+
+    void unmatched(Collection<RejectedBySelectorVersion> unmatchedVersions);
+
+    void rejected(Collection<RejectedVersion> rejectedVersions);
 }

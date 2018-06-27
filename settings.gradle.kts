@@ -18,13 +18,7 @@ apply {
     from("gradle/shared-with-buildSrc/build-cache-configuration.settings.gradle.kts")
 }
 
-try {
-    settings.withGroovyBuilder {
-        "enableFeaturePreview"("IMPROVED_POM_SUPPORT")
-    }
-} catch (e: Exception ){
-    // Ignore - indicates this is run with Gradle < 4.6
-}
+enableFeaturePreview("IMPROVED_POM_SUPPORT")
 
 include("distributionsDependencies")
 include("distributions")
@@ -119,13 +113,10 @@ val groovyBuildScriptProjects = listOf(
     "distributions",
     "logging",
     "process-services",
-    "jvm-services",
     "core",
-    "dependency-management",
     "wrapper",
     "cli",
     "launcher",
-    "messaging",
     "resources",
     "resources-http",
     "resources-gcs",
@@ -137,29 +128,19 @@ val groovyBuildScriptProjects = listOf(
     "ide-native",
     "ide-play",
     "osgi",
-    "maven",
-    "code-quality",
-    "tooling-api",
-    "tooling-api-builders",
     "docs",
     "integ-test",
     "signing",
     "ear",
     "native",
-    "internal-testing",
-    "internal-integ-testing",
-    "internal-performance-testing",
-    "internal-android-performance-testing",
     "performance",
     "build-scan-performance",
     "javascript",
     "reporting",
     "diagnostics",
     "publish",
-    "ivy",
     "jacoco",
     "build-init",
-    "build-option",
     "platform-base",
     "platform-native",
     "platform-jvm",
@@ -180,8 +161,6 @@ val groovyBuildScriptProjects = listOf(
     "test-kit",
     "soak",
     "smoke-test",
-    "composite-builds",
-    "workers",
     "persistent-cache",
     "core-api",
     "version-control")

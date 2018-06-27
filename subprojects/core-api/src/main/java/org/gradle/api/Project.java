@@ -21,6 +21,7 @@ import groovy.lang.MissingPropertyException;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.dsl.ArtifactHandler;
 import org.gradle.api.artifacts.dsl.DependencyHandler;
+import org.gradle.api.artifacts.dsl.DependencyLockingHandler;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
 import org.gradle.api.component.SoftwareComponentContainer;
 import org.gradle.api.file.ConfigurableFileCollection;
@@ -402,7 +403,7 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * @param name The name of the property
      * @param value The value of the property
      */
-    void setProperty(String name, Object value) throws MissingPropertyException;
+    void setProperty(String name, @Nullable Object value) throws MissingPropertyException;
 
     /**
      * <p>Returns this project. This method is useful in build files to explicitly access project properties and
@@ -1734,4 +1735,20 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      */
     @Incubating
     void normalization(Action<? super InputNormalizationHandler> configuration);
+
+    /**
+     * Configures dependency locking
+     *
+     * @since 4.8
+     */
+    @Incubating
+    void dependencyLocking(Action<? super DependencyLockingHandler> configuration);
+
+    /**
+     * Provides access to configuring dependency locking
+     *
+     * @since 4.8
+     */
+    @Incubating
+    DependencyLockingHandler getDependencyLocking();
 }

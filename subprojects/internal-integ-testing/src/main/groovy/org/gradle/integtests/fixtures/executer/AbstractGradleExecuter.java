@@ -40,17 +40,16 @@ import org.gradle.internal.UncheckedException;
 import org.gradle.internal.featurelifecycle.LoggingDeprecatedFeatureHandler;
 import org.gradle.internal.jvm.Jvm;
 import org.gradle.internal.jvm.UnsupportedJavaRuntimeException;
+import org.gradle.internal.jvm.inspection.JvmVersionDetector;
 import org.gradle.internal.logging.LoggingManagerInternal;
 import org.gradle.internal.logging.services.DefaultLoggingManagerFactory;
 import org.gradle.internal.logging.services.LoggingServiceRegistry;
 import org.gradle.internal.logging.sink.ConsoleStateUtil;
-import org.gradle.internal.logging.sink.OutputEventRenderer;
 import org.gradle.internal.nativeintegration.services.NativeServices;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.ServiceRegistryBuilder;
 import org.gradle.internal.service.scopes.GlobalScopeServices;
-import org.gradle.internal.time.Clock;
-import org.gradle.internal.time.Time;
+import org.gradle.launcher.cli.CommandLineActionFactory;
 import org.gradle.launcher.daemon.configuration.DaemonBuildOptions;
 import org.gradle.process.internal.streams.SafeStreams;
 import org.gradle.test.fixtures.file.TestDirectoryProvider;
@@ -63,7 +62,6 @@ import org.gradle.util.GradleVersion;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.Charset;
@@ -78,19 +76,26 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
-import static org.gradle.integtests.fixtures.executer.AbstractGradleExecuter.CliDaemonArgument.*;
+import static org.gradle.integtests.fixtures.executer.AbstractGradleExecuter.CliDaemonArgument.DAEMON;
+import static org.gradle.integtests.fixtures.executer.AbstractGradleExecuter.CliDaemonArgument.FOREGROUND;
+import static org.gradle.integtests.fixtures.executer.AbstractGradleExecuter.CliDaemonArgument.NOT_DEFINED;
+import static org.gradle.integtests.fixtures.executer.AbstractGradleExecuter.CliDaemonArgument.NO_DAEMON;
 import static org.gradle.integtests.fixtures.executer.OutputScrapingExecutionResult.STACK_TRACE_ELEMENT;
 import static org.gradle.internal.service.scopes.DefaultGradleUserHomeScopeServiceRegistry.REUSE_USER_HOME_SERVICES;
 import static org.gradle.util.CollectionUtils.collect;
 import static org.gradle.util.CollectionUtils.join;
 
 public abstract class AbstractGradleExecuter implements GradleExecuter {
+
     protected static final ServiceRegistry GLOBAL_SERVICES = ServiceRegistryBuilder.builder()
         .displayName("Global services")
         .parent(newCommandLineProcessLogging())
         .parent(NativeServicesTestFixture.getInstance())
         .provider(new GlobalScopeServices(true))
         .build();
+
+    private static final JvmVersionDetector JVM_VERSION_DETECTOR = GLOBAL_SERVICES.get(JvmVersionDetector.class);
+
     protected final static Set<String> PROPAGATED_SYSTEM_PROPERTIES = Sets.newHashSet();
     private static final List<String> JDK7_PATHS = Arrays.asList("1.7", "jdk7", "-7-", "jdk-7", "7u");
 
@@ -129,6 +134,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
     private final List<String> args = new ArrayList<String>();
     private final List<String> tasks = new ArrayList<String>();
     private boolean allowExtraLogging = true;
+    protected ConsoleAttachment consoleAttachment = ConsoleAttachment.NOT_ATTACHED;
     private File workingDir;
     private boolean quiet;
     private boolean taskList;
@@ -157,6 +163,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
     private ConsoleOutput consoleType;
     protected WarningMode warningMode = WarningMode.All;
     private boolean showStacktrace = true;
+    private boolean renderWelcomeMessage;
 
     private int expectedDeprecationWarnings;
     private boolean eagerClassLoaderCreationChecksOn = true;
@@ -229,6 +236,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         useOnlyRequestedJvmOpts = false;
         expectedDeprecationWarnings = 0;
         stackTraceChecksOn = true;
+        renderWelcomeMessage = false;
         debug = Boolean.getBoolean(DEBUG_SYSPROP);
         debugLauncher = Boolean.getBoolean(LAUNCHER_DEBUG_SYSPROP);
         profiler = System.getProperty(PROFILE_SYSPROP, "");
@@ -392,6 +400,13 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         if (!showStacktrace) {
             executer.withStacktraceDisabled();
         }
+
+        if (renderWelcomeMessage) {
+            executer.withWelcomeMessageEnabled();
+        }
+
+        executer.withTestConsoleAttached(consoleAttachment);
+
         return executer;
     }
 
@@ -444,10 +459,10 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
 
         GradleInvocation gradleInvocation = new GradleInvocation();
         gradleInvocation.environmentVars.putAll(environmentVars);
-        gradleInvocation.buildJvmArgs.addAll(buildJvmOpts);
         if (!useOnlyRequestedJvmOpts) {
             gradleInvocation.buildJvmArgs.addAll(getImplicitBuildJvmArgs());
         }
+        gradleInvocation.buildJvmArgs.addAll(buildJvmOpts);
         calculateLauncherJvmArgs(gradleInvocation);
         gradleInvocation.args.addAll(getAllArgs());
 
@@ -520,7 +535,27 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         if (isProfile()) {
             buildJvmOpts.add(profiler);
         }
+
+        if (isSharedDaemons()) {
+            if (JVM_VERSION_DETECTOR.getJavaVersion(Jvm.forHome(getJavaHome())).compareTo(JavaVersion.VERSION_1_8) < 0) {
+                buildJvmOpts.add("-XX:MaxPermSize=320m");
+            }
+            buildJvmOpts.add("-Xmx2g");
+        } else {
+            buildJvmOpts.add("-Xmx512m");
+        }
+        buildJvmOpts.add("-XX:+HeapDumpOnOutOfMemoryError");
+        buildJvmOpts.add("-XX:HeapDumpPath=" + buildContext.getGradleUserHomeDir());
         return buildJvmOpts;
+    }
+
+    private boolean xmxSpecified() {
+        for (String arg : buildJvmOpts) {
+            if (arg.startsWith("-Xmx")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -729,7 +764,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
     @Override
     public boolean isUseDaemon() {
         CliDaemonArgument cliDaemonArgument = resolveCliDaemonArgument();
-        if (cliDaemonArgument == NO_DAEMON) {
+        if (cliDaemonArgument == NO_DAEMON ||cliDaemonArgument == FOREGROUND) {
             return false;
         }
         return requireDaemon || cliDaemonArgument == DAEMON;
@@ -755,6 +790,12 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
 
     public GradleExecuter withStacktraceDisabled() {
         showStacktrace = false;
+        return this;
+    }
+
+    @Override
+    public GradleExecuter withWelcomeMessageEnabled() {
+        renderWelcomeMessage = true;
         return this;
     }
 
@@ -793,7 +834,7 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         FOREGROUND
     }
 
-    private CliDaemonArgument resolveCliDaemonArgument() {
+    protected CliDaemonArgument resolveCliDaemonArgument() {
         for (int i = args.size() - 1; i >= 0; i--) {
             final String arg = args.get(i);
             if (arg.equals("--daemon")) {
@@ -946,6 +987,8 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
             }
         }
 
+        properties.put(CommandLineActionFactory.WELCOME_MESSAGE_ENABLED_SYSTEM_PROPERTY, Boolean.toString(renderWelcomeMessage));
+
         return properties;
     }
 
@@ -978,7 +1021,11 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         assertCanExecute();
         collectStateBeforeExecution();
         try {
-            return doRun();
+            ExecutionResult result = doRun();
+            if (errorsShouldAppearOnStdout()) {
+                result = new ErrorsOnStdoutScrapingExecutionResult(result);
+            }
+            return result;
         } finally {
             finished();
         }
@@ -1048,7 +1095,11 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
         assertCanExecute();
         collectStateBeforeExecution();
         try {
-            return doRunWithFailure();
+            ExecutionFailure executionFailure = doRunWithFailure();
+            if (errorsShouldAppearOnStdout()) {
+                executionFailure = new ErrorsOnStdoutScrapingExecutionFailure(executionFailure);
+            }
+            return executionFailure;
         } finally {
             finished();
         }
@@ -1356,49 +1407,34 @@ public abstract class AbstractGradleExecuter implements GradleExecuter {
     }
 
     private static LoggingServiceRegistry newCommandLineProcessLogging() {
-        LoggingServiceRegistry loggingServices = new LoggingServiceRegistry() {
-            @Override
-            protected OutputEventRenderer makeOutputEventRenderer() {
-                return new VerboseAwareOutputEventRenderer(Time.clock());
-            }
-        };
+        LoggingServiceRegistry loggingServices = LoggingServiceRegistry.newEmbeddableLogging();
         LoggingManagerInternal rootLoggingManager = loggingServices.get(DefaultLoggingManagerFactory.class).getRoot();
-        rootLoggingManager.captureSystemSources();
+//        rootLoggingManager.captureSystemSources();
         rootLoggingManager.attachSystemOutAndErr();
         return loggingServices;
     }
 
-    private static class VerboseAwareOutputEventRenderer extends OutputEventRenderer {
-        VerboseAwareOutputEventRenderer(Clock clock) {
-            super(clock);
-        }
+    @Override
+    public GradleExecuter withTestConsoleAttached() {
+        return withTestConsoleAttached(ConsoleAttachment.ATTACHED);
+    }
 
-        @Override
-        public void attachAnsiConsole(OutputStream outputStream) {
-            if (outputStream instanceof VerboseAwareAnsiOutputStream) {
-                attachAnsiConsole(outputStream, VerboseAwareAnsiOutputStream.class.cast(outputStream).isVerbose());
-            } else {
-                super.attachAnsiConsole(outputStream);
-            }
+    @Override
+    public GradleExecuter withTestConsoleAttached(ConsoleAttachment consoleAttachment) {
+        this.consoleAttachment = consoleAttachment;
+        return configureConsoleCommandLineArgs();
+    }
+
+    protected GradleExecuter configureConsoleCommandLineArgs() {
+        if (consoleAttachment == ConsoleAttachment.NOT_ATTACHED) {
+            return this;
+        } else {
+            return withCommandLineGradleOpts(consoleAttachment.getConsoleMetaData().getCommandLineArgument());
         }
     }
 
-    protected static class VerboseAwareAnsiOutputStream extends OutputStream {
-        private final OutputStream delegate;
-        private boolean verbose;
-
-        VerboseAwareAnsiOutputStream(OutputStream delegate, boolean verbose) {
-            this.delegate = delegate;
-            this.verbose = verbose;
-        }
-
-        public boolean isVerbose() {
-            return verbose;
-        }
-
-        @Override
-        public void write(int b) throws IOException {
-            delegate.write(b);
-        }
+    private boolean errorsShouldAppearOnStdout() {
+        // If stderr is attached to the console or if we'll use the fallback console
+        return (consoleAttachment.isStderrAttached() && consoleAttachment.isStdoutAttached()) || (consoleAttachment == ConsoleAttachment.NOT_ATTACHED && (consoleType == ConsoleOutput.Rich || consoleType == ConsoleOutput.Verbose));
     }
 }

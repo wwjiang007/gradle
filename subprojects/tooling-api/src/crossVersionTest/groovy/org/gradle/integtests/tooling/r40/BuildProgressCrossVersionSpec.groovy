@@ -275,7 +275,7 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         events.assertIsABuild()
 
         and:
-        events.operation('Configure project :').children.size() == 1 //only 'Apply plugin org.gradle.help-tasks'
+        events.operation('Configure project :').children.size() <= 5 //only 'Apply plugin org.gradle.help-tasks', maybe before/afterEvaluated and 2 delayed task registrations
     }
 
     def "generates events for applied script plugins"() {
@@ -382,7 +382,7 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         }
     }
 
-    @TargetGradleVersion("<4.7")
+    @TargetGradleVersion(">=4.0 <4.7")
     @Issue("gradle/gradle#1641")
     def "generates download events during maven publish"() {
         given:

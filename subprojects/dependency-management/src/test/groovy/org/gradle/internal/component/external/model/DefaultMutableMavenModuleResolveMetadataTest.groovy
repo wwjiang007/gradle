@@ -19,6 +19,7 @@ package org.gradle.internal.component.external.model
 import org.gradle.api.artifacts.ModuleVersionIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.internal.artifacts.DefaultImmutableModuleIdentifierFactory
+import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.artifacts.repositories.metadata.MavenMutableModuleMetadataFactory
 import org.gradle.internal.component.external.descriptor.Configuration
@@ -42,7 +43,7 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
     }
 
     def "defines configurations for maven scopes and several usage buckets"() {
-        def id = DefaultModuleComponentIdentifier.newId("group", "module", "version")
+        def id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "version")
         def metadata = mavenMetadataFactory.create(id)
 
         expect:
@@ -58,7 +59,7 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
     }
 
     def "default metadata"() {
-        def id = DefaultModuleComponentIdentifier.newId("group", "module", "version")
+        def id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "version")
         def metadata = mavenMetadataFactory.create(id)
 
         expect:
@@ -75,13 +76,13 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
     }
 
     def "initialises values from descriptor state and defaults"() {
-        def id = DefaultModuleComponentIdentifier.newId("group", "module", "version")
+        def id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "version")
 
         def vid = Mock(ModuleVersionIdentifier)
         def metadata = mavenMetadataFactory.create(id)
 
         expect:
-        metadata.componentId == id
+        metadata.id == id
         metadata.status == "integration"
 
         and:
@@ -94,7 +95,7 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
         and:
         def immutable = metadata.asImmutable()
         immutable != metadata
-        immutable.componentId == id
+        immutable.id == id
         immutable.source == null
         immutable.statusScheme == ComponentResolveMetadata.DEFAULT_STATUS_SCHEME
         immutable.snapshotTimestamp == null
@@ -108,7 +109,7 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
         and:
         def copy = immutable.asMutable()
         copy != metadata
-        copy.componentId == id
+        copy.id == id
         copy.source == null
         copy.statusScheme == ComponentResolveMetadata.DEFAULT_STATUS_SCHEME
         copy.snapshotTimestamp == null
@@ -124,15 +125,15 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
     }
 
     def "can override values from descriptor"() {
-        def id = DefaultModuleComponentIdentifier.newId("group", "module", "version")
-        def newId = DefaultModuleComponentIdentifier.newId("group", "module", "1.2")
+        def id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "version")
+        def newId = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "1.2")
         def source = Stub(ModuleSource)
         def contentHash = new HashValue("123")
 
         def metadata = mavenMetadataFactory.create(id)
 
         when:
-        metadata.componentId = newId
+        metadata.id = newId
         metadata.source = source
         metadata.status = "3"
         metadata.changing = true
@@ -143,8 +144,8 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
         metadata.contentHash = contentHash
 
         then:
-        metadata.componentId == newId
-        metadata.id == DefaultModuleVersionIdentifier.newId(newId)
+        metadata.id == newId
+        metadata.moduleVersionId == DefaultModuleVersionIdentifier.newId(newId)
         metadata.source == source
         metadata.changing
         metadata.status == "3"
@@ -156,8 +157,8 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
 
         def immutable = metadata.asImmutable()
         immutable != metadata
-        immutable.componentId == newId
-        immutable.id == DefaultModuleVersionIdentifier.newId(newId)
+        immutable.id == newId
+        immutable.moduleVersionId == DefaultModuleVersionIdentifier.newId(newId)
         immutable.source == source
         immutable.status == "3"
         immutable.changing
@@ -169,8 +170,8 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
 
         def copy = immutable.asMutable()
         copy != metadata
-        copy.componentId == newId
-        copy.id == DefaultModuleVersionIdentifier.newId(newId)
+        copy.id == newId
+        copy.moduleVersionId == DefaultModuleVersionIdentifier.newId(newId)
         copy.source == source
         copy.status == "3"
         copy.changing
@@ -182,15 +183,15 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
     }
 
     def "making changes to copy does not affect original"() {
-        def id = DefaultModuleComponentIdentifier.newId("group", "module", "version")
-        def newId = DefaultModuleComponentIdentifier.newId("group", "module", "1.2")
+        def id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "version")
+        def newId = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "1.2")
         def source = Stub(ModuleSource)
         def metadata = mavenMetadataFactory.create(id)
 
         when:
         def immutable = metadata.asImmutable()
         def copy = immutable.asMutable()
-        copy.componentId = newId
+        copy.id = newId
         copy.source = source
         copy.changing = true
         copy.status = "3"
@@ -201,28 +202,28 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
         def immutableCopy = copy.asImmutable()
 
         then:
-        metadata.componentId == id
+        metadata.id == id
         metadata.source == null
         metadata.statusScheme == ComponentResolveMetadata.DEFAULT_STATUS_SCHEME
         metadata.snapshotTimestamp == null
         metadata.packaging == "jar"
         !metadata.relocated
 
-        immutable.componentId == id
+        immutable.id == id
         immutable.source == null
         immutable.statusScheme == ComponentResolveMetadata.DEFAULT_STATUS_SCHEME
         immutable.snapshotTimestamp == null
         immutable.packaging == "jar"
         !immutable.relocated
 
-        copy.componentId == newId
+        copy.id == newId
         copy.source == source
         copy.statusScheme == ["2", "3"]
         copy.snapshotTimestamp == "123"
         copy.packaging == "pom"
         copy.relocated
 
-        immutableCopy.componentId == newId
+        immutableCopy.id == newId
         immutableCopy.source == source
         immutableCopy.statusScheme == ["2", "3"]
         immutableCopy.snapshotTimestamp == "123"
@@ -231,15 +232,15 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
     }
 
     def "making changes to original does not affect copy"() {
-        def id = DefaultModuleComponentIdentifier.newId("group", "module", "version")
-        def newId = DefaultModuleComponentIdentifier.newId("group", "module", "1.2")
+        def id = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "version")
+        def newId = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("group", "module"), "1.2")
         def source = Stub(ModuleSource)
         def metadata = mavenMetadataFactory.create(id)
 
         when:
         def immutable = metadata.asImmutable()
 
-        metadata.componentId = newId
+        metadata.id = newId
         metadata.source = source
         metadata.statusScheme = ["1", "2"]
         metadata.snapshotTimestamp = "123"
@@ -249,21 +250,21 @@ class DefaultMutableMavenModuleResolveMetadataTest extends AbstractMutableModule
         def immutableCopy = metadata.asImmutable()
 
         then:
-        metadata.componentId == newId
+        metadata.id == newId
         metadata.source == source
         metadata.statusScheme == ["1", "2"]
         metadata.snapshotTimestamp == "123"
         metadata.packaging == "pom"
         metadata.relocated
 
-        immutable.componentId == id
+        immutable.id == id
         immutable.source == null
         immutable.statusScheme == ComponentResolveMetadata.DEFAULT_STATUS_SCHEME
         immutable.snapshotTimestamp == null
         immutable.packaging == "jar"
         !immutable.relocated
 
-        immutableCopy.componentId == newId
+        immutableCopy.id == newId
         immutableCopy.source == source
         immutableCopy.statusScheme == ["1", "2"]
         immutableCopy.snapshotTimestamp == "123"

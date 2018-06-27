@@ -247,18 +247,11 @@ class CrossVersionPerformanceTestRunner extends PerformanceTestSpec {
             }
         builder.workingDirectory = workingDir
         def spec = builder.build()
-        if (experimentRunner.honestProfiler) {
-            experimentRunner.honestProfiler.sessionId = "${testId}-${dist.version.version}".replaceAll('[^a-zA-Z0-9.-]', '_').replaceAll('[_]+', '_')
-        }
         experimentRunner.run(spec, results)
     }
 
     def resolveGradleOpts() {
-        PerformanceTestJvmOptions.customizeJvmOptions(this.gradleOpts)
-    }
-
-    HonestProfilerCollector getHonestProfiler() {
-        return experimentRunner.honestProfiler
+        PerformanceTestJvmOptions.normalizeJvmOptions(this.gradleOpts)
     }
 
     void addBuildExperimentListener(BuildExperimentListener buildExperimentListener) {

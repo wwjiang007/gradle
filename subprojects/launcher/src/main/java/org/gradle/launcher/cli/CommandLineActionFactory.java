@@ -15,7 +15,11 @@
  */
 package org.gradle.launcher.cli;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import groovy.lang.GroovySystem;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.tools.ant.Main;
 import org.gradle.api.Action;
 import org.gradle.api.internal.file.IdentityFileResolver;
@@ -50,9 +54,15 @@ import org.gradle.launcher.cli.converter.LayoutToPropertiesConverter;
 import org.gradle.launcher.cli.converter.PropertiesToLogLevelConfigurationConverter;
 import org.gradle.launcher.cli.converter.PropertiesToParallelismConfigurationConverter;
 import org.gradle.process.internal.DefaultExecActionFactory;
+import org.gradle.util.GFileUtils;
 import org.gradle.util.GradleVersion;
 
+import javax.annotation.Nullable;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
+import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -63,6 +73,7 @@ import java.util.Map;
  * <p>Responsible for converting a set of command-line arguments into a {@link Runnable} action.</p>
  */
 public class CommandLineActionFactory {
+    public static final String WELCOME_MESSAGE_ENABLED_SYSTEM_PROPERTY = "org.gradle.internal.launcher.welcomeMessageEnabled";
     private static final String HELP = "h";
     private static final String VERSION = "v";
 
@@ -108,6 +119,104 @@ public class CommandLineActionFactory {
         out.println();
         parser.printUsage(out);
         out.println();
+    }
+
+    static class WelcomeMessageAction implements Action<PrintStream> {
+        private final BuildLayoutParameters buildLayoutParameters;
+        private final GradleVersion gradleVersion;
+        private final Function<String, InputStream> inputStreamProvider;
+
+        WelcomeMessageAction(BuildLayoutParameters buildLayoutParameters) {
+            this(buildLayoutParameters, GradleVersion.current(), new Function<String, InputStream>() {
+                @Nullable
+                @Override
+                public InputStream apply(@Nullable String input) {
+                    return getClass().getClassLoader().getResourceAsStream(input);
+                }
+            });
+        }
+
+        @VisibleForTesting
+        WelcomeMessageAction(BuildLayoutParameters buildLayoutParameters, GradleVersion gradleVersion, Function<String, InputStream> inputStreamProvider) {
+            this.buildLayoutParameters = buildLayoutParameters;
+            this.gradleVersion = gradleVersion;
+            this.inputStreamProvider = inputStreamProvider;
+        }
+
+        @Override
+        public void execute(PrintStream out) {
+            if (isWelcomeMessageEnabled()) {
+                File markerFile = getMarkerFile();
+
+                if (!markerFile.exists()) {
+                    out.println();
+                    out.print("Welcome to Gradle " + gradleVersion.getVersion() + "!");
+
+                    String featureList = readReleaseFeatures();
+
+                    if (StringUtils.isNotBlank(featureList)) {
+                        out.println();
+                        out.println();
+                        out.println("Here are the highlights of this release:");
+                        out.print(featureList);
+                    }
+
+                    if (!gradleVersion.isSnapshot()) {
+                        out.println();
+                        out.println("For more details see https://docs.gradle.org/" + gradleVersion.getVersion() + "/release-notes.html");
+                    }
+
+                    out.println();
+
+                    writeMarkerFile(markerFile);
+                }
+            }
+        }
+
+        /**
+         * The system property is set for the purpose of internal testing.
+         * In user environments the system property will never be available.
+         */
+        private boolean isWelcomeMessageEnabled() {
+            String messageEnabled = System.getProperty(WELCOME_MESSAGE_ENABLED_SYSTEM_PROPERTY);
+
+            if (messageEnabled == null) {
+                return true;
+            }
+
+            return Boolean.parseBoolean(messageEnabled);
+        }
+
+        private File getMarkerFile() {
+            File gradleUserHomeDir = buildLayoutParameters.getGradleUserHomeDir();
+            File notificationsDir = new File(gradleUserHomeDir, "notifications");
+            File versionedNotificationsDir = new File(notificationsDir, gradleVersion.getVersion());
+            return new File(versionedNotificationsDir, "release-features.rendered");
+        }
+
+        private String readReleaseFeatures() {
+            InputStream inputStream = inputStreamProvider.apply("release-features.txt");
+
+            if (inputStream != null) {
+                StringWriter writer = new StringWriter();
+
+                try {
+                    IOUtils.copy(inputStream, writer, "UTF-8");
+                    return writer.toString();
+                } catch (IOException e) {
+                    // do not fail the build as feature is non-critical
+                } finally {
+                    IOUtils.closeQuietly(inputStream);
+                }
+            }
+
+            return null;
+        }
+
+        private void writeMarkerFile(File markerFile) {
+            GFileUtils.mkdirs(markerFile.getParentFile());
+            GFileUtils.touch(markerFile);
+        }
     }
 
     private static class BuiltInActions implements CommandLineAction {
@@ -250,6 +359,7 @@ public class CommandLineActionFactory {
             try {
                 NativeServices.initialize(buildLayout.getGradleUserHomeDir());
                 loggingManager.attachProcessConsole(loggingConfiguration.getConsoleOutput());
+                new WelcomeMessageAction(buildLayout).execute(System.out);
                 exceptionReportingAction.execute(executionListener);
             } finally {
                 loggingManager.stop();

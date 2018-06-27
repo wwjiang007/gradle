@@ -40,7 +40,8 @@ class AggregatingIncrementalAnnotationProcessingIntegrationTest extends Abstract
         run "compileJava"
 
         then:
-        outputs.recompiledClasses("A", "ServiceRegistry", "B")
+        outputs.recompiledClasses("A", "ServiceRegistry")
+        serviceRegistryReferences("A", "B")
     }
 
     def "unrelated files are not recompiled when annotated file changes"() {
@@ -57,7 +58,7 @@ class AggregatingIncrementalAnnotationProcessingIntegrationTest extends Abstract
         outputs.recompiledClasses("A", "ServiceRegistry")
     }
 
-    def "all annotated files are recompiled when an unrelated file changes"() {
+    def "annotated files are reprocessed when an unrelated file changes"() {
         java "@Service class A {}"
         def unrelated = java "class Unrelated {}"
 
@@ -68,10 +69,10 @@ class AggregatingIncrementalAnnotationProcessingIntegrationTest extends Abstract
         run "compileJava"
 
         then:
-        outputs.recompiledClasses("A", "ServiceRegistry", "Unrelated")
+        outputs.recompiledClasses("Unrelated", "ServiceRegistry")
     }
 
-    def "all annotated files are recompiled when a new file is added"() {
+    def "annotated files are reprocessed when a new file is added"() {
         java "@Service class A {}"
         java "class Unrelated {}"
 
@@ -82,10 +83,11 @@ class AggregatingIncrementalAnnotationProcessingIntegrationTest extends Abstract
         run "compileJava"
 
         then:
-        outputs.recompiledClasses("A", "ServiceRegistry", "B")
+        outputs.recompiledClasses("ServiceRegistry", "B")
+        serviceRegistryReferences("A", "B")
     }
 
-    def "all annotated files are recompiled when a file is deleted"() {
+    def "annotated files are reprocessed when a file is deleted"() {
         def a = java "@Service class A {}"
         java "@Service class B {}"
         java "class Unrelated {}"
@@ -98,7 +100,9 @@ class AggregatingIncrementalAnnotationProcessingIntegrationTest extends Abstract
 
         then:
         outputs.deletedClasses("A")
-        outputs.recompiledClasses( "ServiceRegistry", "B")
+        outputs.recompiledClasses("ServiceRegistry")
+        serviceRegistryReferences("B")
+        !serviceRegistryReferences("A")
     }
 
     def "classes depending on generated file are recompiled when source file changes"() {
@@ -174,17 +178,36 @@ class AggregatingIncrementalAnnotationProcessingIntegrationTest extends Abstract
         outputs.deletedClasses("ServiceRegistry")
     }
 
-    def "processors can't access resources"() {
+    def "processors can't read resources"() {
         given:
-        withProcessor(new NonIncrementalProcessorFixture().withDeclaredType(IncrementalAnnotationProcessorType.AGGREGATING))
-        java "@Thing class A {}"
+        withProcessor(new NonIncrementalProcessorFixture().readingResources().withDeclaredType(IncrementalAnnotationProcessorType.AGGREGATING))
+        def a = java "@Thing class A {}"
+        outputs.snapshot { succeeds "compileJava" }
 
-        expect:
-        fails "compileJava"
+        when:
+        a.text = "@Thing class A { void foo() {} }"
+
+        then:
+        succeeds "compileJava", "--info"
 
         and:
-        failure.assertHasErrorOutput("Incremental annotation processors are not allowed to read resources.")
-        failure.assertHasErrorOutput("Incremental annotation processors are not allowed to create resources.")
+        outputContains("Full recompilation is required because incremental annotation processors are not allowed to read resources.")
+    }
+
+    def "processors can't write resources"() {
+        given:
+        withProcessor(new NonIncrementalProcessorFixture().writingResources().withDeclaredType(IncrementalAnnotationProcessorType.AGGREGATING))
+        def a = java "@Thing class A {}"
+        outputs.snapshot { succeeds "compileJava" }
+
+        when:
+        a.text = "@Thing class A { void foo() {} }"
+
+        then:
+        succeeds "compileJava", "--info"
+
+        and:
+        outputContains("Full recompilation is required because incremental annotation processors are not allowed to create resources.")
     }
 
     def "an isolating processor is also a valid aggregating processor"() {
@@ -203,5 +226,35 @@ class AggregatingIncrementalAnnotationProcessingIntegrationTest extends Abstract
 
         expect:
         succeeds "compileJava"
+    }
+
+    def "aggregating processor do not work with source retention"() {
+        given:
+        annotationProjectDir.file("src/main/java/Service.java").text = """
+            import java.lang.annotation.*;
+            
+            @Retention(RetentionPolicy.SOURCE)
+            public @interface Service {
+            }
+"""
+
+        def a = java "@Service class A {}"
+        outputs.snapshot { succeeds "compileJava" }
+
+        when:
+        a.text = "@Service class A { void foo() {} }"
+
+        then:
+        succeeds "compileJava", "--info"
+
+        and:
+        outputContains("Full recompilation is required because '@Service' has source retention. Aggregating annotation processors require class or runtime retention.")
+    }
+
+    private boolean serviceRegistryReferences(String... services) {
+        def registry = file("build/classes/java/main/ServiceRegistry.java").text
+        services.every() {
+            registry.contains("get$it")
+        }
     }
 }

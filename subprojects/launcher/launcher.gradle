@@ -18,9 +18,11 @@ dependencies {
     compile project(':toolingApi')
     compile project(':native')
     compile project(':logging')
+    compile project(':docs')
 
     compile libraries.asm.coordinates
     compile libraries.commons_io.coordinates
+    compile libraries.commons_lang.coordinates
     compile libraries.slf4j_api.coordinates
 
     integTestCompile project(':internalIntegTesting')
@@ -41,9 +43,10 @@ testFixtures {
     from(':languageJava')
     from(':messaging')
     from(':logging')
+    from(':toolingApi')
 }
 
-integTestTasks.all {
+integTestTasks.configureEach {
     maxParallelForks = Math.min(3, Build_extensionsKt.getMaxParallelForks(project))
 }
 
@@ -64,6 +67,7 @@ task startScripts(type: GradleStartScriptGenerator) {
     launcherJar = jar.outputs.files
 }
 
+import org.gradle.gradlebuild.testing.integrationtests.cleanup.WhenNotEmpty
 testFilesCleanup {
-    errorWhenNotEmpty = false
+    policy = WhenNotEmpty.REPORT
 }

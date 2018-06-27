@@ -17,7 +17,7 @@ package org.gradle.api.internal.artifacts.ivyservice.ivyresolve;
 
 import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.ArtifactIdentifier;
-import org.gradle.api.artifacts.ComponentMetadataSupplier;
+import org.gradle.api.artifacts.ComponentMetadataSupplierDetails;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentArtifactIdentifier;
@@ -38,6 +38,7 @@ import org.gradle.api.internal.artifacts.ivyservice.modulecache.dynamicversions.
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ResolvableArtifact;
 import org.gradle.api.internal.artifacts.repositories.resolver.MetadataFetchingCost;
 import org.gradle.api.internal.component.ArtifactType;
+import org.gradle.internal.action.InstantiatingAction;
 import org.gradle.internal.component.external.model.FixedComponentArtifacts;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata;
 import org.gradle.internal.component.external.model.ModuleComponentResolveMetadata;
@@ -81,9 +82,8 @@ public class CachingModuleComponentRepository implements ModuleComponentReposito
     private final ModuleArtifactsCache moduleArtifactsCache;
     private final ModuleArtifactCache moduleArtifactCache;
 
-    private final CachePolicy cachePolicy;
-
     private final ModuleComponentRepository delegate;
+    private final CachePolicy cachePolicy;
     private final BuildCommencedTimeProvider timeProvider;
     private final ComponentMetadataProcessor metadataProcessor;
     private final ImmutableModuleIdentifierFactory moduleIdentifierFactory;
@@ -99,8 +99,8 @@ public class CachingModuleComponentRepository implements ModuleComponentReposito
         this.moduleVersionsCache = caches.moduleVersionsCache;
         this.moduleArtifactsCache = caches.moduleArtifactsCache;
         this.moduleArtifactCache = caches.moduleArtifactCache;
-        this.timeProvider = timeProvider;
         this.cachePolicy = cachePolicy;
+        this.timeProvider = timeProvider;
         this.metadataProcessor = metadataProcessor;
         this.moduleIdentifierFactory = moduleIdentifierFactory;
     }
@@ -126,17 +126,18 @@ public class CachingModuleComponentRepository implements ModuleComponentReposito
         return resolveAndCacheRepositoryAccess;
     }
 
-    public ComponentMetadataSupplier createMetadataSupplier() {
-        return delegate.createMetadataSupplier();
-    }
-
     @Override
     public Map<ComponentArtifactIdentifier, ResolvableArtifact> getArtifactCache() {
         throw new UnsupportedOperationException();
     }
 
+    @Override
+    public InstantiatingAction<ComponentMetadataSupplierDetails> getComponentMetadataSupplier() {
+        return delegate.getComponentMetadataSupplier();
+    }
+
     private ModuleIdentifier getCacheKey(ModuleComponentSelector requested) {
-        return moduleIdentifierFactory.module(requested.getGroup(), requested.getModule());
+        return requested.getModuleIdentifier();
     }
 
     private class LocateInCacheRepositoryAccess implements ModuleComponentRepositoryAccess {
@@ -164,7 +165,7 @@ public class CachingModuleComponentRepository implements ModuleComponentReposito
                 Set<String> versionList = cachedModuleVersionList.getModuleVersions();
                 Set<ModuleVersionIdentifier> versions = CollectionUtils.collect(versionList, new Transformer<ModuleVersionIdentifier, String>() {
                     public ModuleVersionIdentifier transform(String original) {
-                        return new DefaultModuleVersionIdentifier(moduleId, original);
+                        return DefaultModuleVersionIdentifier.newId(moduleId, original);
                     }
                 });
                 if (cachePolicy.mustRefreshVersionList(moduleId, versions, cachedModuleVersionList.getAgeMillis())) {
@@ -266,17 +267,17 @@ public class CachingModuleComponentRepository implements ModuleComponentReposito
         }
 
         private void resolveModuleArtifactsFromCache(String contextId, ComponentResolveMetadata component, BuildableArtifactSetResolveResult result, CachingModuleSource cachedModuleSource) {
-            CachedArtifacts cachedModuleArtifacts = moduleArtifactsCache.getCachedArtifacts(delegate, component.getComponentId(), contextId);
+            CachedArtifacts cachedModuleArtifacts = moduleArtifactsCache.getCachedArtifacts(delegate, component.getId(), contextId);
             BigInteger moduleDescriptorHash = cachedModuleSource.getDescriptorHash();
 
             if (cachedModuleArtifacts != null) {
-                if (!cachePolicy.mustRefreshModuleArtifacts(component.getId(), null, cachedModuleArtifacts.getAgeMillis(),
+                if (!cachePolicy.mustRefreshModuleArtifacts(component.getModuleVersionId(), null, cachedModuleArtifacts.getAgeMillis(),
                     cachedModuleSource.isChangingModule(), moduleDescriptorHash.equals(cachedModuleArtifacts.getDescriptorHash()))) {
                     result.resolved(cachedModuleArtifacts.getArtifacts());
                     return;
                 }
 
-                LOGGER.debug("Artifact listing has expired: will perform fresh resolve of '{}' for '{}' in '{}'", contextId, component.getId(), delegate.getName());
+                LOGGER.debug("Artifact listing has expired: will perform fresh resolve of '{}' for '{}' in '{}'", contextId, component.getModuleVersionId(), delegate.getName());
             }
         }
 
@@ -401,7 +402,7 @@ public class CachingModuleComponentRepository implements ModuleComponentReposito
             delegate.getRemoteAccess().resolveArtifactsWithType(component.withSource(moduleSource.getDelegate()), artifactType, result);
 
             if (result.getFailure() == null) {
-                moduleArtifactsCache.cacheArtifacts(delegate, component.getComponentId(), cacheKey(artifactType), moduleSource.getDescriptorHash(), result.getResult());
+                moduleArtifactsCache.cacheArtifacts(delegate, component.getId(), cacheKey(artifactType), moduleSource.getDescriptorHash(), result.getResult());
             }
         }
 
@@ -412,7 +413,7 @@ public class CachingModuleComponentRepository implements ModuleComponentReposito
 
             if (result.getFailure() == null) {
                 FixedComponentArtifacts artifacts = (FixedComponentArtifacts) result.getResult();
-                moduleArtifactsCache.cacheArtifacts(delegate, component.getComponentId(), "component:", moduleSource.getDescriptorHash(), artifacts.getArtifacts());
+                moduleArtifactsCache.cacheArtifacts(delegate, component.getId(), "component:", moduleSource.getDescriptorHash(), artifacts.getArtifacts());
             }
         }
 

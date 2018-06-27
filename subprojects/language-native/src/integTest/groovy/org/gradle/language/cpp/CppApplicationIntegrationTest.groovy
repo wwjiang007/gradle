@@ -16,6 +16,8 @@
 
 package org.gradle.language.cpp
 
+import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
+import org.gradle.nativeplatform.fixtures.ToolChainRequirement
 import org.gradle.nativeplatform.fixtures.app.CppApp
 import org.gradle.nativeplatform.fixtures.app.CppAppWithLibraries
 import org.gradle.nativeplatform.fixtures.app.CppAppWithLibrariesWithApiDependencies
@@ -24,7 +26,6 @@ import org.gradle.nativeplatform.fixtures.app.CppAppWithLibraryAndOptionalFeatur
 import org.gradle.nativeplatform.fixtures.app.CppAppWithOptionalFeature
 import org.gradle.nativeplatform.fixtures.app.CppCompilerDetectingTestApp
 import org.gradle.nativeplatform.fixtures.app.SourceElement
-import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
 
 import static org.gradle.util.Matchers.containsText
 
@@ -443,13 +444,13 @@ class CppApplicationIntegrationTest extends AbstractCppIntegrationTest implement
                     dependencies {
                         implementation project(':hello')
                     }
-                    operatingSystems = [objects.named(OperatingSystemFamily, '${DefaultNativePlatform.currentOperatingSystem.toFamilyName()}')]
+                    operatingSystems = [objects.named(OperatingSystemFamily, '${currentOsFamilyName}')]
                 }
             }
             project(':hello') {
                 apply plugin: 'cpp-library'
                 library {
-                    operatingSystems = [objects.named(OperatingSystemFamily, '${DefaultNativePlatform.currentOperatingSystem.toFamilyName()}')]
+                    operatingSystems = [objects.named(OperatingSystemFamily, '${currentOsFamilyName}')]
                 }
             }
         """
@@ -472,7 +473,6 @@ class CppApplicationIntegrationTest extends AbstractCppIntegrationTest implement
         def app = new CppAppWithLibrary()
 
         given:
-        def currentOperatingSystemFamily = DefaultNativePlatform.currentOperatingSystem.toFamilyName()
         buildFile << """
             project(':app') {
                 apply plugin: 'cpp-application'
@@ -480,7 +480,7 @@ class CppApplicationIntegrationTest extends AbstractCppIntegrationTest implement
                     dependencies {
                         implementation project(':hello')
                     }
-                    operatingSystems = [objects.named(OperatingSystemFamily, '${currentOperatingSystemFamily}')]
+                    operatingSystems = [objects.named(OperatingSystemFamily, '${currentOsFamilyName}')]
                 }
             }
             project(':hello') {
@@ -496,9 +496,9 @@ class CppApplicationIntegrationTest extends AbstractCppIntegrationTest implement
         expect:
         fails ":app:assemble"
 
-        failure.assertHasCause """Unable to find a matching configuration of project :hello: Configuration 'cppApiElements':
+        failure.assertHasCause """Unable to find a matching variant of project :hello: Variant 'cppApiElements':
   - Required org.gradle.native.debuggable 'true' but no value provided.
-  - Required org.gradle.native.operatingSystem '${currentOperatingSystemFamily}' but no value provided.
+  - Required org.gradle.native.operatingSystem '${currentOsFamilyName}' but no value provided.
   - Required org.gradle.native.optimized 'false' but no value provided.
   - Required org.gradle.usage 'native-runtime' and found incompatible value 'cplusplus-api'."""
     }
@@ -932,5 +932,33 @@ class CppApplicationIntegrationTest extends AbstractCppIntegrationTest implement
         installation("build/install/main/debug").exec().out == app.expectedOutput
         sharedLibrary("build/install/main/debug/lib/lib1").file.assertExists()
         sharedLibrary("build/install/main/debug/lib/lib2").file.assertExists()
+    }
+
+    @RequiresInstalledToolChain(ToolChainRequirement.GCC_COMPATIBLE)
+    def "system headers are not evaluated when compiler warnings are enabled"() {
+        settingsFile << "rootProject.name = 'app'"
+        def app = new CppCompilerDetectingTestApp()
+
+        given:
+        app.writeSources(file('src/main'))
+
+        and:
+        buildFile << """
+            apply plugin: 'cpp-application'
+            
+            application {
+                binaries.configureEach {
+                    compileTask.get().compilerArgs.add("-Wall")
+                    compileTask.get().compilerArgs.add("-Werror")
+                }
+            }
+         """
+
+        expect:
+        succeeds "assemble"
+        result.assertTasksExecuted(tasks.debug.allToInstall, ':assemble')
+
+        executable("build/exe/main/debug/app").assertExists()
+        installation("build/install/main/debug").exec().out == app.expectedOutput(toolChain)
     }
 }

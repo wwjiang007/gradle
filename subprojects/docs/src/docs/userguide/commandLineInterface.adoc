@@ -206,6 +206,7 @@ Running `gradle projects` gives you a list of the sub-projects of the selected p
 
 You also get a project report within build scans. Learn more about https://guides.gradle.org/creating-build-scans/[creating build scans].
 
+[[sec:listing_tasks]]
 ==== Listing tasks
 
 Running `gradle tasks` gives you a list of the main tasks of the selected project. This report shows the default tasks for the project, if any, and a description for each task.
@@ -446,9 +447,9 @@ image::img/rich-cli.png[alt="Gradle Rich Console"]
 
 Features:
 
- * Logs above grouped by task that generated them
  * Progress bar and timer visually describe overall status
  * Parallel work-in-progress lines below describe what is happening now
+ * Colors and fonts are used to highlight important output and errors
 
 [[sec:command_line_execution_options]]
 === Execution options
@@ -465,6 +466,15 @@ Refresh the state of dependencies. Learn more about how to use this in the <<sec
 
 `--dry-run`::
 Run Gradle with all task actions disabled. Use this to show which task would have executed.
+
+`--write-locks`::
+Indicates that all resolved configurations that are _lockable_ should have their lock state persisted.
+Learn more about this in <<dependency_locking,dependency locking>>.
+
+`--update-locks <group:name>[,<group:name>]*`::
+Indicates that versions for the specified modules have to be updated in the lock file.
+This flag also implies `--write-locks`.
+Learn more about this in <<dependency_locking,dependency locking>>.
 
 === Environment options
 You can customize many aspects about where build scripts, settings, caches, and so on through the options below. Learn more about customizing your <<build_environment, build environment>>.
@@ -527,6 +537,7 @@ The built-in `gradle wrapper` task generates a script, `gradlew`, that invokes a
 
 You can also specify `--distribution-type=(bin|all)`, `--gradle-distribution-url`, `--gradle-distribution-sha256-sum` in addition to `--gradle-version`. Full details on how to use these options are documented in the <<gradle_wrapper,Gradle wrapper section>>.
 
+[[sec:continuous_build]]
 === Continuous Build
 
 Continuous Build allows you to automatically re-execute the requested tasks when task inputs change.

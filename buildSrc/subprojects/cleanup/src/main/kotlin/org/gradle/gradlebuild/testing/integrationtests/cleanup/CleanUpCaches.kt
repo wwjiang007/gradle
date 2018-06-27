@@ -24,6 +24,7 @@ import org.gradle.util.GradleVersion
 
 import java.io.File
 
+
 open class CleanUpCaches : DefaultTask() {
 
     @TaskAction
@@ -55,6 +56,7 @@ open class CleanUpCaches : DefaultTask() {
         // location defined in TempTestKitDirProvider, copied here
         val testKitTmpDir = File(File(System.getProperty("java.io.tmpdir")), String.format(".gradle-test-kit-%s", System.getProperty("user.name")))
         removeCachedScripts(File(testKitTmpDir, "caches"))
+        removeTransformDir(File(testKitTmpDir, "caches"))
 
         removeOldVersionsFromDir(file("intTestHomeDir/worker-1/daemon"), expireIntegTestCache)
 

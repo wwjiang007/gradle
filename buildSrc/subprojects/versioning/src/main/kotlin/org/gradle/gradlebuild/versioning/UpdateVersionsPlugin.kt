@@ -19,24 +19,24 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.build.ReleasedVersion
 import org.gradle.build.UpdateReleasedVersions
-import org.gradle.build.remote.DefaultRemoteGradleVersionResolver
 import org.gradle.build.remote.VersionType
 import com.google.gson.Gson
 import org.gradle.kotlin.dsl.*
 import java.net.URL
 import java.util.concurrent.Callable
 
+
 // TODO Don't use Gson for Json. Extract
 class UpdateVersionsPlugin : Plugin<Project> {
     override fun apply(project: Project): Unit = project.run {
         val releasedVersionsJsonFile = file("released-versions.json")
 
-        tasks.withType<UpdateReleasedVersions> {
+        tasks.withType<UpdateReleasedVersions>().configureEach {
             releasedVersionsFile = releasedVersionsJsonFile
             group = "Versioning"
         }
 
-        tasks.create<UpdateReleasedVersions>("updateReleasedVersions") {
+        tasks.register("updateReleasedVersions", UpdateReleasedVersions::class.java) {
             // TODO
             val currentReleasedVersionProperty = project.findProperty("currentReleasedVersion")
             val value =
@@ -45,7 +45,7 @@ class UpdateVersionsPlugin : Plugin<Project> {
             currentReleasedVersion.set(value)
         }
 
-        tasks.create<UpdateReleasedVersions>("updateReleasedVersionsToLatestNightly") {
+        tasks.register("updateReleasedVersionsToLatestNightly", UpdateReleasedVersions::class.java) {
             currentReleasedVersion.set(project.providers.provider(Callable {
                 val jsonText = URL("https://services.gradle.org/versions/${VersionType.NIGHTLY.type}").readText()
                 println(jsonText)
@@ -55,6 +55,7 @@ class UpdateVersionsPlugin : Plugin<Project> {
         }
     }
 }
+
 
 private
 class VersionBuildTimeInfo(val version: String, val buildTime: String)

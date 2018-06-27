@@ -17,9 +17,9 @@
 package org.gradle.internal.logging;
 
 import org.gradle.api.logging.LoggingOutput;
-import org.gradle.api.logging.StandardOutputListener;
 import org.gradle.api.logging.configuration.ConsoleOutput;
 import org.gradle.internal.logging.events.OutputEventListener;
+import org.gradle.internal.nativeintegration.console.ConsoleMetaData;
 import org.gradle.internal.scan.UsedByScanPlugin;
 
 import java.io.OutputStream;
@@ -42,19 +42,29 @@ public interface LoggingOutputInternal extends LoggingOutput {
     void attachProcessConsole(ConsoleOutput consoleOutput);
 
     /**
-     * Adds the given {@link java.io.OutputStream} as a logging destination. The stream receives stdout and stderr logging formatted according to the current logging settings
-     * and encoded using the system character encoding. The output also includes color and dynamic text encoded using ANSI control sequences.
+     * Adds the given {@link java.io.OutputStream} as a logging destination. The stream receives stdout and stderr logging formatted according to the current logging settings and encoded using the system character encoding. The output also includes color and dynamic text encoded using ANSI control sequences, depending on the requested output format.
      *
-     * <p>Removes standard output and/or error as a side-effect.
+     * Assumes that a console is attached to stderr.
+     *
+     * <p>Removes System.out and System.err as logging destinations, if present, as a side-effect.
+     *
+     * @param outputStream Receives formatted output.
+     * @param errorStream Receives formatted error output. Note that this steam may not necessarily be used, depending on the console mode requested.
+     * @param consoleOutput The output format.
      */
-    void attachAnsiConsole(OutputStream outputStream);
+    void attachConsole(OutputStream outputStream, OutputStream errorStream, ConsoleOutput consoleOutput);
 
     /**
-     * Adds the given {@link StandardOutputListener} objects as logging destinations.  The output will include plain text only, with no color or dynamic text.
+     * Adds the given {@link java.io.OutputStream} as a logging destination. The stream receives stdout and stderr logging formatted according to the current logging settings and encoded using the system character encoding. The output also includes color and dynamic text encoded using ANSI control sequences, depending on the requested output format.
      *
-     * <p>Removes standard output and/or error as a side-effect.
+     * <p>Removes System.out and System.err as logging destinations, if present, as a side-effect.
+     *
+     * @param outputStream Receives formatted output.
+     * @param errorStream Receives formatted error output. Note that this steam may not necessarily be used, depending on the console mode requested.
+     * @param consoleMetadata The metadata associated with this console
+     * @param consoleOutput The output format.
      */
-    void attachPlainConsole(StandardOutputListener outputListener, StandardOutputListener errorListener);
+    void attachConsole(OutputStream outputStream, OutputStream errorStream, ConsoleOutput consoleOutput, ConsoleMetaData consoleMetadata);
 
     /**
      * Adds the given {@link java.io.OutputStream} as a logging destination. The stream receives stdout logging formatted according to the current logging settings and

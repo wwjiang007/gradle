@@ -37,6 +37,8 @@ public interface ExecutionResult {
      *     <li>Removes notice about starting the daemon.</li>
      *     <li>Normalizes build time to 1 second.
      * </ul>
+     *
+     * <p>You should avoid using this method as it couples the tests to a particular layout for the console. Instead use the more descriptive assertion methods.</p>
      */
     String getNormalizedOutput();
 
@@ -60,6 +62,13 @@ public interface ExecutionResult {
     ExecutionResult assertHasErrorOutput(String expectedOutput);
 
     /**
+     * Asserts that this result includes the given error log message in the raw output (including ansi characters and build result message).
+     *
+     * @param expectedOutput The expected log message, with line endings normalized to a newline character.
+     */
+    ExecutionResult assertHasRawErrorOutput(String expectedOutput);
+
+    /**
      * Returns true when this result includes the given error log message. Does not consider any text in or following the build result message (use {@link #assertHasPostBuildOutput(String)} instead).
      *
      * @param expectedOutput The expected log message, with line endings normalized to a newline character.
@@ -76,6 +85,22 @@ public interface ExecutionResult {
     ExecutionResult assertOutputContains(String expectedOutput);
 
     /**
+     * Asserts that this result includes the given non-error log message (including ansi characters and build result message).
+     *
+     * @param expectedOutput The expected log message, with line endings normalized to a newline character.
+     */
+    ExecutionResult assertRawOutputContains(String expectedOutput);
+
+    /**
+     * Asserts that the given content includes the given log message.
+     *
+     * @param content The content to check
+     * @param expectedOutput The expected log message, with line endings normalized to a newline character.
+     * @param label The label to use when printing a failure
+     */
+    ExecutionResult assertContentContains(String content, String expectedOutput, String label);
+
+    /**
      * Asserts that this result does not include the given log message anywhere in the build output.
      *
      * @param expectedOutput The expected log message, with line endings normalized to a newline character.
@@ -90,7 +115,9 @@ public interface ExecutionResult {
     ExecutionResult assertHasPostBuildOutput(String expectedOutput);
 
     /**
-     * Returns the tasks have been executed in order (includes tasks that were skipped). Note: ignores buildSrc tasks.
+     * Returns the tasks have been executed in order started (includes tasks that were skipped). Asserts that each task appears once only. Note: ignores buildSrc tasks.
+     *
+     * <p>You should avoid using this method, as as doing so not provide useful context on assertion failure. Instead, use the more descriptive assertion methods
      */
     List<String> getExecutedTasks();
 
@@ -107,6 +134,16 @@ public interface ExecutionResult {
     ExecutionResult assertTasksExecuted(Object... taskPaths);
 
     /**
+     * Asserts that the given task has been executed. Note: ignores buildSrc tasks.
+     */
+    ExecutionResult assertTaskExecuted(String taskPath);
+
+    /**
+     * Asserts that the given task has not been executed. Note: ignores buildSrc tasks.
+     */
+    ExecutionResult assertTaskNotExecuted(String taskPath);
+
+    /**
      * Asserts that the provided tasks were executed in the given order.  Each task path can be either a String
      * or a {@link TaskOrderSpec}.  See {@link TaskOrderSpecs} for common assertions and an explanation of their usage.
      * Defaults to a {@link TaskOrderSpecs#exact(Object[])} assertion.
@@ -115,6 +152,8 @@ public interface ExecutionResult {
 
     /**
      * Returns the tasks that were skipped, in an undefined order. Note: ignores buildSrc tasks.
+     *
+     * <p>You should avoid using this method, as as doing so not provide useful context on assertion failure. Instead, use the more descriptive assertion methods
      */
     Set<String> getSkippedTasks();
 

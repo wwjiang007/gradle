@@ -18,61 +18,12 @@ package org.gradle.performance.regression.nativeplatform
 
 import org.gradle.performance.AbstractCrossVersionPerformanceTest
 import org.gradle.performance.mutator.ApplyChangeToNativeSourceFileMutator
-import spock.lang.Ignore
 import spock.lang.Unroll
 
-@Ignore("Ignore to unblock CI for now - SLG 2018/03/07")
 class NativeBuildPerformanceTest extends AbstractCrossVersionPerformanceTest {
-
     def setup() {
-        runner.minimumVersion = '4.0'
-        runner.targetVersions = ["4.7-20180308002700+0000"]
-    }
-
-    @Unroll
-    def "clean assemble on #testProject"() {
-        given:
-        runner.testProject = testProject
-        runner.tasksToRun = ["assemble"]
-        runner.cleanTasks = ["clean"]
-        runner.gradleOpts = ["-Xms$maxMemory", "-Xmx$maxMemory"]
-        runner.runs = iterations
-        runner.warmUpRuns = iterations
-
-        when:
-        def result = runner.run()
-
-        then:
-        result.assertCurrentVersionHasNotRegressed()
-
-        where:
-        testProject                       | maxMemory | iterations
-        "smallNative"                     | '256m'    | 40
-        "mediumNative"                    | '256m'    | null
-        "bigNative"                       | '1g'      | null
-        "multiNative"                     | '256m'    | null
-        "smallCppApp"                     | '256m'    | 40
-        "mediumCppApp"                    | '256m'    | null
-        "mediumCppAppWithMacroIncludes"   | '256m'    | null
-        "bigCppApp"                       | '256m'    | null
-        "smallCppMulti"                   | '256m'    | 40
-        "mediumCppMulti"                  | '256m'    | null
-        "mediumCppMultiWithMacroIncludes" | '256m'    | null
-        "bigCppMulti"                     | '1g'      | null
-    }
-
-    def "clean assemble on manyProjectsNative"() {
-        given:
-        runner.testProject = "manyProjectsNative"
-        runner.tasksToRun = ["assemble"]
-        runner.cleanTasks = ["clean"]
-        runner.args = ["--parallel", "--max-workers=12"]
-
-        when:
-        def result = runner.run()
-
-        then:
-        result.assertCurrentVersionHasNotRegressed()
+        runner.minimumVersion = '4.1' // minimum version that contains new C++ plugins
+        runner.targetVersions = ["4.9-20180620235919+0000"]
     }
 
     @Unroll

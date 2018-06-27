@@ -25,9 +25,9 @@ abstract class AbstractIncrementalAnnotationProcessingIntegrationTest extends Ab
 
     protected CompilationOutputsFixture outputs
 
-    private TestFile annotationProjectDir
-    private TestFile libraryProjectDir
-    private TestFile processorProjectDir
+    protected TestFile annotationProjectDir
+    protected TestFile libraryProjectDir
+    protected TestFile processorProjectDir
 
     def setup() {
         executer.requireOwnGradleUserHomeDir()
@@ -54,7 +54,6 @@ abstract class AbstractIncrementalAnnotationProcessingIntegrationTest extends Ab
             
             compileJava {
                 compileJava.options.incremental = true
-                options.fork = true
             }
         """
 
@@ -93,6 +92,6 @@ abstract class AbstractIncrementalAnnotationProcessingIntegrationTest extends Ab
 
         expect:
         fails("compileJava")
-        failure.assertHasCause("java.lang.ClassNotFoundException: unknown.Processor")
+        failure.assertHasCause("Annotation processor 'unknown.Processor' not found")
     }
 }

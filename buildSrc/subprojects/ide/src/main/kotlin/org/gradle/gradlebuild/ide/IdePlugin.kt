@@ -15,7 +15,9 @@
  */
 package org.gradle.gradlebuild.ide
 
-import accessors.*
+import accessors.base
+import accessors.eclipse
+import accessors.idea
 import org.gradle.api.Action
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
@@ -46,6 +48,7 @@ import java.io.File
 private
 const val ideConfigurationBaseName = "ideConfiguration"
 
+
 open class IdePlugin : Plugin<Project> {
 
     override fun apply(project: Project): Unit = project.run {
@@ -71,13 +74,13 @@ open class IdePlugin : Plugin<Project> {
                 classpath {
                     file.whenMerged(Action<Classpath> {
                         //There are classes in here not designed to be compiled, but just used in our testing
-                        entries.removeAll { (it as AbstractClasspathEntry).path.contains("src/integTest/resources") }
+                        entries.removeAll { it is AbstractClasspathEntry && it.path.contains("src/integTest/resources") }
                         //Workaround for some projects referring to themselves as dependent projects
-                        entries.removeAll { (it as AbstractClasspathEntry).path.contains("$project.name") && it.kind == "src" }
+                        entries.removeAll { it is AbstractClasspathEntry && it.path.contains("$project.name") && it.kind == "src" }
                         // Remove references to libraries in the build folder
-                        entries.removeAll { (it as AbstractClasspathEntry).path.contains("$project.name/build") && it.kind == "lib" }
+                        entries.removeAll { it is AbstractClasspathEntry && it.path.contains("$project.name/build") && it.kind == "lib" }
                         // Remove references to other project's binaries
-                        entries.removeAll { (it as AbstractClasspathEntry).path.contains("/subprojects") && it.kind == "lib" }
+                        entries.removeAll { it is AbstractClasspathEntry && it.path.contains("/subprojects") && it.kind == "lib" }
                         // Add needed resources for running gradle as a non daemon java application
                         entries.add(SourceFolder("build/generated-resources/main", null))
                         if (file("build/generated-resources/test").exists()) {
@@ -275,20 +278,30 @@ open class IdePlugin : Plugin<Project> {
     }
 
     private
-    fun Project.configureBuildSrc(root: Element) {
-        val buildSrcModuleFile = "buildSrc/buildSrc.iml"
-        val projectModuleManager = root.select("component[name=ProjectModuleManager]").first()
-        if (file(buildSrcModuleFile).exists()) {
-            val hasBuildSrc = projectModuleManager
-                .select("modules")?.first()
-                ?.select("module[filepath*=buildSrc]")?.isNotEmpty() ?: false
+    val minusLower = "-\\p{Lower}".toRegex()
 
-            if (!hasBuildSrc) {
+    private
+    fun String.toCamelCase() =
+        replace(minusLower) { "${it.value[1].toUpperCase()}" }
+
+    private
+    fun Project.configureBuildSrc(root: Element) {
+        val subprojectModuleFiles = file("buildSrc/subprojects").listFiles().filter { it.isDirectory }.map {
+            val projectName = it.name.toCamelCase()
+            "buildSrc/subprojects/${it.name}/buildSrc-$projectName.iml"
+        }
+        val projectModuleManager = root.select("component[name=ProjectModuleManager]").first()
+        subprojectModuleFiles.filter { file(it).exists() }.forEach { relativeModulePath ->
+            val hasModule = projectModuleManager
+                .select("modules")?.first()
+                ?.select("module[filepath*=$relativeModulePath]")?.isNotEmpty() ?: false
+
+            if (!hasModule) {
                 projectModuleManager
                     .select("modules").first()
                     .appendElement("module")
-                    .attr("fileurl", "file://\$PROJECT_DIR\$/$buildSrcModuleFile")
-                    .attr("filepath", "\$PROJECT_DIR\$/$buildSrcModuleFile")
+                    .attr("fileurl", "file://\$PROJECT_DIR\$/$relativeModulePath")
+                    .attr("filepath", "\$PROJECT_DIR\$/$relativeModulePath")
             }
         }
     }
@@ -353,7 +366,8 @@ open class IdePlugin : Plugin<Project> {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun getDefaultJunitVmParameter(docsProject: Project): String {
+    private
+    fun getDefaultJunitVmParameter(docsProject: Project): String {
         val rootProject = docsProject.rootProject
         val releaseNotesMarkdown: PegDown by docsProject.tasks
         val releaseNotes: Copy by docsProject.tasks
@@ -422,6 +436,7 @@ const val GRADLE_CONFIGURATION = """
     </configuration>
 """
 
+
 private
 fun Element.configureCodeStyleSettings() {
     val config = appendElement("component")
@@ -436,6 +451,7 @@ fun Element.configureCodeStyleSettings() {
         "USE_SAME_INDENTS" to "true",
         "IGNORE_SAME_INDENTS_FOR_LANGUAGES" to "true",
         "RIGHT_MARGIN" to "200",
+        "FORMATTER_TAGS_ENABLED" to "true",
         "WRAP_COMMENTS" to "true",
         "IF_BRACE_FORCE" to "3",
         "DOWHILE_BRACE_FORCE" to "3",
@@ -471,12 +487,14 @@ fun Element.configureCodeStyleSettings() {
     }
 }
 
+
 private
 fun Element.option(name: String, value: String) {
     appendElement("option")
         .attr("name", name)
         .attr("value", value)
 }
+
 
 private
 fun XmlProvider.withJsoup(function: (Document) -> Unit) {
@@ -485,6 +503,7 @@ fun XmlProvider.withJsoup(function: (Document) -> Unit) {
     xml.replace(0, xml.length, document)
 }
 
+
 private
 fun modifyXmlDocument(xml: StringBuilder, function: (Document) -> Unit): String {
     val document = Jsoup.parse(xml.toString(), "", Parser.xmlParser())
@@ -492,6 +511,7 @@ fun modifyXmlDocument(xml: StringBuilder, function: (Document) -> Unit): String 
     document.outputSettings().escapeMode(Entities.EscapeMode.xhtml)
     return document.toString()
 }
+
 
 private
 fun Element.createOrEmptyOutChildElement(childName: String): Element {
@@ -503,6 +523,7 @@ fun Element.createOrEmptyOutChildElement(childName: String): Element {
         children().remove()
     }
 }
+
 
 private
 fun Element.removeBySelector(selector: String): Element =

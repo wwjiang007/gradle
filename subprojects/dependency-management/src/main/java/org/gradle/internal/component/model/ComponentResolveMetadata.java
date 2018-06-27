@@ -16,13 +16,13 @@
 
 package org.gradle.internal.component.model;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import org.gradle.api.artifacts.Dependency;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.attributes.HasAttributes;
 import org.gradle.api.internal.attributes.AttributesSchemaInternal;
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
@@ -38,7 +38,7 @@ public interface ComponentResolveMetadata extends HasAttributes {
     /**
      * Returns the identifier for this component.
      */
-    ComponentIdentifier getComponentId();
+    ComponentIdentifier getId();
 
     /**
      * Returns the module version identifier for this component. Currently this reflects the (group, module, version) that was used to request this component.
@@ -47,7 +47,7 @@ public interface ComponentResolveMetadata extends HasAttributes {
      * module versions to the more general component instances. Currently, the module version and component identifiers are used interchangeably. However, over
      * time more things will use the component identifier. At some point, the module version identifier will become optional for a component.
      */
-    ModuleVersionIdentifier getId();
+    ModuleVersionIdentifier getModuleVersionId();
 
     /**
      * Returns the source (eg location) for this component.
@@ -65,7 +65,7 @@ public interface ComponentResolveMetadata extends HasAttributes {
     ComponentResolveMetadata withSource(ModuleSource source);
 
     /**
-     * Returns the names of all of the legacy configurations for this component. May be empty, in which case the component should provide at least one variant via {@link #getVariantsForGraphTraversal(ImmutableAttributesFactory)}.
+     * Returns the names of all of the legacy configurations for this component. May be empty, in which case the component should provide at least one variant via {@link #getVariantsForGraphTraversal()}.
      */
     Set<String> getConfigurationNames();
 
@@ -80,7 +80,7 @@ public interface ComponentResolveMetadata extends HasAttributes {
      *
      * <p>Note: currently, {@link ConfigurationMetadata} is used to represent these variants. This is to help with migration. The set of objects returned by this method may or may not be the same as those returned by {@link #getConfigurationNames()}.</p>
      */
-    ImmutableList<? extends ConfigurationMetadata> getVariantsForGraphTraversal();
+    Optional<ImmutableList<? extends ConfigurationMetadata>> getVariantsForGraphTraversal();
 
     /**
      * Returns true when this metadata represents the default metadata provided for components with missing metadata files.

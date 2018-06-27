@@ -16,8 +16,11 @@
 
 package org.gradle.internal.logging.console.taskgrouping
 
+import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
+import spock.lang.IgnoreIf
+
 abstract class AbstractConsoleVerboseRenderingFunctionalTest extends AbstractConsoleVerboseBasicFunctionalTest {
-    def 'failed task result can be rendered (#consoleType console)'() {
+    def 'failed task result can be rendered'() {
         given:
         buildFile << '''
             task myFailure {
@@ -28,7 +31,6 @@ abstract class AbstractConsoleVerboseRenderingFunctionalTest extends AbstractCon
         '''
 
         when:
-        executer.withConsole(consoleType)
         fails('myFailure')
 
         then:
@@ -57,6 +59,7 @@ abstract class AbstractConsoleVerboseRenderingFunctionalTest extends AbstractCon
         result.groupedOutput.task(':upToDate').outcome == 'UP-TO-DATE'
     }
 
+    @IgnoreIf({ GradleContextualExecuter.parallel })
     def "task headers for long running tasks are printed only once when there is no output"() {
         given:
         settingsFile << """
@@ -81,11 +84,12 @@ abstract class AbstractConsoleVerboseRenderingFunctionalTest extends AbstractCon
         """
 
         when:
+        executer.withArguments("--parallel")
         succeeds "allTasks"
 
         then:
         12.times { i ->
-            assert result.groupedOutput.task(":project${i}:slowTask${i}").outputs.size() == 1
+            assert result.groupedOutput.task(":project${i}:slowTask${i}").output == ''
         }
     }
 }

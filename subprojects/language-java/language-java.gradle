@@ -6,7 +6,10 @@ plugins {
 }
 
 dependencies {
-    compile libraries.groovy.coordinates
+    implementation libraries.asm.coordinates
+    implementation libraries.asm_commons.coordinates
+    implementation libraries.groovy.coordinates
+
     compile project(":core")
     compile project(":platformJvm")
     compile project(":languageJvm")
@@ -33,7 +36,7 @@ classycle {
                        'org/gradle/external/javadoc/**']
 }
 
+import org.gradle.gradlebuild.testing.integrationtests.cleanup.WhenNotEmpty
 testFilesCleanup {
-    errorWhenNotEmpty = false
+    policy = WhenNotEmpty.REPORT
 }
-

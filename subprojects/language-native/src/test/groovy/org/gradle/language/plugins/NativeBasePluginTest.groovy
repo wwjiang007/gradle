@@ -27,6 +27,7 @@ import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.artifacts.configurations.ConfigurationInternal
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.internal.component.UsageContext
+import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.internal.provider.Providers
 import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.tasks.TaskDependency
@@ -34,7 +35,7 @@ import org.gradle.api.tasks.TaskDependencyMatchers
 import org.gradle.language.ComponentWithBinaries
 import org.gradle.language.ComponentWithOutputs
 import org.gradle.language.ProductionComponent
-import org.gradle.language.PublishableComponent
+import org.gradle.api.component.PublishableComponent
 import org.gradle.language.internal.DefaultBinaryCollection
 import org.gradle.language.nativeplatform.internal.ComponentWithNames
 import org.gradle.language.nativeplatform.internal.ConfigurableComponentWithExecutable
@@ -430,6 +431,7 @@ class NativeBasePluginTest extends Specification {
         project.components.add(component)
         project.group = "my.group"
         project.version = "1.2"
+        ((ProjectInternal) project).evaluate()
 
         expect:
         def publishing = project.publishing

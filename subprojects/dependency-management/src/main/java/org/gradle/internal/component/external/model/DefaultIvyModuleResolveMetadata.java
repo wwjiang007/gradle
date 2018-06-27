@@ -22,6 +22,7 @@ import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
 import org.gradle.api.internal.artifacts.ivyservice.NamespaceId;
+import org.gradle.api.internal.attributes.AttributeContainerInternal;
 import org.gradle.api.internal.attributes.AttributesSchemaInternal;
 import org.gradle.internal.component.external.descriptor.Artifact;
 import org.gradle.internal.component.external.descriptor.Configuration;
@@ -89,7 +90,7 @@ public class DefaultIvyModuleResolveMetadata extends AbstractModuleComponentReso
         ImmutableList<ModuleComponentArtifactMetadata> artifacts = filterArtifacts(name, hierarchy);
         ImmutableList<ExcludeMetadata> excludesForConfiguration = filterExcludes(hierarchy);
 
-        DefaultConfigurationMetadata configuration = new DefaultConfigurationMetadata(componentId, name, transitive, visible, hierarchy, ImmutableList.copyOf(artifacts), componentMetadataRules, excludesForConfiguration);
+        DefaultConfigurationMetadata configuration = new DefaultConfigurationMetadata(componentId, name, transitive, visible, hierarchy, ImmutableList.copyOf(artifacts), componentMetadataRules, excludesForConfiguration, ((AttributeContainerInternal)getAttributes()).asImmutable());
         configuration.setDependencies(filterDependencies(configuration));
         return configuration;
     }
@@ -111,7 +112,7 @@ public class DefaultIvyModuleResolveMetadata extends AbstractModuleComponentReso
             if (artifact.getConfigurations().contains(name)) {
                 ModuleComponentArtifactMetadata artifactMetadata = artifacts.get(artifact);
                 if (artifactMetadata == null) {
-                    artifactMetadata = new DefaultModuleComponentArtifactMetadata(getComponentId(), artifact.getArtifactName());
+                    artifactMetadata = new DefaultModuleComponentArtifactMetadata(getId(), artifact.getArtifactName());
                     artifacts.put(artifact, artifactMetadata);
                 }
                 dest.add(artifactMetadata);
@@ -136,7 +137,7 @@ public class DefaultIvyModuleResolveMetadata extends AbstractModuleComponentReso
         ImmutableList.Builder<ModuleDependencyMetadata> filteredDependencies = ImmutableList.builder();
         for (IvyDependencyDescriptor dependency : dependencies) {
             if (include(dependency, config.getName(), config.getHierarchy())) {
-                filteredDependencies.add(contextualize(config, getComponentId(), dependency));
+                filteredDependencies.add(contextualize(config, getId(), dependency));
             }
         }
         return filteredDependencies.build();
@@ -209,7 +210,7 @@ public class DefaultIvyModuleResolveMetadata extends AbstractModuleComponentReso
             public IvyDependencyDescriptor transform(IvyDependencyDescriptor dependency) {
                 ModuleComponentSelector selector = dependency.getSelector();
                     String dynamicConstraintVersion = dependency.getDynamicConstraintVersion();
-                    ModuleComponentSelector newSelector = DefaultModuleComponentSelector.newSelector(selector.getGroup(), selector.getModule(), dynamicConstraintVersion);
+                    ModuleComponentSelector newSelector = DefaultModuleComponentSelector.newSelector(selector.getModuleIdentifier(), dynamicConstraintVersion);
                     return dependency.withRequested(newSelector);
             }
         });

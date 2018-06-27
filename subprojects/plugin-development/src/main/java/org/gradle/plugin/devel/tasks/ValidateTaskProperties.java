@@ -52,7 +52,6 @@ import org.gradle.internal.classloader.ClassLoaderFactory;
 import org.gradle.internal.classloader.ClassLoaderUtils;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.classpath.DefaultClassPath;
-import org.gradle.util.internal.PatchedClassReader;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Opcodes;
@@ -118,7 +117,7 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
     @TaskAction
     public void validateTaskClasses() throws IOException {
         ClassLoader previousContextClassLoader = Thread.currentThread().getContextClassLoader();
-        ClassPath classPath = new DefaultClassPath(Iterables.concat(getClasses(), getClasspath()));
+        ClassPath classPath = DefaultClassPath.of(Iterables.concat(getClasses(), getClasspath()));
         ClassLoader classLoader = getClassLoaderFactory().createIsolatedClassLoader(classPath);
         Thread.currentThread().setContextClassLoader(classLoader);
         try {
@@ -151,7 +150,7 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
                 }
                 ClassReader reader;
                 try {
-                    reader = new PatchedClassReader(Files.asByteSource(fileDetails.getFile()).read());
+                    reader = new ClassReader(Files.asByteSource(fileDetails.getFile()).read());
                 } catch (IOException e) {
                     throw new UncheckedIOException(e);
                 }

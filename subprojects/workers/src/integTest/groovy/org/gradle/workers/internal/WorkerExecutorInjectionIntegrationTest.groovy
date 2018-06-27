@@ -21,7 +21,7 @@ import org.gradle.api.internal.file.FileResolver
 import spock.lang.Timeout
 import spock.lang.Unroll
 
-@Timeout(60)
+@Timeout(120)
 class WorkerExecutorInjectionIntegrationTest extends AbstractWorkerExecutorIntegrationTest {
 
     @Unroll
@@ -35,7 +35,7 @@ class WorkerExecutorInjectionIntegrationTest extends AbstractWorkerExecutorInteg
         fails("runInWorker")
 
         and:
-        failure.assertHasCause("No service of type $forbiddenType.simpleName")
+        failure.assertHasCause("Unable to determine InjectingRunnable argument #1: missing parameter value of type $forbiddenType, or no service of type $forbiddenType")
 
         where:
         forbiddenType << [Project, FileResolver]

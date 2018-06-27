@@ -17,8 +17,8 @@
 package org.gradle.api.provider;
 
 import org.gradle.api.Incubating;
+import org.gradle.api.NonExtensible;
 import org.gradle.api.Transformer;
-import org.gradle.api.tasks.Internal;
 import org.gradle.internal.HasInternalProtocol;
 
 import javax.annotation.Nullable;
@@ -46,7 +46,7 @@ import javax.annotation.Nullable;
  * </p>
  *
  * <p>
- *  For a provider whose value can be mutated, see {@link PropertyState}.
+ *  For a provider whose value can be mutated, see {@link Property}.
  * </p>
  *
  * <p>
@@ -60,6 +60,7 @@ import javax.annotation.Nullable;
  */
 @Incubating
 @HasInternalProtocol
+@NonExtensible
 public interface Provider<T> {
 
     /**
@@ -76,7 +77,6 @@ public interface Provider<T> {
      * @return the value or {@code null}
      */
     @Nullable
-    @Internal
     T getOrNull();
 
     /**
@@ -104,6 +104,5 @@ public interface Provider<T> {
      *
      * @return {@code true} if there is a value present, otherwise {@code false}
      */
-    @Internal
     boolean isPresent();
 }

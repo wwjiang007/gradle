@@ -68,7 +68,7 @@ public class ValidatingIvyPublisher implements IvyPublisher {
                 .validInFileName();
 
         MutableIvyModuleResolveMetadata metadata = parseIvyFile(publication);
-        ModuleVersionIdentifier moduleId = metadata.getId();
+        ModuleVersionIdentifier moduleId = metadata.getModuleVersionId();
         organisation.matches(moduleId.getGroup());
         moduleName.matches(moduleId.getName());
         revision.matches(moduleId.getVersion());
@@ -91,7 +91,7 @@ public class ValidatingIvyPublisher implements IvyPublisher {
     }
 
     private void validateArtifacts(IvyNormalizedPublication publication) {
-        for (final IvyArtifact artifact : publication.getArtifacts()) {
+        for (final IvyArtifact artifact : publication.getAllArtifacts()) {
             field(publication, "artifact name", artifact.getName())
                     .notEmpty().validInFileName();
             field(publication, "artifact type", artifact.getType())
@@ -108,7 +108,7 @@ public class ValidatingIvyPublisher implements IvyPublisher {
     private void checkNoDuplicateArtifacts(IvyNormalizedPublication publication) {
         Set<IvyArtifact> verified = new HashSet<IvyArtifact>();
 
-        for (final IvyArtifact artifact : publication.getArtifacts()) {
+        for (final IvyArtifact artifact : publication.getAllArtifacts()) {
             checkNotDuplicate(publication, verified, artifact.getName(), artifact.getExtension(), artifact.getType(), artifact.getClassifier());
             verified.add(artifact);
         }

@@ -18,13 +18,15 @@ package org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.conflic
 
 import org.gradle.api.Action;
 import org.gradle.api.artifacts.ModuleIdentifier;
-import org.gradle.api.artifacts.result.ComponentSelectionCause;
 import org.gradle.api.internal.artifacts.dsl.ModuleReplacementsData;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolutionState;
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ConflictResolverDetails;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ModuleConflictResolver;
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasonInternal;
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionDescriptorInternal;
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.VersionSelectionReasons;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
+import org.gradle.internal.Describables;
 import org.gradle.internal.UncheckedException;
 
 import javax.annotation.Nullable;
@@ -43,6 +45,11 @@ public class DefaultConflictHandler implements ModuleConflictHandler {
     public DefaultConflictHandler(ModuleConflictResolver conflictResolver, ModuleReplacementsData moduleReplacements) {
         this.moduleReplacements = moduleReplacements;
         this.compositeResolver.addFirst(conflictResolver);
+    }
+
+    @Override
+    public ModuleConflictResolver getResolver() {
+        return compositeResolver;
     }
 
     /**
@@ -68,7 +75,7 @@ public class DefaultConflictHandler implements ModuleConflictHandler {
     public void resolveNextConflict(Action<ConflictResolutionResult> resolutionAction) {
         assert hasConflicts();
         ConflictContainer<ModuleIdentifier, ComponentResolutionState>.Conflict conflict = conflicts.popConflict();
-        DefaultConflictResolverDetails<ComponentResolutionState> details = new DefaultConflictResolverDetails<ComponentResolutionState>(conflict.candidates);
+        ConflictResolverDetails<ComponentResolutionState> details = new DefaultConflictResolverDetails<ComponentResolutionState>(conflict.candidates);
         compositeResolver.select(details);
         if (details.hasFailure()) {
             throw UncheckedException.throwAsUncheckedException(details.getFailure());
@@ -85,10 +92,11 @@ public class DefaultConflictHandler implements ModuleConflictHandler {
             ModuleReplacementsData.Replacement replacement = moduleReplacements.getReplacementFor(identifier);
             if (replacement != null) {
                 String reason = replacement.getReason();
+                ComponentSelectionDescriptorInternal moduleReplacement = VersionSelectionReasons.SELECTED_BY_RULE.withReason(Describables.of(identifier, "replaced with", replacement.getTarget()));
                 if (reason != null) {
-                    ComponentSelectionReasonInternal selectionReason = selected.getSelectionReason();
-                    selectionReason.addCause(ComponentSelectionCause.CONFLICT_RESOLUTION, reason);
+                    moduleReplacement = moduleReplacement.withReason(Describables.of(reason));
                 }
+                selected.addCause(moduleReplacement);
             }
         }
     }

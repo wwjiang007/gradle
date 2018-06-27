@@ -28,6 +28,8 @@ import org.gradle.internal.logging.config.LoggingSourceSystem;
 import org.gradle.internal.logging.config.LoggingSystem;
 import org.gradle.internal.logging.events.OutputEventListener;
 import org.gradle.internal.logging.text.StreamBackedStandardOutputListener;
+import org.gradle.internal.nativeintegration.console.ConsoleMetaData;
+import org.gradle.internal.nativeintegration.console.FallbackConsoleMetaData;
 
 import java.io.Closeable;
 import java.io.OutputStream;
@@ -41,6 +43,7 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
     private final StartableLoggingSystem stdErrLoggingSystem;
     private final StartableLoggingSystem javaUtilLoggingSystem;
     private final StartableLoggingRouter loggingRouter;
+    private boolean enableStdOutListeners;
     private final LoggingOutputInternal loggingOutput;
     private final Set<StandardOutputListener> stdoutListeners = new LinkedHashSet<StandardOutputListener>();
     private final Set<StandardOutputListener> stderrListeners = new LinkedHashSet<StandardOutputListener>();
@@ -56,8 +59,12 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         this.javaUtilLoggingSystem = new StartableLoggingSystem(javaUtilLoggingSystem, null);
     }
 
+    @Override
     public DefaultLoggingManager start() {
         started = true;
+        if (enableStdOutListeners) {
+            loggingRouter.loggingRouter.enableUserStandardOutputListeners();
+        }
         for (StandardOutputListener stdoutListener : stdoutListeners) {
             loggingOutput.addStandardOutputListener(stdoutListener);
         }
@@ -79,6 +86,7 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         return this;
     }
 
+    @Override
     public DefaultLoggingManager stop() {
         try {
             CompositeStoppable.stoppable(slf4jLoggingSystem, javaUtilLoggingSystem, stdOutLoggingSystem, stdErrLoggingSystem).stop();
@@ -98,6 +106,7 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         return this;
     }
 
+    @Override
     public void close() {
         stop();
     }
@@ -110,6 +119,7 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         return this;
     }
 
+    @Override
     public LogLevel getLevel() {
         return slf4jLoggingSystem.level;
     }
@@ -122,81 +132,102 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         return this;
     }
 
+    @Override
     public LogLevel getStandardOutputCaptureLevel() {
         return stdOutLoggingSystem.level;
     }
 
+    @Override
     public DefaultLoggingManager captureStandardOutput(LogLevel level) {
         stdOutLoggingSystem.setLevel(level);
         return this;
     }
 
+    @Override
     public DefaultLoggingManager captureStandardError(LogLevel level) {
         stdErrLoggingSystem.setLevel(level);
         return this;
     }
 
+    @Override
     public LogLevel getStandardErrorCaptureLevel() {
         return stdErrLoggingSystem.level;
     }
 
+    @Override
+    public LoggingManagerInternal enableUserStandardOutputListeners() {
+        enableStdOutListeners = true;
+        return this;
+    }
+
+    @Override
     public void addStandardOutputListener(StandardOutputListener listener) {
         if (stdoutListeners.add(listener) && started) {
             loggingOutput.addStandardOutputListener(listener);
         }
     }
 
+    @Override
     public void addStandardErrorListener(StandardOutputListener listener) {
         if (stderrListeners.add(listener) && started) {
             loggingOutput.addStandardErrorListener(listener);
         }
     }
 
+    @Override
     public void addStandardOutputListener(OutputStream outputStream) {
         addStandardOutputListener(new StreamBackedStandardOutputListener(outputStream));
     }
 
+    @Override
     public void addStandardErrorListener(OutputStream outputStream) {
         addStandardErrorListener(new StreamBackedStandardOutputListener(outputStream));
     }
 
+    @Override
     public void removeStandardOutputListener(StandardOutputListener listener) {
         if (stdoutListeners.remove(listener) && started) {
             loggingOutput.removeStandardOutputListener(listener);
         }
     }
 
+    @Override
     public void removeStandardErrorListener(StandardOutputListener listener) {
         if (stderrListeners.remove(listener) && started) {
             loggingOutput.removeStandardErrorListener(listener);
         }
     }
 
+    @Override
     public void addOutputEventListener(OutputEventListener listener) {
         if (outputEventListeners.add(listener) && started) {
             loggingOutput.addOutputEventListener(listener);
         }
     }
 
+    @Override
     public void removeOutputEventListener(OutputEventListener listener) {
         if (outputEventListeners.remove(listener) && started) {
             loggingOutput.removeOutputEventListener(listener);
         }
     }
 
+    @Override
     public void attachProcessConsole(ConsoleOutput consoleOutput) {
         loggingRouter.attachProcessConsole(consoleOutput);
     }
 
     @Override
-    public void attachPlainConsole(StandardOutputListener outputListener, StandardOutputListener errorListener) {
-        loggingRouter.attachPlainConsole(outputListener, errorListener);
+    public void attachConsole(OutputStream outputStream, OutputStream errorStream, ConsoleOutput consoleOutput) {
+        loggingRouter.attachConsole(outputStream, errorStream, consoleOutput, FallbackConsoleMetaData.INSTANCE);
     }
 
-    public void attachAnsiConsole(OutputStream outputStream) {
-        loggingRouter.attachAnsiConsole(outputStream);
+    @Override
+    public void attachConsole(OutputStream outputStream, OutputStream errorStream, ConsoleOutput consoleOutput, ConsoleMetaData consoleMetadata) {
+        loggingRouter.attachConsole(outputStream, errorStream, consoleOutput, consoleMetadata);
     }
 
+    @Override
     public void attachSystemOutAndErr() {
         loggingOutput.attachSystemOutAndErr();
     }
@@ -212,7 +243,7 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         private LoggingSystem.Snapshot originalState;
         private Runnable consoleAttachment;
 
-        public StartableLoggingRouter(LoggingRouter loggingRouter) {
+        StartableLoggingRouter(LoggingRouter loggingRouter) {
             this.loggingRouter = loggingRouter;
         }
 
@@ -241,16 +272,12 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
             this.consoleAttachment = consoleAttachment;
         }
 
-        public void attachProcessConsole(ConsoleOutput consoleOutput) {
-            addConsoleAttachement(new ProcessConsoleAttachement(loggingRouter, consoleOutput));
+        void attachProcessConsole(ConsoleOutput consoleOutput) {
+            addConsoleAttachement(new ProcessConsoleAttachment(loggingRouter, consoleOutput));
         }
 
-        public void attachAnsiConsole(OutputStream outputStream) {
-            addConsoleAttachement(new AnsiConsoleAttachment(loggingRouter, outputStream));
-        }
-
-        public void attachPlainConsole(StandardOutputListener outputListener, StandardOutputListener errorListener) {
-            addConsoleAttachement(new PlainConsoleAttachment(loggingRouter, outputListener, errorListener));
+        void attachConsole(OutputStream outputStream, OutputStream errorStream, ConsoleOutput consoleOutput, ConsoleMetaData consoleMetadata) {
+            addConsoleAttachement(new ConsoleAttachment(loggingRouter, outputStream, errorStream, consoleOutput, consoleMetadata));
         }
 
         public void setLevel(LogLevel logLevel) {
@@ -350,11 +377,11 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         }
     }
 
-    private static class ProcessConsoleAttachement implements Runnable {
+    private static class ProcessConsoleAttachment implements Runnable {
         private final LoggingRouter loggingRouter;
         private final ConsoleOutput consoleOutput;
 
-        public ProcessConsoleAttachement(LoggingRouter loggingRouter, ConsoleOutput consoleOutput) {
+        ProcessConsoleAttachment(LoggingRouter loggingRouter, ConsoleOutput consoleOutput) {
             this.loggingRouter = loggingRouter;
             this.consoleOutput = consoleOutput;
         }
@@ -373,7 +400,7 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
                 return false;
             }
 
-            ProcessConsoleAttachement that = (ProcessConsoleAttachement) o;
+            ProcessConsoleAttachment that = (ProcessConsoleAttachment) o;
 
             return consoleOutput == that.consoleOutput;
         }
@@ -384,18 +411,24 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
         }
     }
 
-    private static class AnsiConsoleAttachment implements Runnable {
+    private static class ConsoleAttachment implements Runnable {
         private final LoggingRouter loggingRouter;
         private final OutputStream outputStream;
+        private final OutputStream errorStream;
+        private final ConsoleOutput consoleOutput;
+        private final ConsoleMetaData consoleMetadata;
 
-        public AnsiConsoleAttachment(LoggingRouter loggingRouter, OutputStream outputStream) {
+        ConsoleAttachment(LoggingRouter loggingRouter, OutputStream outputStream, OutputStream errorStream, ConsoleOutput consoleOutput, ConsoleMetaData consoleMetadata) {
             this.loggingRouter = loggingRouter;
             this.outputStream = outputStream;
+            this.errorStream = errorStream;
+            this.consoleOutput = consoleOutput;
+            this.consoleMetadata = consoleMetadata;
         }
 
         @Override
         public void run() {
-            loggingRouter.attachAnsiConsole(outputStream);
+            loggingRouter.attachConsole(outputStream, errorStream, consoleOutput, consoleMetadata);
         }
 
         @Override
@@ -407,55 +440,14 @@ public class DefaultLoggingManager implements LoggingManagerInternal, Closeable 
                 return false;
             }
 
-            AnsiConsoleAttachment that = (AnsiConsoleAttachment) o;
+            ConsoleAttachment that = (ConsoleAttachment) o;
 
-            return outputStream == that.outputStream;
+            return outputStream == that.outputStream && errorStream == that.errorStream && consoleOutput == that.consoleOutput && consoleMetadata == that.consoleMetadata;
         }
 
         @Override
         public int hashCode() {
-            return outputStream.hashCode();
-        }
-    }
-
-    private static class PlainConsoleAttachment implements Runnable {
-        private final LoggingRouter loggingRouter;
-        private final StandardOutputListener outputListener;
-        private final StandardOutputListener errorListener;
-
-        public PlainConsoleAttachment(LoggingRouter loggingRouter, StandardOutputListener outputListener, StandardOutputListener errorListener) {
-            this.loggingRouter = loggingRouter;
-            this.outputListener = outputListener;
-            this.errorListener = errorListener;
-        }
-
-        @Override
-        public void run() {
-            loggingRouter.attachPlainConsole(outputListener, errorListener);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-
-            PlainConsoleAttachment that = (PlainConsoleAttachment) o;
-
-            if (outputListener != that.outputListener) {
-                return false;
-            }
-            return errorListener == that.errorListener;
-        }
-
-        @Override
-        public int hashCode() {
-            int result = outputListener.hashCode();
-            result = 31 * result + errorListener.hashCode();
-            return result;
+            return outputStream.hashCode() ^ errorStream.hashCode();
         }
     }
 }

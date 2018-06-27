@@ -18,7 +18,12 @@ package org.gradle.plugins.publish
 import org.junit.Assert
 import org.junit.Test
 
+
 class ArtifactPatternTest {
+
+    private
+    val GRADLE_REPO = "https://gradle.artifactoryonline.com/gradle"
+
     @Test
     fun `given snapshot library and typical other values it returns a correct URL`() {
         // given:
@@ -63,5 +68,4 @@ class ArtifactPatternTest {
         // given:
         createArtifactPattern(false, "foo", "")
     }
-
 }
