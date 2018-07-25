@@ -43,6 +43,7 @@ import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.Visit
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.projectresult.ResolvedLocalComponentsResult;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.projectresult.ResolvedLocalComponentsResultGraphVisitor;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.DefaultResolutionResultBuilder;
+import org.gradle.api.internal.artifacts.repositories.ResolutionAwareRepository;
 import org.gradle.api.internal.attributes.AttributeContainerInternal;
 import org.gradle.api.specs.Spec;
 import org.gradle.internal.locking.LockOutOfDateException;
@@ -50,6 +51,7 @@ import org.gradle.internal.locking.LockOutOfDateException;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 public class ShortCircuitEmptyConfigurationResolver implements ConfigurationResolver {
@@ -66,9 +68,14 @@ public class ShortCircuitEmptyConfigurationResolver implements ConfigurationReso
     }
 
     @Override
+    public List<ResolutionAwareRepository> getRepositories() {
+        return delegate.getRepositories();
+    }
+
+    @Override
     public void resolveBuildDependencies(ConfigurationInternal configuration, ResolverResults result) {
         if (configuration.getAllDependencies().isEmpty()) {
-            emptyGraph(configuration, result);
+            emptyGraph(configuration, result, false);
         } else {
             delegate.resolveBuildDependencies(configuration, result);
         }
@@ -77,19 +84,19 @@ public class ShortCircuitEmptyConfigurationResolver implements ConfigurationReso
     @Override
     public void resolveGraph(ConfigurationInternal configuration, ResolverResults results) throws ResolveException {
         if (configuration.getAllDependencies().isEmpty()) {
-            emptyGraph(configuration, results);
+            emptyGraph(configuration, results, true);
         } else {
             delegate.resolveGraph(configuration, results);
         }
     }
 
-    private void emptyGraph(ConfigurationInternal configuration, ResolverResults results) {
+    private void emptyGraph(ConfigurationInternal configuration, ResolverResults results, boolean verifyLocking) {
         Module module = configuration.getModule();
         ModuleVersionIdentifier id = moduleIdentifierFactory.moduleWithVersion(module);
         ComponentIdentifier componentIdentifier = componentIdentifierFactory.createComponentIdentifier(module);
         ResolutionResult emptyResult = DefaultResolutionResultBuilder.empty(id, componentIdentifier);
         ResolvedLocalComponentsResult emptyProjectResult = new ResolvedLocalComponentsResultGraphVisitor(thisBuild);
-        if (configuration.getResolutionStrategy().isDependencyLockingEnabled()) {
+        if (verifyLocking && configuration.getResolutionStrategy().isDependencyLockingEnabled()) {
             DependencyLockingProvider dependencyLockingProvider = configuration.getResolutionStrategy().getDependencyLockingProvider();
             DependencyLockingState lockingState = dependencyLockingProvider.loadLockState(configuration.getName());
             if (lockingState.mustValidateLockState() && !lockingState.getLockedDependencies().isEmpty()) {

@@ -198,7 +198,7 @@ class TaskDefinitionIntegrationTest extends AbstractIntegrationSpec {
 
         then:
         output.contains(message)
-        output.contains("The Task.leftShift(Closure) method has been deprecated and is scheduled to be removed in Gradle 5.0. Please use Task.doLast(Action) instead.")
+        output.contains("The Task.leftShift(Closure) method has been deprecated. This is scheduled to be removed in Gradle 5.0. Please use Task.doLast(Action) instead.")
     }
 
     def "can construct a custom task without constructor arguments"() {
@@ -477,5 +477,52 @@ class TaskDefinitionIntegrationTest extends AbstractIntegrationSpec {
 
         then:
         result.output.contains("got it 15")
+    }
+
+    def "renders deprecation warning when adding a pre-created task to the task container"() {
+        given:
+        buildFile << """
+            Task foo = tasks.create("foo")
+            
+            tasks.add(new Bar("bar", foo))
+            
+            class Bar implements Task {
+                String name
+                
+                @Delegate
+                Task delegate
+                
+                Bar(String name, Task delegate) {
+                    this.name = name
+                    this.delegate = delegate
+                }
+                
+                String getName() {
+                    return name
+                }
+            }
+        """
+
+        when:
+        executer.expectDeprecationWarning()
+        succeeds("help")
+
+        then:
+        outputContains("The add() method has been deprecated. Please use the create() or register() method instead.")
+    }
+
+    def "cannot add a pre-created task provider to the task container"() {
+        given:
+        buildFile << """
+            Task foo = tasks.create("foo")
+            
+            tasks.addLater(provider { foo })
+        """
+
+        when:
+        fails("help")
+
+        then:
+        failure.assertHasCause("Adding a task provider directly to the task container is not supported.")
     }
 }

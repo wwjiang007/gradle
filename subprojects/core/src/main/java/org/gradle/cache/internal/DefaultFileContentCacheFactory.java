@@ -16,9 +16,9 @@
 
 package org.gradle.cache.internal;
 
-import org.gradle.api.internal.changedetection.state.FileSnapshot;
 import org.gradle.api.internal.changedetection.state.FileSystemSnapshotter;
 import org.gradle.api.internal.changedetection.state.InMemoryCacheDecoratorFactory;
+import org.gradle.api.internal.changedetection.state.mirror.PhysicalSnapshot;
 import org.gradle.api.internal.tasks.execution.TaskOutputChangesListener;
 import org.gradle.cache.CacheRepository;
 import org.gradle.cache.FileLockManager;
@@ -115,14 +115,14 @@ public class DefaultFileContentCacheFactory implements FileContentCacheFactory, 
             // TODO - don't calculate the same value concurrently
             V value = cache.get(file);
             if (value == null) {
-                FileSnapshot fileSnapshot = fileSystemSnapshotter.snapshotSelf(file);
+                PhysicalSnapshot fileSnapshot = fileSystemSnapshotter.snapshotSelf(file);
                 FileType fileType = fileSnapshot.getType();
                 if (fileType == FileType.RegularFile) {
-                    HashCode hashCode = fileSnapshot.getContent().getContentMd5();
-                    value = contentCache.get(hashCode);
+                    HashCode contentHash = fileSnapshot.getContentHash();
+                    value = contentCache.get(contentHash);
                     if (value == null) {
                         value = calculator.calculate(file, fileType);
-                        contentCache.put(hashCode, value);
+                        contentCache.put(contentHash, value);
                     }
                 } else {
                     value = calculator.calculate(file, fileType);

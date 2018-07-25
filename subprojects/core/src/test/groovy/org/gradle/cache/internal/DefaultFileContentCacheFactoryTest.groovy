@@ -16,10 +16,9 @@
 
 package org.gradle.cache.internal
 
-import org.gradle.api.internal.changedetection.state.FileHashSnapshot
-import org.gradle.api.internal.changedetection.state.FileSnapshot
 import org.gradle.api.internal.changedetection.state.FileSystemSnapshotter
 import org.gradle.api.internal.changedetection.state.InMemoryCacheDecoratorFactory
+import org.gradle.api.internal.changedetection.state.mirror.PhysicalFileSnapshot
 import org.gradle.api.internal.tasks.execution.TaskOutputChangesListener
 import org.gradle.api.invocation.Gradle
 import org.gradle.cache.AsyncCacheAccess
@@ -49,7 +48,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         CacheDecorator decorator(int maxEntriesToKeepInMemory, boolean cacheInMemoryForShortLivedProcesses) {
             return new CacheDecorator() {
                 @Override
-                def <K, V> MultiProcessSafePersistentIndexedCache<K, V> decorate(String cacheId, String cacheName, MultiProcessSafePersistentIndexedCache<K, V> persistentCache, CrossProcessCacheAccess crossProcessCacheAccess, AsyncCacheAccess asyncCacheAccess) {
+                <K, V> MultiProcessSafePersistentIndexedCache<K, V> decorate(String cacheId, String cacheName, MultiProcessSafePersistentIndexedCache<K, V> persistentCache, CrossProcessCacheAccess crossProcessCacheAccess, AsyncCacheAccess asyncCacheAccess) {
                     return persistentCache
                 }
             }
@@ -60,7 +59,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
 
     def "calculates entry value for file when not seen before and reuses result"() {
         def file = new File("thing.txt")
-        def fileSnapshot = Stub(FileSnapshot)
+        def fileSnapshot = Stub(PhysicalFileSnapshot)
         def cache = factory.newCache("cache", 12000, calculator, BaseSerializerFactory.INTEGER_SERIALIZER)
 
         when:
@@ -72,7 +71,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         1 * calculator.calculate(file, FileType.RegularFile) >> 12
         0 * _
 
@@ -86,7 +85,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
 
     def "calculates entry value for directory when not seen before and reuses result"() {
         def file = new File("thing.txt")
-        def fileSnapshot = Stub(FileSnapshot)
+        def fileSnapshot = Stub(PhysicalFileSnapshot)
         def cache = factory.newCache("cache", 12000, calculator, BaseSerializerFactory.INTEGER_SERIALIZER)
 
         when:
@@ -111,7 +110,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
 
     def "reuses calculated value for file across cache instances"() {
         def file = new File("thing.txt")
-        def fileSnapshot = Stub(FileSnapshot)
+        def fileSnapshot = Stub(PhysicalFileSnapshot)
         def cache = factory.newCache("cache", 12000, calculator, BaseSerializerFactory.INTEGER_SERIALIZER)
 
         when:
@@ -123,7 +122,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         1 * calculator.calculate(file, FileType.RegularFile) >> 12
         0 * _
 
@@ -136,13 +135,13 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         0 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         0 * _
     }
 
     def "reuses calculated value for file across factory instances"() {
         def file = new File("thing.txt")
-        def fileSnapshot = Stub(FileSnapshot)
+        def fileSnapshot = Stub(PhysicalFileSnapshot)
         def cache = factory.newCache("cache", 12000, calculator, BaseSerializerFactory.INTEGER_SERIALIZER)
 
         when:
@@ -154,7 +153,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         1 * calculator.calculate(file, FileType.RegularFile) >> 12
         0 * _
 
@@ -168,13 +167,13 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         0 * _
     }
 
     def "reuses result when file content has not changed after task outputs may have changed"() {
         def file = new File("thing.txt")
-        def fileSnapshot = Stub(FileSnapshot)
+        def fileSnapshot = Stub(PhysicalFileSnapshot)
         def cache = factory.newCache("cache", 12000, calculator, BaseSerializerFactory.INTEGER_SERIALIZER)
 
         when:
@@ -186,7 +185,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         1 * calculator.calculate(file, FileType.RegularFile) >> 12
         0 * _
 
@@ -200,13 +199,13 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         0 * _
     }
 
     def "calculates result for directory content after task outputs may have changed"() {
         def file = new File("thing.txt")
-        def fileSnapshot = Stub(FileSnapshot)
+        def fileSnapshot = Stub(PhysicalFileSnapshot)
         def cache = factory.newCache("cache", 12000, calculator, BaseSerializerFactory.INTEGER_SERIALIZER)
 
         when:
@@ -237,7 +236,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
 
     def "calculates result when file content has changed"() {
         def file = new File("thing.txt")
-        def fileSnapshot = Stub(FileSnapshot)
+        def fileSnapshot = Stub(PhysicalFileSnapshot)
         def cache = factory.newCache("cache", 12000, calculator, BaseSerializerFactory.INTEGER_SERIALIZER)
 
         when:
@@ -249,7 +248,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(123), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(123)
         1 * calculator.calculate(file, FileType.RegularFile) >> 12
         0 * _
 
@@ -263,7 +262,7 @@ class DefaultFileContentCacheFactoryTest extends Specification {
         and:
         1 * fileSystemSnapshotter.snapshotSelf(file) >> fileSnapshot
         _ * fileSnapshot.type >> FileType.RegularFile
-        _ * fileSnapshot.content >> new FileHashSnapshot(HashCode.fromInt(321), 123)
+        _ * fileSnapshot.contentHash >> HashCode.fromInt(321)
         1 * calculator.calculate(file, FileType.RegularFile) >> 10
         0 * _
     }

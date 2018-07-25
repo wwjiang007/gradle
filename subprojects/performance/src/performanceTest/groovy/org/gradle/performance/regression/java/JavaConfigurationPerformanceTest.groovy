@@ -20,7 +20,6 @@ import org.gradle.performance.AbstractCrossVersionPerformanceTest
 import spock.lang.Unroll
 
 import static org.gradle.performance.generator.JavaTestProject.LARGE_JAVA_MULTI_PROJECT
-import static org.gradle.performance.generator.JavaTestProject.LARGE_JAVA_MULTI_PROJECT_KOTLIN_DSL
 import static org.gradle.performance.generator.JavaTestProject.LARGE_MONOLITHIC_JAVA_PROJECT
 
 class JavaConfigurationPerformanceTest extends AbstractCrossVersionPerformanceTest {
@@ -31,7 +30,7 @@ class JavaConfigurationPerformanceTest extends AbstractCrossVersionPerformanceTe
         runner.testProject = testProject
         runner.gradleOpts = ["-Xms${testProject.daemonMemory}", "-Xmx${testProject.daemonMemory}"]
         runner.tasksToRun = ['help']
-        runner.targetVersions = ["4.9-20180620235919+0000"]
+        runner.targetVersions = ["4.10-20180712235924+0000"]
 
         when:
         def result = runner.run()
@@ -43,6 +42,7 @@ class JavaConfigurationPerformanceTest extends AbstractCrossVersionPerformanceTe
         testProject                              | _
         LARGE_MONOLITHIC_JAVA_PROJECT            | _
         LARGE_JAVA_MULTI_PROJECT                 | _
-        LARGE_JAVA_MULTI_PROJECT_KOTLIN_DSL      | _
+        // TODO:kotlin-dsl - uncomment after we have a new nightly
+        //LARGE_JAVA_MULTI_PROJECT_KOTLIN_DSL      | _
     }
 }

@@ -16,8 +16,14 @@
 
 package org.gradle.api.internal.changedetection.state
 
+import org.gradle.api.internal.changedetection.state.mirror.FileSystemSnapshot
+import org.gradle.api.internal.changedetection.state.mirror.ImmutablePhysicalDirectorySnapshot
+import org.gradle.api.internal.changedetection.state.mirror.PhysicalFileSnapshot
+import org.gradle.api.internal.changedetection.state.mirror.PhysicalMissingSnapshot
+import org.gradle.api.internal.changedetection.state.mirror.PhysicalSnapshot
 import org.gradle.api.internal.file.FileTreeInternal
 import org.gradle.api.internal.file.collections.DirectoryFileTree
+import org.gradle.internal.hash.HashCode
 import org.gradle.internal.hash.Hashing
 
 class TestFileSnapshotter implements FileSystemSnapshotter {
@@ -27,30 +33,29 @@ class TestFileSnapshotter implements FileSystemSnapshotter {
     }
 
     @Override
-    FileSnapshot snapshotSelf(File file) {
+    PhysicalSnapshot snapshotSelf(File file) {
         if (file.isFile()) {
-            return new RegularFileSnapshot(null, null, false, new FileHashSnapshot(Hashing.sha1().hashBytes(file.bytes)))
+            return new PhysicalFileSnapshot(file.absolutePath, file.name, Hashing.md5().hashBytes(file.bytes), file.lastModified())
         }
-        return new MissingFileSnapshot(null, null)
+        if (file.isDirectory()) {
+            return new ImmutablePhysicalDirectorySnapshot(file.absolutePath, file.name, [])
+        }
+        return new PhysicalMissingSnapshot(file.absolutePath, file.name)
     }
 
     @Override
-    Snapshot snapshotAll(File file) {
+    HashCode snapshotAll(File file) {
+        throw new UnsupportedOperationException()
+    }
+
+
+    @Override
+    FileSystemSnapshot snapshotDirectoryTree(DirectoryFileTree dirTree) {
         throw new UnsupportedOperationException()
     }
 
     @Override
-    FileTreeSnapshot snapshotDirectoryTree(File dir) {
-        throw new UnsupportedOperationException()
-    }
-
-    @Override
-    FileTreeSnapshot snapshotDirectoryTree(DirectoryFileTree dirTree) {
-        throw new UnsupportedOperationException()
-    }
-
-    @Override
-    List<FileSnapshot> snapshotTree(FileTreeInternal tree) {
+    FileSystemSnapshot snapshotTree(FileTreeInternal tree) {
         throw new UnsupportedOperationException()
     }
 }

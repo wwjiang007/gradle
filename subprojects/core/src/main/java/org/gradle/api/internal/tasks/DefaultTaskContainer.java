@@ -33,6 +33,7 @@ import org.gradle.api.internal.TaskInternal;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.project.taskfactory.ITaskFactory;
 import org.gradle.api.internal.project.taskfactory.TaskIdentity;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.TaskCollection;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.initialization.ProjectAccessListener;
@@ -44,7 +45,6 @@ import org.gradle.internal.operations.BuildOperationContext;
 import org.gradle.internal.operations.BuildOperationDescriptor;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.operations.CallableBuildOperation;
-import org.gradle.internal.operations.NullBuildOperationExecutor;
 import org.gradle.internal.operations.RunnableBuildOperation;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.model.internal.core.ModelNode;
@@ -57,6 +57,7 @@ import org.gradle.util.DeprecationLogger;
 import org.gradle.util.GUtil;
 
 import javax.annotation.Nullable;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -69,7 +70,6 @@ import java.util.TreeSet;
 @NonNullApi
 public class DefaultTaskContainer extends DefaultTaskCollection<Task> implements TaskContainerInternal {
     private static final Object[] NO_ARGS = new Object[0];
-    public final static String CREATE_TASKS_CREATE_OPS_PROPERTY = "org.gradle.internal.tasks.createops";
     public final static String EAGERLY_CREATE_LAZY_TASKS_PROPERTY = "org.gradle.internal.tasks.eager";
 
     private static final Set<String> VALID_TASK_ARGUMENTS = ImmutableSet.of(
@@ -95,10 +95,7 @@ public class DefaultTaskContainer extends DefaultTaskCollection<Task> implements
         this.projectAccessListener = projectAccessListener;
         this.statistics = statistics;
         this.eagerlyCreateLazyTasks = Boolean.getBoolean(EAGERLY_CREATE_LAZY_TASKS_PROPERTY);
-
-        // Note: this conditional use of operations is intended to be temporary.
-        // The extra operations create extra overhead that we do not want to impose at this time.
-        this.buildOperationExecutor = createOps() ? buildOperationExecutor : NullBuildOperationExecutor.INSTANCE;
+        this.buildOperationExecutor = buildOperationExecutor;
     }
 
     public Task create(Map<String, ?> options) {
@@ -203,11 +200,6 @@ public class DefaultTaskContainer extends DefaultTaskCollection<Task> implements
         }
     }
 
-    private static boolean createOps() {
-        String createOps = System.getProperty(CREATE_TASKS_CREATE_OPS_PROPERTY);
-        return (createOps != null && createOps.isEmpty()) || Boolean.parseBoolean(createOps);
-    }
-
     private <T extends Task> void addTask(T task, boolean replaceExisting) {
         String name = task.getName();
 
@@ -236,7 +228,7 @@ public class DefaultTaskContainer extends DefaultTaskCollection<Task> implements
             duplicateTask(name);
         }
 
-        add(task);
+        addInternal(task);
     }
 
     private <T extends Task> T duplicateTask(String task) {
@@ -362,7 +354,7 @@ public class DefaultTaskContainer extends DefaultTaskCollection<Task> implements
                 DefaultTaskProvider<T> provider = Cast.uncheckedCast(getInstantiator()
                     .newInstance(TaskCreatingProvider.class, DefaultTaskContainer.this, identity, configurationAction, constructorArgs)
                 );
-                addLater(provider);
+                addLaterInternal(provider);
                 context.setResult(REGISTER_RESULT);
                 return provider;
             }
@@ -544,7 +536,7 @@ public class DefaultTaskContainer extends DefaultTaskCollection<Task> implements
     private void warnAboutPlaceholderDeprecation(String placeholderName) {
         DeprecationLogger.nagUserOfDeprecated(
             "Creating a custom task named '" + placeholderName + "'",
-            "You can configure the existing task using the '" + placeholderName + " { }' syntax or create your custom task under a different name.'"
+            "You can configure the existing task using the '" + placeholderName + " { }' syntax or create your custom task under a different name."
         );
     }
 
@@ -659,6 +651,39 @@ public class DefaultTaskContainer extends DefaultTaskCollection<Task> implements
     private static BuildOperationDescriptor.Builder registerDescriptor(TaskIdentity<?> identity) {
         return BuildOperationDescriptor.displayName("Register task " + identity.identityPath)
             .details(new RegisterDetails(identity));
+    }
+
+    @Deprecated
+    @Override
+    public boolean add(Task o) {
+        DeprecationLogger.nagUserOfReplacedMethodWithoutRemoval("add()", "create() or register()");
+        return addInternal(o);
+    }
+
+    @Deprecated
+    @Override
+    public boolean addAll(Collection<? extends Task> c) {
+        DeprecationLogger.nagUserOfReplacedMethodWithoutRemoval("addAll()", "create() or register()");
+        return addAllInternal(c);
+    }
+
+    @Override
+    public void addLater(Provider<? extends Task> provider) {
+        throw new UnsupportedOperationException("Adding a task provider directly to the task container is not supported.  Use the register() method instead.");
+    }
+
+    @Override
+    public boolean addInternal(Task task) {
+        return super.add(task);
+    }
+
+    @Override
+    public boolean addAllInternal(Collection<? extends Task> task) {
+        return super.addAll(task);
+    }
+
+    private void addLaterInternal(Provider<? extends Task> provider) {
+        super.addLater(provider);
     }
 
     private static final RegisterTaskBuildOperationType.Result REGISTER_RESULT = new RegisterTaskBuildOperationType.Result() {

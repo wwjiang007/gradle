@@ -27,6 +27,7 @@ import org.gradle.api.internal.TaskInternal
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.internal.project.taskfactory.ITaskFactory
 import org.gradle.api.internal.project.taskfactory.TaskIdentity
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.initialization.ProjectAccessListener
 import org.gradle.internal.operations.TestBuildOperationExecutor
@@ -407,6 +408,46 @@ class DefaultTaskContainerTest extends Specification {
         and:
         1 * rule.apply("task")
         0 * rule._
+    }
+
+    void "can query task name and type from task provider after registration"() {
+        given:
+        def provider = null
+
+        when:
+        provider = container.register("a")
+
+        then:
+        provider.type == DefaultTask
+        provider.name == "a"
+
+        when:
+        provider = container.register("b", Mock(Action))
+
+        then:
+        provider.type == DefaultTask
+        provider.name == "b"
+
+        when:
+        provider = container.register("c", CustomTask)
+
+        then:
+        provider.type == CustomTask
+        provider.name == "c"
+
+        when:
+        provider = container.register("d", CustomTask, Mock(Action))
+
+        then:
+        provider.type == CustomTask
+        provider.name == "d"
+
+        when:
+        provider = container.register("e", CustomTask, "some", "constructor", "args")
+
+        then:
+        provider.type == CustomTask
+        provider.name == "e"
     }
 
     void "can define task to create and configure later given name and type"() {
@@ -1376,6 +1417,19 @@ class DefaultTaskContainerTest extends Specification {
 
         then:
         container.findByName("task") == null
+    }
+
+    def "cannot add a provider directly to the task container"() {
+        given:
+        def provider = Mock(Provider) {
+            _ * get() >> task("foo")
+        }
+
+        when:
+        container.addLater(provider)
+
+        then:
+        thrown(UnsupportedOperationException)
     }
 
     private ProjectInternal expectTaskLookupInOtherProject(final String projectPath, final String taskName, def task) {
