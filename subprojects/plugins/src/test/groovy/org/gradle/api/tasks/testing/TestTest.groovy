@@ -39,7 +39,6 @@ import org.gradle.api.internal.tasks.testing.report.TestReporter
 import org.gradle.api.tasks.AbstractConventionTaskTest
 import org.gradle.internal.work.WorkerLeaseRegistry
 import org.gradle.process.CommandLineArgumentProvider
-import org.gradle.process.internal.DefaultJavaForkOptions
 import org.gradle.process.internal.worker.WorkerProcessBuilder
 
 import java.lang.ref.WeakReference
@@ -268,7 +267,7 @@ class TestTest extends AbstractConventionTaskTest {
                 return ["First", "Second"]
             }
         }
-        def javaForkOptions = new DefaultJavaForkOptions(project.fileResolver)
+        def javaForkOptions = TestFiles.execFactory().newJavaForkOptions()
         test.copyTo(javaForkOptions)
 
         then:
@@ -278,7 +277,7 @@ class TestTest extends AbstractConventionTaskTest {
     private void assertIsDirectoryTree(FileTree classFiles, Set<String> includes, Set<String> excludes) {
         assert classFiles instanceof CompositeFileTree
         def files = (CompositeFileTree) classFiles
-        def context = new DefaultFileCollectionResolveContext(TestFiles.resolver())
+        def context = new DefaultFileCollectionResolveContext(TestFiles.patternSetFactory)
         files.visitContents(context)
         List<? extends FileTree> contents = context.resolveAsFileTrees()
         FileTreeAdapter adapter = (FileTreeAdapter) contents.get(0)
@@ -294,7 +293,7 @@ class TestTest extends AbstractConventionTaskTest {
         test.useTestFramework(testFrameworkMock)
         test.setTestExecuter(testExecuterMock)
 
-        test.setTestClassesDir(classesDir)
+        test.setTestClassesDirs(ImmutableFileCollection.of(classesDir))
         test.getReports().getJunitXml().setDestination(resultsDir)
         test.setBinResultsDir(binResultsDir)
         test.getReports().getHtml().setDestination(reportDir)

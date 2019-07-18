@@ -112,7 +112,7 @@ class TestTaskIntegrationTest extends JUnitMultiVersionIntegrationSpec {
         buildFile << """
             apply plugin: 'java'
             ${jcenterRepository()}
-            dependencies { testCompile 'junit:junit:4.12' }
+            dependencies { testImplementation 'junit:junit:4.12' }
             test {
                 maxParallelForks = $maxParallelForks
             }
@@ -140,8 +140,8 @@ class TestTaskIntegrationTest extends JUnitMultiVersionIntegrationSpec {
                 ${jcenterRepository()}
             }
             dependencies { 
-                testCompile 'junit:junit:4.12'
-                testCompile project(":dependency") 
+                testImplementation 'junit:junit:4.12'
+                testImplementation project(":dependency") 
             }
         """
         settingsFile << """
@@ -181,7 +181,7 @@ class TestTaskIntegrationTest extends JUnitMultiVersionIntegrationSpec {
             ${jcenterRepository()}
 
             dependencies { 
-                testCompile 'junit:junit:4.12' 
+                testImplementation 'junit:junit:4.12' 
             }
         """
         file("src/test/java/MyTest.java") << """
@@ -209,31 +209,6 @@ class TestTaskIntegrationTest extends JUnitMultiVersionIntegrationSpec {
         resourceFile.renameTo(file("src/main/resources/dependency/bar.properties"))
         then:
         fails 'test'
-    }
-
-    @Requires(TestPrecondition.ONLINE)
-    def "emits deprecation warning when using testClassesDir"() {
-        buildFile << """
-            apply plugin: 'java'
-            ${jcenterRepository()}
-
-            dependencies { 
-                testCompile 'junit:junit:4.12' 
-            }
-            compileTestJava {
-                destinationDir = file("build/non-standard")
-            }
-            test {
-                testClassesDir = compileTestJava.destinationDir
-                classpath = sourceSets.test.runtimeClasspath + files(compileTestJava.destinationDir)
-            }
-        """
-        file('src/test/java/MyTest.java') << standaloneTestClass()
-        when:
-        executer.expectDeprecationWarning()
-        succeeds("test")
-        then:
-        outputContains("The setTestClassesDir(File) method has been deprecated. This is scheduled to be removed in Gradle 5.0. Please use the setTestClassesDirs(FileCollection) method instead.")
     }
 
     @Issue("https://github.com/gradle/gradle/issues/3627")
@@ -285,7 +260,7 @@ class TestTaskIntegrationTest extends JUnitMultiVersionIntegrationSpec {
             ${jcenterRepository()}
 
             dependencies {
-                testCompile 'junit:junit:4.12'
+                testImplementation 'junit:junit:4.12'
             }
 
             sourceCompatibility = 1.9
@@ -293,7 +268,7 @@ class TestTaskIntegrationTest extends JUnitMultiVersionIntegrationSpec {
         """
     }
 
-    private int classFormat(TestFile path) {
+    private static int classFormat(TestFile path) {
         path.bytes[7] & 0xFF
     }
 }

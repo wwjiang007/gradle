@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 import org.gradle.api.Project
-
-import org.gradle.kotlin.dsl.*
+import org.gradle.api.tasks.TaskOutputs
+import org.gradle.gradlebuild.BuildEnvironment
+import org.gradle.kotlin.dsl.extra
 
 
 // This file contains Kotlin extensions for the gradle/gradle build
@@ -43,14 +44,14 @@ fun Project.libraryReason(name: String): String? =
     libraries[name]!!["because"]
 
 
-fun Project.testLibrary(name: String): Any =
-    testLibraries[name]!!
+fun Project.testLibrary(name: String): String =
+    testLibraries[name]!! as String
 
 
 // TODO:kotlin-dsl Remove work around for https://github.com/gradle/kotlin-dsl/issues/639 once fixed
 @Suppress("unchecked_cast")
-fun Project.testLibraries(name: String): List<Any> =
-    testLibraries[name]!! as List<Any>
+fun Project.testLibraries(name: String): List<String> =
+    testLibraries[name]!! as List<String>
 
 
 val Project.maxParallelForks: Int
@@ -69,3 +70,10 @@ val Project.useAllDistribution: Boolean
 private
 fun <T> Project.ifProperty(name: String, then: T): T? =
     then.takeIf { rootProject.findProperty(name) == true }
+
+
+fun TaskOutputs.doNotCacheIfSlowInternetConnection() {
+    doNotCacheIf("Slow internet connection") {
+        BuildEnvironment.isSlowInternetConnection
+    }
+}

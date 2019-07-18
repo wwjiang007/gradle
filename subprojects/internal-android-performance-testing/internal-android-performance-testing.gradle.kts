@@ -5,14 +5,15 @@ plugins {
 }
 
 val androidTools by configurations.creating
-configurations.compile.extendsFrom(androidTools)
+configurations.compile { extendsFrom(androidTools) }
 
 repositories {
     google()
 }
 
 dependencies {
-    compile(project(":toolingApi"))
+    implementation(project(":baseServices"))
+    implementation(project(":toolingApi"))
     androidTools("com.android.tools.build:gradle:3.0.0")
 }
 
@@ -32,14 +33,12 @@ tasks.register<BuildClassPath>("buildClassPath") {
     outputFile = buildDir.resolve("classpath.txt")
 }
 
-val distZip: TaskProvider<Zip> = tasks.withType<Zip>().named("distZip")
-val distTar: TaskProvider<Tar> = tasks.withType<Tar>().named("distTar")
-listOf(distZip, distTar).forEach {
-    it.configure { baseName = "android-test-app" }
+listOf(tasks.distZip, tasks.distTar).forEach {
+    it { baseName = "android-test-app" }
 }
 
 project(":distributions").tasks.register("buildDists") {
-    dependsOn(distZip)
+    dependsOn(tasks.distZip)
 }
 
 

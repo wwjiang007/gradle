@@ -24,17 +24,16 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.filefilter.RegexFileFilter;
 import org.apache.commons.lang.StringUtils;
-import org.gradle.api.Action;
-import org.gradle.api.Describable;
-import org.gradle.api.logging.Logger;
-import org.gradle.api.logging.Logging;
 import org.gradle.cache.CleanupProgressMonitor;
+import org.gradle.internal.IoActions;
 import org.gradle.util.GradleVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.FileFilter;
 import java.io.InputStream;
@@ -54,10 +53,10 @@ import java.util.zip.ZipFile;
 import static org.apache.commons.io.filefilter.FileFilterUtils.directoryFileFilter;
 import static org.gradle.util.CollectionUtils.single;
 
-public class WrapperDistributionCleanupAction implements Action<CleanupProgressMonitor>, Describable {
+public class WrapperDistributionCleanupAction implements DirectoryCleanupAction {
 
     @VisibleForTesting static final String WRAPPER_DISTRIBUTION_FILE_PATH = "wrapper/dists";
-    private static final Logger LOGGER = Logging.getLogger(WrapperDistributionCleanupAction.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(WrapperDistributionCleanupAction.class);
 
     private static final ImmutableMap<String, Pattern> JAR_FILE_PATTERNS_BY_PREFIX;
     private static final String BUILD_RECEIPT_ZIP_ENTRY_PATH = StringUtils.removeStart(GradleVersion.RESOURCE_NAME, "/");
@@ -89,7 +88,8 @@ public class WrapperDistributionCleanupAction implements Action<CleanupProgressM
         return "Deleting unused Gradle distributions in " + distsDir;
     }
 
-    public void execute(@Nonnull CleanupProgressMonitor progressMonitor) {
+    @Override
+    public boolean execute(@Nonnull CleanupProgressMonitor progressMonitor) {
         long maximumTimestamp = Math.max(0, System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1));
         Set<GradleVersion> usedVersions = this.usedGradleVersions.getUsedGradleVersions();
         Multimap<GradleVersion, File> checksumDirsByVersion = determineChecksumDirsByVersion();
@@ -100,6 +100,7 @@ public class WrapperDistributionCleanupAction implements Action<CleanupProgressM
                 progressMonitor.incrementSkipped(checksumDirsByVersion.get(version).size());
             }
         }
+        return true;
     }
 
     private void deleteDistributions(Collection<File> dirs, long maximumTimestamp, CleanupProgressMonitor progressMonitor) {
@@ -162,16 +163,18 @@ public class WrapperDistributionCleanupAction implements Action<CleanupProgressM
         throw new IllegalArgumentException("No checked JAR file contained a build receipt: " + checkedJarFiles);
     }
 
+    @Nullable
     private GradleVersion readGradleVersionFromJarFile(File jarFile) throws Exception {
         ZipFile zipFile = null;
         try {
             zipFile = new ZipFile(jarFile);
             return readGradleVersionFromBuildReceipt(zipFile);
         } finally {
-            IOUtils.closeQuietly(zipFile);
+            IoActions.closeQuietly(zipFile);
         }
     }
 
+    @Nullable
     private GradleVersion readGradleVersionFromBuildReceipt(ZipFile zipFile) throws Exception {
         ZipEntry zipEntry = zipFile.getEntry(BUILD_RECEIPT_ZIP_ENTRY_PATH);
         if (zipEntry == null) {
@@ -196,7 +199,7 @@ public class WrapperDistributionCleanupAction implements Action<CleanupProgressM
         return listFiles(baseDir, null);
     }
 
-    private List<File> listFiles(File baseDir, FileFilter filter) {
+    private List<File> listFiles(File baseDir, @Nullable FileFilter filter) {
         File[] dirs = baseDir.listFiles(filter);
         return dirs == null ? Collections.<File>emptyList() : Arrays.asList(dirs);
     }

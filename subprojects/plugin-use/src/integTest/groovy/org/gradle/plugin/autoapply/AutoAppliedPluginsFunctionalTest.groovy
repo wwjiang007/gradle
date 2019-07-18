@@ -17,23 +17,18 @@
 package org.gradle.plugin.autoapply
 
 import org.gradle.api.logging.configuration.ConsoleOutput
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.AbstractPluginIntegrationTest
 import org.gradle.integtests.fixtures.executer.GradleHandle
 import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import spock.lang.Issue
 
-import static org.gradle.integtests.fixtures.BuildScanUserInputFixture.BUILD_SCAN_ERROR_MESSAGE_HINT
-import static org.gradle.integtests.fixtures.BuildScanUserInputFixture.DUMMY_TASK_NAME
-import static org.gradle.integtests.fixtures.BuildScanUserInputFixture.EOF
-import static org.gradle.integtests.fixtures.BuildScanUserInputFixture.NO
-import static org.gradle.integtests.fixtures.BuildScanUserInputFixture.YES
-import static org.gradle.integtests.fixtures.BuildScanUserInputFixture.writeToStdInAndClose
+import static org.gradle.integtests.fixtures.BuildScanUserInputFixture.*
 
 @Requires(TestPrecondition.ONLINE)
 @LeaksFileHandles
-class AutoAppliedPluginsFunctionalTest extends AbstractIntegrationSpec {
+class AutoAppliedPluginsFunctionalTest extends AbstractPluginIntegrationTest {
 
     private static final String BUILD_SCAN_LICENSE_QUESTION = 'Publishing a build scan to scans.gradle.com requires accepting the Gradle Terms of Service defined at https://gradle.com/terms-of-service. Do you accept these terms?'
     private static final String BUILD_SCAN_SUCCESSFUL_PUBLISHING = 'Publishing build scan'
@@ -89,11 +84,9 @@ class AutoAppliedPluginsFunctionalTest extends AbstractIntegrationSpec {
         def result = gradleHandle.waitForFinish()
         result.assertHasPostBuildOutput(BUILD_SCAN_LICENSE_QUESTION)
         result.assertHasPostBuildOutput(BUILD_SCAN_LICENSE_DECLINATION)
-        result.assertHasPostBuildOutput(BUILD_SCAN_PLUGIN_CONFIG_PROBLEM)
         result.assertNotOutput(BUILD_SCAN_SUCCESSFUL_PUBLISHING)
         result.assertNotOutput(BUILD_SCAN_LICENSE_NOTE)
-        result.assertHasPostBuildOutput("The buildScan extension 'termsOfServiceAgree' value must be exactly the string 'yes' (without quotes).")
-        result.assertHasPostBuildOutput("The value given was 'no'.")
+        result.assertHasPostBuildOutput("You must answer 'yes' to publish a build scan when prompted on the command line or accept the Gradle Terms of Service in a buildScan configuration block.")
     }
 
     def "can auto-apply build scan plugin and cancel license acceptance with ctrl-d in interactive console"() {
@@ -164,9 +157,9 @@ class AutoAppliedPluginsFunctionalTest extends AbstractIntegrationSpec {
 
     private void withInteractiveConsole() {
         executer.withTestConsoleAttached()
-                .withConsole(ConsoleOutput.Plain)
-                .withStdinPipe()
-                .withForceInteractive(true)
+            .withConsole(ConsoleOutput.Plain)
+            .withStdinPipe()
+            .withForceInteractive(true)
     }
 
     private GradleHandle startBuildWithBuildScanCommandLineOption() {

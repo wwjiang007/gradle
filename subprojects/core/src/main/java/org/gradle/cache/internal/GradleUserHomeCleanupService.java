@@ -16,20 +16,20 @@
 
 package org.gradle.cache.internal;
 
-import org.gradle.api.Action;
-import org.gradle.api.Describable;
-import org.gradle.cache.CleanupProgressMonitor;
 import org.gradle.initialization.GradleUserHomeDirProvider;
 import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.internal.logging.progress.ProgressLogger;
 import org.gradle.internal.logging.progress.ProgressLoggerFactory;
+import org.gradle.util.GUtil;
 
 import java.io.File;
+import java.util.Properties;
 
 public class GradleUserHomeCleanupService implements Stoppable {
 
     private static final long MAX_UNUSED_DAYS_FOR_RELEASES = 30;
     private static final long MAX_UNUSED_DAYS_FOR_SNAPSHOTS = 7;
+    private static final String CACHE_CLEANUP_PROPERTY = "org.gradle.cache.cleanup";
 
     private final GradleUserHomeDirProvider userHomeDirProvider;
     private final CacheScopeMapping cacheScopeMapping;
@@ -45,16 +45,27 @@ public class GradleUserHomeCleanupService implements Stoppable {
 
     @Override
     public void stop() {
-        File cacheBaseDir = cacheScopeMapping.getRootDirectory(null);
-        execute(new VersionSpecificCacheCleanupAction(cacheBaseDir, MAX_UNUSED_DAYS_FOR_RELEASES, MAX_UNUSED_DAYS_FOR_SNAPSHOTS));
+        // TODO Will be implemented without hard-coded access to `$GRADLE_USER_HOME/gradle.properties` for 5.1 in #6084
         File gradleUserHomeDirectory = userHomeDirProvider.getGradleUserHomeDirectory();
-        execute(new WrapperDistributionCleanupAction(gradleUserHomeDirectory, usedGradleVersions));
+        File gradleProperties = new File(gradleUserHomeDirectory, "gradle.properties");
+        if (gradleProperties.isFile()) {
+            Properties properties = GUtil.loadProperties(gradleProperties);
+            String cleanup = properties.getProperty(CACHE_CLEANUP_PROPERTY);
+            if (cleanup != null && cleanup.equals("false")) {
+                return;
+            }
+        }
+        File cacheBaseDir = cacheScopeMapping.getRootDirectory(null);
+        boolean wasCleanedUp = execute(new VersionSpecificCacheCleanupAction(cacheBaseDir, MAX_UNUSED_DAYS_FOR_RELEASES, MAX_UNUSED_DAYS_FOR_SNAPSHOTS));
+        if (wasCleanedUp) {
+            execute(new WrapperDistributionCleanupAction(gradleUserHomeDirectory, usedGradleVersions));
+        }
     }
 
-    private <T extends Action<CleanupProgressMonitor> & Describable> void execute(T action) {
+    private boolean execute(DirectoryCleanupAction action) {
         ProgressLogger progressLogger = startNewOperation(action.getClass(), action.getDisplayName());
         try {
-            action.execute(new DefaultCleanupProgressMonitor(progressLogger));
+            return action.execute(new DefaultCleanupProgressMonitor(progressLogger));
         } finally {
             progressLogger.completed();
         }

@@ -21,10 +21,10 @@ import org.gradle.api.artifacts.ComponentMetadataSupplier
 import org.gradle.api.artifacts.ComponentMetadataSupplierDetails
 import org.gradle.api.artifacts.ComponentMetadataVersionLister
 import org.gradle.api.artifacts.repositories.AuthenticationContainer
-import org.gradle.api.internal.artifacts.DefaultImmutableModuleIdentifierFactory
+import org.gradle.api.internal.artifacts.DependencyManagementTestUtil
 import org.gradle.api.internal.artifacts.ImmutableModuleIdentifierFactory
 import org.gradle.api.internal.artifacts.ivyservice.IvyContextManager
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.parser.ModuleMetadataParser
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.parser.GradleModuleMetadataParser
 import org.gradle.api.internal.artifacts.repositories.metadata.IvyMutableModuleMetadataFactory
 import org.gradle.api.internal.artifacts.repositories.resolver.IvyResolver
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransport
@@ -39,12 +39,14 @@ import org.gradle.internal.resource.ExternalResourceRepository
 import org.gradle.internal.resource.cached.ExternalResourceFileStore
 import org.gradle.internal.resource.local.FileResourceRepository
 import org.gradle.internal.resource.local.LocallyAvailableResourceFinder
-import org.gradle.testing.internal.util.Specification
+import org.gradle.util.SnapshotTestUtil
 import org.gradle.util.TestUtil
+import spock.lang.Specification
 
 import javax.inject.Inject
 
 class DefaultIvyArtifactRepositoryTest extends Specification {
+    final instantiator = TestUtil.instantiatorFactory().decorateLenient()
     final FileResolver fileResolver = Mock()
     final RepositoryTransportFactory transportFactory = Mock()
     final LocallyAvailableResourceFinder locallyAvailableResourceFinder = Mock()
@@ -55,10 +57,10 @@ class DefaultIvyArtifactRepositoryTest extends Specification {
     final AuthenticationContainer authenticationContainer = Stub()
     final ivyContextManager = Mock(IvyContextManager)
     final ImmutableModuleIdentifierFactory moduleIdentifierFactory = Mock()
-    final ModuleMetadataParser moduleMetadataParser = new ModuleMetadataParser(Mock(ImmutableAttributesFactory), moduleIdentifierFactory, Mock(NamedObjectInstantiator))
-    final IvyMutableModuleMetadataFactory metadataFactory = new IvyMutableModuleMetadataFactory(new DefaultImmutableModuleIdentifierFactory(), TestUtil.attributesFactory())
+    final GradleModuleMetadataParser moduleMetadataParser = new GradleModuleMetadataParser(Mock(ImmutableAttributesFactory), moduleIdentifierFactory, Mock(NamedObjectInstantiator))
+    final IvyMutableModuleMetadataFactory metadataFactory = DependencyManagementTestUtil.ivyMetadataFactory()
 
-    final DefaultIvyArtifactRepository repository = new DefaultIvyArtifactRepository(fileResolver, transportFactory, locallyAvailableResourceFinder, artifactIdentifierFileStore, externalResourceFileStore, authenticationContainer, ivyContextManager, moduleIdentifierFactory, TestUtil.instantiatorFactory(), Mock(FileResourceRepository), moduleMetadataParser, TestUtil.featurePreviews(), metadataFactory, TestUtil.valueSnapshotter(), Mock(ObjectFactory))
+    final DefaultIvyArtifactRepository repository = instantiator.newInstance(DefaultIvyArtifactRepository.class, fileResolver, transportFactory, locallyAvailableResourceFinder, artifactIdentifierFileStore, externalResourceFileStore, authenticationContainer, ivyContextManager, moduleIdentifierFactory, TestUtil.instantiatorFactory(), Mock(FileResourceRepository), moduleMetadataParser, TestUtil.featurePreviews(), metadataFactory, SnapshotTestUtil.valueSnapshotter(), Mock(ObjectFactory))
 
     def "default values"() {
         expect:
@@ -184,7 +186,7 @@ class DefaultIvyArtifactRepositoryTest extends Specification {
     def "uses specified base url with configured pattern layout"() {
         repository.name = 'name'
         repository.url = 'http://host'
-        repository.layout 'pattern', {
+        repository.patternLayout {
             artifact '[module]/[revision]/[artifact](.[ext])'
             ivy '[module]/[revision]/ivy.xml'
         }
@@ -210,7 +212,7 @@ class DefaultIvyArtifactRepositoryTest extends Specification {
     def "when requested uses maven patterns with configured pattern layout"() {
         repository.name = 'name'
         repository.url = 'http://host'
-        repository.layout 'pattern', {
+        repository.patternLayout {
             artifact '[module]/[revision]/[artifact](.[ext])'
             ivy '[module]/[revision]/ivy.xml'
             m2compatible = true
@@ -260,7 +262,7 @@ class DefaultIvyArtifactRepositoryTest extends Specification {
     def "uses artifact pattern for ivy files when no ivy pattern provided"() {
         repository.name = 'name'
         repository.url = 'http://host'
-        repository.layout 'pattern', {
+        repository.patternLayout {
             artifact '[layoutPattern]'
         }
         repository.artifactPattern 'http://other/[additionalPattern]'

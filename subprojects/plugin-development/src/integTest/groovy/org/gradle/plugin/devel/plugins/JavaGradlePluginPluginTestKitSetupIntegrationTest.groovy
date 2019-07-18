@@ -36,10 +36,25 @@ class JavaGradlePluginPluginTestKitSetupIntegrationTest extends AbstractIntegrat
         """
     }
 
+    def "has default conventions"() {
+        buildFile << """
+            task assertHasTestKit() {
+                doLast {
+                    assert project.sourceSets.test.runtimeClasspath.files.containsAll(dependencies.gradleTestKit().files.files)
+                }
+            }
+        """
+        expect:
+        succeeds("assertHasTestKit")
+        succeeds("test")
+        result.assertTaskExecuted(":pluginUnderTestMetadata")
+        result.assertTaskExecuted(":pluginDescriptors")
+    }
+
     def "wires creation of plugin under test metadata into build lifecycle"() {
         given:
         def module = mavenRepo.module('org.gradle.test', 'a', '1.3').publish()
-        buildFile << compileDependency('compile', module)
+        buildFile << compileDependency('implementation', module)
 
         when:
         succeeds 'build'
@@ -54,8 +69,6 @@ class JavaGradlePluginPluginTestKitSetupIntegrationTest extends AbstractIntegrat
     def "can configure plugin and test source set by extension"() {
         given:
         buildFile << """
-            sourceSets.remove(sourceSets.main)
-
             sourceSets {
                 custom {
                     java {
@@ -89,7 +102,7 @@ class JavaGradlePluginPluginTestKitSetupIntegrationTest extends AbstractIntegrat
             }
         """
         def module = mavenRepo.module('org.gradle.test', 'a', '1.3').publish()
-        buildFile << compileDependency('customCompile', module)
+        buildFile << compileDependency('customImplementation', module)
 
         when:
         succeeds 'build'

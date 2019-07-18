@@ -33,11 +33,13 @@ public interface ModuleComponentResolveMetadata extends ComponentResolveMetadata
     /**
      * {@inheritDoc}
      */
+    @Override
     ModuleComponentIdentifier getId();
 
     /**
      * {@inheritDoc}
      */
+    @Override
     ModuleComponentResolveMetadata withSource(ModuleSource source);
 
     /**
@@ -64,4 +66,5 @@ public interface ModuleComponentResolveMetadata extends ComponentResolveMetadata
 
     ImmutableAttributesFactory getAttributesFactory();
 
+    VariantMetadataRules getVariantMetadataRules();
 }

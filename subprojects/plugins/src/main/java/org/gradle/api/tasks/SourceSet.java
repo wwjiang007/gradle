@@ -20,14 +20,18 @@ import org.gradle.api.Action;
 import org.gradle.api.Incubating;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.SourceDirectorySet;
+import org.gradle.api.plugins.ExtensionAware;
 
 import javax.annotation.Nullable;
 
 /**
- * A {@code SourceSet} represents a logical group of Java source and resources.
+ * A {@code SourceSet} represents a logical group of Java source and resource files. They
+ * are covered in more detail in the
+ * <a href="https://docs.gradle.org/current/userguide/building_java_projects.html#sec:java_source_sets">user manual</a>.
  * <p>
- * See the example below how {@link SourceSet} 'main' is accessed and how the {@link SourceDirectorySet} 'java'
- * is configured to exclude some package from compilation.
+ * The following example shows how you can configure the 'main' source set, which in this
+ * case involves excluding classes whose package begins 'some.unwanted.package' from
+ * compilation of the source files in the 'java' {@link SourceDirectorySet}:
  *
  * <pre class='autoTested'>
  * apply plugin: 'java'
@@ -41,7 +45,7 @@ import javax.annotation.Nullable;
  * }
  * </pre>
  */
-public interface SourceSet {
+public interface SourceSet extends ExtensionAware {
     /**
      * The name of the main source set.
      */
@@ -95,7 +99,7 @@ public interface SourceSet {
      * @since 4.6
      */
     @Incubating
-    void setAnnotationProcessorPath(@Nullable FileCollection annotationProcessorPath);
+    void setAnnotationProcessorPath(FileCollection annotationProcessorPath);
 
     /**
      * Returns the classpath used to execute this source.
@@ -143,7 +147,7 @@ public interface SourceSet {
      * @param configureClosure The closure to use to configure the resources.
      * @return this
      */
-    SourceSet resources(Closure configureClosure);
+    SourceSet resources(@Nullable Closure configureClosure);
 
     /**
      * Configures the non-Java resources for this set.
@@ -170,7 +174,7 @@ public interface SourceSet {
      * @param configureClosure The closure to use to configure the Java source.
      * @return this
      */
-    SourceSet java(Closure configureClosure);
+    SourceSet java(@Nullable Closure configureClosure);
 
     /**
      * Configures the Java source for this set.
@@ -260,7 +264,6 @@ public interface SourceSet {
      *
      * @since 2.12
      */
-    @Incubating
     String getCompileOnlyConfigurationName();
 
     /**
@@ -269,7 +272,6 @@ public interface SourceSet {
      *
      * @since 2.12
      */
-    @Incubating
     String getCompileClasspathConfigurationName();
 
     /**
@@ -292,7 +294,6 @@ public interface SourceSet {
      *
      * @since 3.3
      */
-    @Incubating
     String getApiConfigurationName();
 
     /**
@@ -302,7 +303,6 @@ public interface SourceSet {
      * @return The configuration name
      * @since 3.4
      */
-    @Incubating
     String getImplementationConfigurationName();
 
     /**
@@ -314,7 +314,6 @@ public interface SourceSet {
      *
      * @since 3.3
      */
-    @Incubating
     String getApiElementsConfigurationName();
 
     /**
@@ -325,7 +324,6 @@ public interface SourceSet {
      * @return the runtime only configuration name
      * @since 3.4
      */
-    @Incubating
     String getRuntimeOnlyConfigurationName();
 
     /**
@@ -335,7 +333,6 @@ public interface SourceSet {
      * @return the name of the runtime classpath configuration
      * @since 3.4
      */
-    @Incubating
     String getRuntimeClasspathConfigurationName();
 
     /**
@@ -346,6 +343,5 @@ public interface SourceSet {
      * @return the name of the runtime elements configuration.
      * @since 3.4
      */
-    @Incubating
     String getRuntimeElementsConfigurationName();
 }

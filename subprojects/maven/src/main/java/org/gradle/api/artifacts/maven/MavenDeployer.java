@@ -65,20 +65,8 @@ public interface MavenDeployer extends MavenResolver {
     void setSnapshotRepository(Object snapshotRepository);
 
     /**
-     * Out of the box only uploading to the filesysten and via http is supported. If other protocolls should be used,
+     * Out of the box only uploading to the filesysten and via http is supported. If other protocols should be used,
      * the appropriate Maven wagon jars have to be passed via this method.
      */
     void addProtocolProviderJars(Collection<File> jars);
-
-    /**
-     * Returns whether to assign snapshots a unique version comprised of the timestamp and build number, or to use the
-     * same version each time. Defaults to true.
-     */
-    boolean isUniqueVersion();
-
-    /**
-     * Sets whether to assign snapshots a unique version comprised of the timestamp and build number, or to use the same
-     * version each time. Defaults to true.
-     */
-    void setUniqueVersion(boolean uniqueVersion);
 }

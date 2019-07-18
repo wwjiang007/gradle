@@ -18,10 +18,14 @@ package org.gradle.testfixtures
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
-import org.gradle.api.internal.TaskInternal
 import org.gradle.api.internal.project.DefaultProject
+import org.gradle.api.logging.configuration.WarningMode
+import org.gradle.internal.featurelifecycle.DeprecatedFeatureUsage
+import org.gradle.internal.featurelifecycle.DeprecatedUsageBuildOperationProgressBroadaster
+import org.gradle.internal.featurelifecycle.UsageLocationReporter
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.Resources
+import org.gradle.util.SingleMessageLogger
 import org.junit.Rule
 import spock.lang.Ignore
 import spock.lang.Issue
@@ -165,16 +169,37 @@ class ProjectBuilderTest extends Specification {
         latch.get()
     }
 
-    @Issue("https://github.com/gradle/gradle/issues/5396")
-    def "can run task by calling TaskInternal.execute()"() {
-        def project = buildProject()
-        TaskInternal task = project.task('custom', type: CustomTask)
+    def "emits deprecation warning when using constructor directly"() {
+        given:
+        def broadcaster = Mock(DeprecatedUsageBuildOperationProgressBroadaster)
+        SingleMessageLogger.init(Mock(UsageLocationReporter), WarningMode.None, broadcaster)
 
         when:
-        task.execute()
+        new ProjectBuilder()
 
         then:
-        noExceptionThrown()
+        1 * broadcaster.progress(_) >> { DeprecatedFeatureUsage usage ->
+            assert usage.summary == "The ProjectBuilder() constructor has been deprecated."
+            assert usage.advice == "Please use ProjectBuilder.builder() instead."
+        }
+
+        cleanup:
+        SingleMessageLogger.reset()
+    }
+
+    def "does not emit deprecation warning when using the builder() method"() {
+        given:
+        def broadcaster = Mock(DeprecatedUsageBuildOperationProgressBroadaster)
+        SingleMessageLogger.init(Mock(UsageLocationReporter), WarningMode.None, broadcaster)
+
+        when:
+        ProjectBuilder.builder()
+
+        then:
+        0 * broadcaster.progress(_)
+
+        cleanup:
+        SingleMessageLogger.reset()
     }
 }
 

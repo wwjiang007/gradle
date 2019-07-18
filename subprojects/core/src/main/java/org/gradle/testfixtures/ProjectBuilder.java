@@ -15,9 +15,11 @@
  */
 package org.gradle.testfixtures;
 
-import org.gradle.api.Incubating;
+import org.gradle.util.SingleMessageLogger;
 import org.gradle.api.Project;
+import org.gradle.internal.Factory;
 import org.gradle.testfixtures.internal.ProjectBuilderImpl;
+import org.gradle.util.DeprecationLogger;
 
 import java.io.File;
 
@@ -52,12 +54,27 @@ public class ProjectBuilder {
     private ProjectBuilderImpl impl = new ProjectBuilderImpl();
 
     /**
+     * Don't use this constructor anymore.
+     *
+     * An instance should only be created via the {@link #builder()}.
+     */
+    @Deprecated
+    public ProjectBuilder() {
+        SingleMessageLogger.nagUserOfDeprecated("The ProjectBuilder() constructor", "Please use ProjectBuilder.builder() instead.");
+    }
+
+    /**
      * Creates a project builder.
      *
      * @return The builder
      */
     public static ProjectBuilder builder() {
-        return new ProjectBuilder();
+        return DeprecationLogger.whileDisabled(new Factory<ProjectBuilder>() {
+                  @Override
+                  public ProjectBuilder create() {
+                      return new ProjectBuilder();
+                  }
+              });
     }
 
     /**
@@ -74,9 +91,9 @@ public class ProjectBuilder {
     /**
      * Specifies the Gradle user home for the builder. If not set, an empty directory under the project directory
      * will be used.
+     *
      * @return The builder
      */
-    @Incubating
     public ProjectBuilder withGradleUserHomeDir(File dir) {
         gradleUserHomeDir = dir;
         return this;

@@ -22,10 +22,11 @@ import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 
 class MavenRealProjectsDependencyResolveIntegrationTest extends AbstractDependencyResolutionTest {
-    def resolve = new ResolveTestFixture(buildFile)
+    def resolve = new ResolveTestFixture(buildFile, "compile")
 
     def setup() {
         resolve.prepare()
+        resolve.addDefaultVariantDerivationStrategy()
         settingsFile << """
             rootProject.name = 'testproject'
         """
@@ -73,6 +74,7 @@ task check {
 
         expect:
         succeeds "check", "checkDep"
+        resolve.expectDefaultConfiguration('runtime')
         resolve.expectGraph {
             root(':', ':testproject:') {
                 module('ch.qos.logback:logback-classic:0.9.30') {
@@ -95,7 +97,7 @@ task check {
                     }
                 }
                 edge('commons-collections:commons-collections:3.0', 'commons-collections:commons-collections:3.1') {
-                    byConflictResolution("between versions 3.0 and 3.1")
+                    byConflictResolution("between versions 3.1 and 3.0")
                 }
             }
         }

@@ -23,12 +23,12 @@ import spock.lang.Unroll
 class LargeDependencyGraphPerformanceTest extends AbstractCrossVersionPerformanceTest implements WithExternalRepository {
 
     private final static TEST_PROJECT_NAME = 'excludeRuleMergingBuild'
-    public static final String MIN_MEMORY = "-Xms512m"
-    public static final String MAX_MEMORY = "-Xmx512m"
+    public static final String MIN_MEMORY = "-Xms800m"
+    public static final String MAX_MEMORY = "-Xmx800m"
 
     def setup() {
-        runner.minimumVersion = '4.6'
-        runner.targetVersions = ["4.9-20180701083801+0000"]
+        runner.minimumVersion = '4.8'
+        runner.targetVersions = ["5.6-20190626000031+0000"]
     }
 
     def "resolve large dependency graph from file repo"() {
@@ -47,7 +47,7 @@ class LargeDependencyGraphPerformanceTest extends AbstractCrossVersionPerformanc
     }
 
     @Unroll
-    def "resolve large dependency graph (improvedPomSupport = #improvedPomSupport, parallel = #parallel)"() {
+    def "resolve large dependency graph (parallel = #parallel, locking = #locking)"() {
         runner.testProject = TEST_PROJECT_NAME
         startServer()
 
@@ -58,8 +58,8 @@ class LargeDependencyGraphPerformanceTest extends AbstractCrossVersionPerformanc
         if (parallel) {
             runner.args += '--parallel'
         }
-        if (improvedPomSupport) {
-            runner.args += '-PimprovedPomSupport=true'
+        if (locking) {
+            runner.args += '-PuseLocking'
         }
 
         when:
@@ -72,11 +72,8 @@ class LargeDependencyGraphPerformanceTest extends AbstractCrossVersionPerformanc
         stopServer()
 
         where:
-        parallel | improvedPomSupport
-        true     | true
-        true     | false
-        false    | true
-        false    | false
+        parallel << [false, true, false, true]
+        locking << [false, false, true, true]
     }
 
 }

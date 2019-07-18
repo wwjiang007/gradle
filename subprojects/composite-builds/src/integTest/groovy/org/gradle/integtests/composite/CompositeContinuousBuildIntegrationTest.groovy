@@ -91,7 +91,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
             group = 'com.example'
             mainClassName = 'com.example.Main'
             dependencies {
-                compile 'org.test:library:0.1'
+                implementation 'org.test:library:0.1'
             }
         """
         def mainSource = file("src/main/java/com/example/Main.java")
@@ -123,6 +123,10 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
     }
 
     def "will rebuild on change for plugin supplied by included build"() {
+        // to reduce contention with concurrently executing tests
+        requireOwnGradleUserHomeDir()
+        executer.requireIsolatedDaemons()
+
         def includedLibrary = singleProjectBuild("plugin") {
             buildFile << """
                 apply plugin: 'java-gradle-plugin'
@@ -161,7 +165,8 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         """
 
         when:
-        succeeds("tasks")
+        succeeds("--status")
+        succeeds("tasks", "--debug")
         then:
         outputContains("Hello World")
 
@@ -170,6 +175,9 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         then:
         succeeds()
         outputContains("Goodbye World")
+
+        cleanup:
+        stopGradle()
     }
 
     def "will rebuild on change for build included into a multi-project build"() {
@@ -201,7 +209,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
                 group = 'com.example'
                 mainClassName = 'com.example.' + name + '.Main'
                 dependencies {
-                    compile 'org.test:library:0.1'
+                    implementation 'org.test:library:0.1'
                 }
             }
             project(":sub2") {

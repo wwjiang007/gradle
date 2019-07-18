@@ -18,10 +18,9 @@ package org.gradle.api.reporting.dependencies;
 
 import groovy.lang.Closure;
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
-import org.gradle.api.internal.ClosureBackedAction;
+import org.gradle.api.internal.CollectionCallbackActionDecorator;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionComparator;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionParser;
@@ -35,6 +34,7 @@ import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.internal.logging.ConsoleRenderer;
+import org.gradle.util.ClosureBackedAction;
 
 import javax.inject.Inject;
 import java.util.Set;
@@ -64,15 +64,15 @@ import java.util.Set;
  * }
  * </pre>
  */
-@Incubating
 public class HtmlDependencyReportTask extends ConventionTask implements Reporting<DependencyReportContainer> {
     private Set<Project> projects;
     private final DependencyReportContainer reports;
 
     public HtmlDependencyReportTask() {
-        reports = getObjectFactory().newInstance(DefaultDependencyReportContainer.class, this);
+        reports = getObjectFactory().newInstance(DefaultDependencyReportContainer.class, this, getCallbackActionDecorator());
         reports.getHtml().setEnabled(true);
         getOutputs().upToDateWhen(new Spec<Task>() {
+            @Override
             public boolean isSatisfiedBy(Task element) {
                 return false;
             }
@@ -96,13 +96,8 @@ public class HtmlDependencyReportTask extends ConventionTask implements Reportin
         return reports;
     }
 
-    /**
-     * Injects and returns an instance of {@link org.gradle.api.model.ObjectFactory}.
-     *
-     * @since 4.2
-     */
     @Inject
-    public ObjectFactory getObjectFactory() {
+    protected ObjectFactory getObjectFactory() {
         throw new UnsupportedOperationException();
     }
 
@@ -118,6 +113,16 @@ public class HtmlDependencyReportTask extends ConventionTask implements Reportin
 
     @Inject
     protected  VersionParser getVersionParser() {
+        throw new UnsupportedOperationException();
+    }
+
+    /**
+     * Required for decorating reports container callbacks for tracing user code application.
+     *
+     * @since 5.1
+     */
+    @Inject
+    protected CollectionCallbackActionDecorator getCallbackActionDecorator() {
         throw new UnsupportedOperationException();
     }
 

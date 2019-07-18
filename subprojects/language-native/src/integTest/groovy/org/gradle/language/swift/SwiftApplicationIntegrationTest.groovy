@@ -26,10 +26,15 @@ import org.gradle.nativeplatform.fixtures.app.SwiftAppWithOptionalFeature
 import org.gradle.nativeplatform.fixtures.app.SwiftCompilerDetectingApp
 
 @RequiresInstalledToolChain(ToolChainRequirement.SWIFTC)
-class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest {
+class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest implements SwiftTaskNames {
     @Override
-    protected List<String> getTasksToAssembleDevelopmentBinary() {
-        [":compileDebugSwift", ":linkDebug", ":installDebug"]
+    protected List<String> getTasksToAssembleDevelopmentBinary(String variant) {
+        return [":compileDebug${variant.capitalize()}Swift", ":linkDebug${variant.capitalize()}", ":installDebug${variant.capitalize()}"]
+    }
+
+    @Override
+    protected SwiftApp getComponentUnderTest() {
+        return new SwiftApp()
     }
 
     @Override
@@ -42,6 +47,13 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest {
     @Override
     String getDevelopmentBinaryCompileTask() {
         return ':compileDebugSwift'
+    }
+
+    @Override
+    void assertComponentUnderTestWasBuilt() {
+        executable("build/exe/main/debug/${componentUnderTest.moduleName}").assertExists()
+        file("build/modules/main/debug/${componentUnderTest.moduleName}.swiftmodule").assertIsFile()
+        installation("build/install/main/debug").exec().out == componentUnderTest.expectedOutput
     }
 
     @Override
@@ -120,26 +132,6 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest {
         result.assertTasksExecuted(":greeter:compileDebugSwift", ":greeter:linkDebug", ":app:compileDebugSwift", ":app:linkDebug", ":app:installDebug", ":app:assemble")
         result.assertTasksNotSkipped(":greeter:linkDebug", ":app:compileDebugSwift", ":app:linkDebug", ":app:installDebug", ":app:assemble")
         installation("app/build/install/main/debug").exec().out == app.expectedOutput
-    }
-
-    def "sources are compiled and linked with Swift tools"() {
-        given:
-        def app = new SwiftApp()
-        settingsFile << "rootProject.name = '${app.projectName}'"
-        app.writeToProject(testDirectory)
-
-        and:
-        buildFile << """
-            apply plugin: 'swift-application'
-         """
-
-        expect:
-        succeeds "assemble"
-        result.assertTasksExecuted(":compileDebugSwift", ":linkDebug", ":installDebug", ":assemble")
-
-        executable("build/exe/main/debug/App").assertExists()
-        file("build/modules/main/debug/App.swiftmodule").assertIsFile()
-        installation("build/install/main/debug").exec().out == app.expectedOutput
     }
 
     def "can build debug and release variant of the executable"() {
@@ -423,6 +415,75 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest {
         def installation = installation("app/build/install/main/debug")
         installation.exec().out == app.expectedOutput
         installation.assertIncludesLibraries("Greeter")
+    }
+
+    def "can compile and link against a library specifying target machines"() {
+        settingsFile << "include 'app', 'greeter'"
+        def app = new SwiftAppWithLibrary()
+
+        given:
+        buildFile << """
+            project(':app') {
+                apply plugin: 'swift-application'
+                dependencies {
+                    implementation project(':greeter')
+                }
+                application {
+                    targetMachines = [machines.macOS, machines.linux]
+                }
+            }
+            project(':greeter') {
+                apply plugin: 'swift-library'
+                library {
+                    targetMachines = [machines.macOS, machines.linux]
+                }
+            }
+        """
+        app.library.writeToProject(file("greeter"))
+        app.executable.writeToProject(file("app"))
+
+        expect:
+        succeeds ":app:assemble"
+        result.assertTasksExecuted(tasks(':greeter').withOperatingSystemFamily(currentOsFamilyName).debug.allToLink, tasks(':app').withOperatingSystemFamily(currentOsFamilyName).debug.allToInstall, ":app:assemble")
+
+        executable("app/build/exe/main/debug/${currentOsFamilyName}/App").assertExists()
+        sharedLibrary("greeter/build/lib/main/debug/${currentOsFamilyName}/Greeter").assertExists()
+        def installation = installation("app/build/install/main/debug/${currentOsFamilyName}")
+        installation.exec().out == app.expectedOutput
+        installation.assertIncludesLibraries("Greeter")
+    }
+
+    def "fails when dependency library does not specify the same target machines"() {
+        settingsFile << "include 'app', 'greeter'"
+        def app = new SwiftAppWithLibrary()
+
+        given:
+        buildFile << """
+            project(':app') {
+                apply plugin: 'swift-application'
+                application {
+                    targetMachines = [machines.${currentHostOperatingSystemFamilyDsl}]
+                    dependencies {
+                        implementation project(':greeter')
+                    }
+                }
+            }
+            project(':greeter') {
+                apply plugin: 'swift-library'
+                library {
+                    targetMachines = [machines.os('os-family')]
+                }
+            }
+        """
+        app.library.writeToProject(file("greeter"))
+        app.executable.writeToProject(file("app"))
+
+        expect:
+        fails ":app:assemble"
+
+        and:
+        failure.assertHasCause("Could not resolve project :greeter.")
+        failure.assertHasCause("Unable to find a matching configuration of project :greeter")
     }
 
     def "can compile and link against a static library"() {

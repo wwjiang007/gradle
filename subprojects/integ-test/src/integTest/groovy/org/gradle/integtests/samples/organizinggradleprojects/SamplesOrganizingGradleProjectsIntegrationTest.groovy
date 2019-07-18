@@ -16,35 +16,43 @@
 
 package org.gradle.integtests.samples.organizinggradleprojects
 
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.AbstractSampleIntegrationTest
 import org.gradle.integtests.fixtures.Sample
 import org.gradle.integtests.fixtures.UsesSample
+import org.gradle.test.fixtures.archive.ZipTestFixture
 import org.junit.Rule
+import spock.lang.Unroll
 
-class SamplesOrganizingGradleProjectsIntegrationTest extends AbstractIntegrationSpec {
+class SamplesOrganizingGradleProjectsIntegrationTest extends AbstractSampleIntegrationTest {
 
     @Rule
     Sample sample = new Sample(testDirectoryProvider)
 
     @UsesSample("userguide/organizingGradleProjects/customGradleDistribution")
-    def "can resolve dependencies"() {
+    def "can build custom gradle distribution"() {
         executer.inDirectory(sample.dir)
 
         when:
         succeeds('createCustomGradleDistribution')
 
         then:
-        sample.dir.file('build/distributions/mycompany-gradle-4.6-bin.zip').isFile()
+        def customDistribution = sample.dir.file('build/distributions/mycompany-gradle-4.6-0.1-bin.zip')
+        customDistribution.assertExists()
+        new ZipTestFixture(customDistribution).assertContainsFile("gradle-4.6/init.d/repositories.gradle")
     }
 
     @UsesSample("userguide/organizingGradleProjects/separatedTestTypes")
-    def "can execute different types of tests"() {
-        executer.inDirectory(sample.dir)
+    @Unroll
+    def "can execute different types of tests with #dsl dsl"() {
+        executer.inDirectory(sample.dir.file(dsl))
 
         when:
         succeeds('build')
 
         then:
-        nonSkippedTasks.containsAll([':test', ':integTest'])
+        executedAndNotSkipped(':test', ':integTest')
+
+        where:
+        dsl << ['groovy', 'kotlin']
     }
 }

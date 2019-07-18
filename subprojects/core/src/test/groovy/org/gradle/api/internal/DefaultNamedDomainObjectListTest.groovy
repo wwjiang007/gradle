@@ -18,7 +18,7 @@ package org.gradle.api.internal
 import org.gradle.api.Action
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Namer
-import org.gradle.internal.reflect.DirectInstantiator
+import org.gradle.util.TestUtil
 
 class DefaultNamedDomainObjectListTest extends AbstractNamedDomainObjectCollectionSpec<CharSequence> {
     final Namer<Object> toStringNamer = new Namer<Object>() {
@@ -26,13 +26,15 @@ class DefaultNamedDomainObjectListTest extends AbstractNamedDomainObjectCollecti
             return object.toString()
         }
     }
-    final DefaultNamedDomainObjectList<CharSequence> list = new DefaultNamedDomainObjectList<CharSequence>(CharSequence, DirectInstantiator.INSTANCE, toStringNamer)
+    final DefaultNamedDomainObjectList<CharSequence> list = new DefaultNamedDomainObjectList<CharSequence>(CharSequence, TestUtil.instantiatorFactory().decorateLenient(), toStringNamer, callbackActionDecorator)
 
     final DefaultNamedDomainObjectList<String> container = list
-    final String a = "a"
-    final String b = "b"
-    final String c = "c"
+    final StringBuffer a = new StringBuffer("a")
+    final StringBuffer b = new StringBuffer("b")
+    final StringBuffer c = new StringBuffer("c")
     final StringBuilder d = new StringBuilder("d")
+    final boolean externalProviderAllowed = true
+    final boolean supportsBuildOperations = true
 
     def "can add element at given index"() {
         given:
@@ -211,7 +213,7 @@ class DefaultNamedDomainObjectListTest extends AbstractNamedDomainObjectCollecti
         list.addAll(['a', 'b', 'a'])
 
         expect:
-        list.lastIndexOf('a') == 2
+        list.lastIndexOf('a') == 0  // Duplicates are omitted
         list.lastIndexOf('other') == -1
     }
 
@@ -458,5 +460,18 @@ class DefaultNamedDomainObjectListTest extends AbstractNamedDomainObjectCollecti
         iter.nextIndex() == 1
         iter.next() == "c"
         !iter.hasNext()
+    }
+
+    @Override
+    protected Map<String, Closure> getMutatingMethods() {
+        return super.getMutatingMethods() + [
+            "add(int, T)": { container.add(0, b) },
+            "addAll(int, Collection)": { container.addAll(0, [b]) },
+            "set(int, T)": { container.set(0, b) },
+            "remove(int)": { container.remove(0) },
+            "listIterator().add(T)": { def iter = container.listIterator(); iter.next(); iter.add(b) },
+            "listIterator().set(T)": { def iter = container.listIterator(); iter.next(); iter.set(b) },
+            "listIterator().remove()": { def iter = container.listIterator(); iter.next(); iter.remove() },
+        ]
     }
 }

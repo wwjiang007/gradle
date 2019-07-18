@@ -23,13 +23,14 @@ import org.gradle.api.attributes.AttributeDisambiguationRule
 import org.gradle.api.attributes.MultipleCandidatesDetails
 import org.gradle.api.internal.attributes.AttributeContainerInternal
 import org.gradle.api.internal.attributes.ImmutableAttributes
-import org.gradle.util.TestUtil
+import org.gradle.util.AttributeTestUtil
 import spock.lang.Specification
+import static org.gradle.util.AttributeTestUtil.attributes
 
 class ComponentAttributeMatcherTest extends Specification {
 
     def schema = new TestSchema()
-    def factory = TestUtil.attributesFactory()
+    def factory = AttributeTestUtil.attributesFactory()
 
     def "selects candidate with same set of attributes and whose values match"() {
         def attr = Attribute.of(String)
@@ -38,11 +39,11 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.attribute(attr2)
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(attr, "value1")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(attr, "value2")
-        def requested = attributes()
+        def requested = attrs()
         requested.attribute(attr, "value1")
 
         def matcher = new ComponentAttributeMatcher()
@@ -62,15 +63,15 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.attribute(attr2)
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(attr, "value1")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(attr, "no match")
-        def candidate3 = attributes()
+        def candidate3 = attrs()
         candidate3.attribute(attr, "value1")
         candidate3.attribute(attr2, "no match")
-        def candidate4 = attributes()
-        def requested = attributes()
+        def candidate4 = attrs()
+        def requested = attrs()
         requested.attribute(attr, "value1")
         requested.attribute(attr2, "value2")
 
@@ -93,12 +94,12 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.attribute(attr2)
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(attr, "value1")
         candidate1.attribute(attr2, "other")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(attr, "no match")
-        def requested = attributes()
+        def requested = attrs()
         requested.attribute(attr, "value1")
 
         def matcher = new ComponentAttributeMatcher()
@@ -118,16 +119,16 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.attribute(attr2)
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(attr, "value1")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(attr, "no match")
-        def candidate3 = attributes()
+        def candidate3 = attrs()
         candidate3.attribute(attr2, "value2")
-        def candidate4 = attributes()
-        def candidate5 = attributes()
+        def candidate4 = attrs()
+        def candidate5 = attrs()
         candidate5.attribute(attr, "value1")
-        def requested = attributes()
+        def requested = attrs()
         requested.attribute(attr, "value1")
         requested.attribute(attr2, "value2")
 
@@ -150,20 +151,20 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.prefer(attr2, "value2")
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(attr, "value1")
         candidate1.attribute(attr2, "value1")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(attr, "no match")
         candidate2.attribute(attr2, "no match")
-        def candidate3 = attributes()
+        def candidate3 = attrs()
         candidate3.attribute(attr, "value2")
         candidate3.attribute(attr2, "value2")
-        def candidate4 = attributes()
-        def candidate5 = attributes()
+        def candidate4 = attrs()
+        def candidate5 = attrs()
         candidate5.attribute(attr, "value1")
         candidate5.attribute(attr2, "value2")
-        def requested = attributes()
+        def requested = attrs()
         requested.attribute(attr, "requested")
         requested.attribute(attr2, "requested")
 
@@ -188,22 +189,50 @@ class ComponentAttributeMatcherTest extends Specification {
         rule.execute({ it.consumerValue == null }) >> { MultipleCandidatesDetails details -> details.closestMatch("value1") }
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(attr, "value1")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(attr, "no match")
-        def candidate3 = attributes()
+        def candidate3 = attrs()
         candidate3.attribute(attr, "value2")
-        def candidate4 = attributes()
-        def requested1 = attributes()
+        def candidate4 = attrs()
+        def requested1 = attrs()
         requested1.attribute(attr, "requested")
-        def requested2 = attributes()
+        def requested2 = attrs()
 
         def matcher = new ComponentAttributeMatcher()
 
         expect:
         matcher.match(schema, [candidate1, candidate2, candidate3, candidate4], requested1, null) == [candidate3]
         matcher.match(schema, [candidate1, candidate2, candidate3, candidate4], requested2, null) == [candidate1]
+    }
+
+    def "disambiguation rule is presented with all non-null candidate values"() {
+        def rule = Mock(AttributeDisambiguationRule)
+        def attr = Attribute.of(String)
+        schema.attribute(attr)
+        schema.accept(attr, "requested", "value1")
+        schema.accept(attr, "requested", "value2")
+        schema.select(attr, rule)
+
+        rule.execute({ it.consumerValue == "requested" }) >> { MultipleCandidatesDetails details ->
+            assert details.candidateValues == ["value1", "value2"] as Set
+            details.closestMatch("value1")
+        }
+
+        given:
+        def candidate1 = attrs()
+        candidate1.attribute(attr, "value1")
+        def candidate2 = attrs()
+        candidate2.attribute(attr, "value2")
+        def candidate3 = attrs()
+        def requested1 = attrs()
+        requested1.attribute(attr, "requested")
+
+        def matcher = new ComponentAttributeMatcher()
+
+        expect:
+        matcher.match(schema, [candidate1, candidate2, candidate3], requested1, null) == [candidate1]
     }
 
     def "prefers match with superset of matching attributes"() {
@@ -213,19 +242,19 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.attribute(attr2)
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(attr, "value1")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(attr, "no match")
-        def candidate3 = attributes()
+        def candidate3 = attrs()
         candidate3.attribute(attr2, "value2")
-        def candidate4 = attributes()
-        def candidate5 = attributes()
+        def candidate4 = attrs()
+        def candidate5 = attrs()
         candidate5.attribute(attr, "value1")
         candidate5.attribute(attr2, "value2")
-        def candidate6 = attributes()
+        def candidate6 = attrs()
         candidate6.attribute(attr, "value1")
-        def requested = attributes()
+        def requested = attrs()
         requested.attribute(attr, "value1")
         requested.attribute(attr2, "value2")
 
@@ -246,13 +275,13 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.prefer(key2, "ignore2")
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(key1, "value1")
         candidate1.attribute(key2, "ignored1")
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(key1, "value1")
         candidate2.attribute(key2, "ignore2")
-        def requested = attributes()
+        def requested = attrs()
         requested.attribute(key1, "value1")
 
         expect:
@@ -274,15 +303,15 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.prefer(key2, "ignored1")
 
         given:
-        def candidate1 = attributes()
+        def candidate1 = attrs()
         candidate1.attribute(key1, "bar")
         candidate1.attribute(key2, "ignored1")
 
-        def candidate2 = attributes()
+        def candidate2 = attrs()
         candidate2.attribute(key1, "baz")
         candidate2.attribute(key2, "ignored2")
 
-        def requested = attributes()
+        def requested = attrs()
         requested.attribute(key1, "foo")
 
         expect:
@@ -297,9 +326,9 @@ class ComponentAttributeMatcherTest extends Specification {
         def key1 = Attribute.of("a1", String)
         schema.attribute(key1)
 
-        def requested = attributes()
-        def candidate = attributes()
-        def candidate2 = attributes().attribute(key1, "1")
+        def requested = attrs()
+        def candidate = attrs()
+        def candidate2 = attrs().attribute(key1, "1")
 
         expect:
         def matcher = new ComponentAttributeMatcher()
@@ -319,8 +348,8 @@ class ComponentAttributeMatcherTest extends Specification {
         def key2 = Attribute.of("a2", String)
 
         given:
-        def candidate = attributes()
-        def requested = attributes().attribute(key1, "1").attribute(key2, "2")
+        def candidate = attrs()
+        def requested = attrs().attribute(key1, "1").attribute(key2, "2")
 
         expect:
         def matcher = new ComponentAttributeMatcher()
@@ -338,13 +367,13 @@ class ComponentAttributeMatcherTest extends Specification {
         schema.attribute(key3)
 
         given:
-        def candidate1 = attributes().attribute(key1, "other")
-        def candidate2 = attributes().attribute(key2, "other")
-        def fallback1 = attributes()
-        def fallback2 = attributes().attribute(key1, "1")
-        def fallback3 = attributes().attribute(key3, "3")
-        def fallback4 = attributes().attribute(key1, "other")
-        def requested = attributes().attribute(key1, "1").attribute(key2, "2")
+        def candidate1 = attrs().attribute(key1, "other")
+        def candidate2 = attrs().attribute(key2, "other")
+        def fallback1 = attrs()
+        def fallback2 = attrs().attribute(key1, "1")
+        def fallback3 = attrs().attribute(key3, "3")
+        def fallback4 = attrs().attribute(key1, "other")
+        def requested = attrs().attribute(key1, "1").attribute(key2, "2")
 
         expect:
         def matcher = new ComponentAttributeMatcher()
@@ -377,9 +406,9 @@ class ComponentAttributeMatcherTest extends Specification {
         def key2 = Attribute.of("a", Integer)
         schema.attribute(key1)
 
-        def requested = attributes().attribute(key1, 1)
-        def c1 = attributes().attribute(key2, 1)
-        def c2 = attributes().attribute(key2, 2)
+        def requested = attrs().attribute(key1, 1)
+        def c1 = attrs().attribute(key2, 1)
+        def c2 = attrs().attribute(key2, 2)
 
         expect:
         matcher.match(schema, [c1, c2], requested, null) == [c1]
@@ -391,8 +420,8 @@ class ComponentAttributeMatcherTest extends Specification {
         def key2 = Attribute.of("a", Number)
         schema.attribute(key1)
 
-        def requested = attributes().attribute(key1, "1")
-        def c1 = attributes().attribute(key2, 1)
+        def requested = attrs().attribute(key1, "1")
+        def c1 = attrs().attribute(key2, 1)
 
         when:
         matcher.match(schema, [c1], requested, null)
@@ -402,7 +431,76 @@ class ComponentAttributeMatcherTest extends Specification {
         e.message == "Unexpected type for attribute 'a' provided. Expected a value of type java.lang.String but found a value of type java.lang.Integer."
     }
 
-    private AttributeContainerInternal attributes() {
+    def "prefers a strict match with requested values"() {
+        def matcher = new ComponentAttributeMatcher()
+        def key1 = Attribute.of("a", String)
+        def key2 = Attribute.of("b", String)
+        schema.attribute(key1)
+        schema.attribute(key2)
+
+        def requested = attributes(a: 'val')
+        def candidate1 = attributes(a: 'val')
+        def candidate2 = attributes(a: 'val', b: 'foo')
+
+        when:
+        def result = matcher.match(schema, [candidate1, candidate2], requested, null)
+
+        then:
+        result == [candidate1]
+    }
+
+    def "prefers a shorter match with compatible requested values and more than one extra attribute"() {
+        def matcher = new ComponentAttributeMatcher()
+        def usage = Attribute.of("usage", String)
+        def bundling = Attribute.of("bundling", String)
+        def status = Attribute.of("status", String)
+
+        schema.with {
+            attribute(usage)
+            attribute(bundling)
+            attribute(status)
+            accept(usage, 'java-api', 'java-api-extra')
+            accept(usage, 'java-api', 'java-runtime-extra')
+            prefer(usage, 'java-api-extra')
+        }
+
+        def requested = attributes(usage: 'java-api')
+        def candidate1 = attributes(usage: 'java-api-extra', status: 'integration')
+        def candidate2 = attributes(usage: 'java-runtime-extra', status: 'integration')
+        def candidate3 = attributes(usage: 'java-api-extra', status: 'integration', bundling: 'embedded')
+        def candidate4 = attributes(usage: 'java-runtime-extra', status: 'integration', bundling: 'embedded')
+
+        when:
+        def result = matcher.match(schema, [candidate1, candidate2, candidate3, candidate4], requested, null)
+
+        then:
+        result == [candidate1]
+
+        when: // check with a different attribute order
+        candidate1 = attributes(usage: 'java-api-extra', status: 'integration')
+        candidate2 = attributes(usage: 'java-runtime-extra', status: 'integration')
+        candidate3 = attributes(usage: 'java-api-extra', bundling: 'embedded', status: 'integration')
+        candidate4 = attributes(usage: 'java-runtime-extra', bundling: 'embedded', status: 'integration')
+
+        result = matcher.match(schema, [candidate1, candidate2, candidate3, candidate4], requested, null)
+
+        then:
+        result == [candidate1]
+
+        when: // yet another attribute order
+        candidate1 = attributes(status: 'integration', usage: 'java-api-extra')
+        candidate2 = attributes(usage: 'java-runtime-extra', status: 'integration')
+        candidate3 = attributes(bundling: 'embedded', status: 'integration', usage: 'java-api-extra')
+        candidate4 = attributes(status: 'integration', usage: 'java-runtime-extra', bundling: 'embedded')
+
+        result = matcher.match(schema, [candidate1, candidate2, candidate3, candidate4], requested, null)
+
+        then:
+        result == [candidate1]
+
+    }
+
+    private AttributeContainerInternal attrs() {
         factory.mutable()
     }
 

@@ -44,7 +44,8 @@ public abstract class AbstractRealisedModuleResolveMetadataSerializationHelper {
     protected static final byte GRADLE_DEPENDENCY_METADATA = 1;
     protected static final byte MAVEN_DEPENDENCY_METADATA = 2;
     protected static final byte IVY_DEPENDENCY_METADATA = 3;
-    private final AttributeContainerSerializer attributeContainerSerializer;
+    protected static final byte FORCED_DEPENDENCY_METADATA = 4;
+    protected final AttributeContainerSerializer attributeContainerSerializer;
     private final ModuleComponentSelectorSerializer componentSelectorSerializer;
     private final ExcludeRuleConverter excludeRuleConverter;
     private final ImmutableModuleIdentifierFactory moduleIdentifierFactory;
@@ -81,16 +82,20 @@ public abstract class AbstractRealisedModuleResolveMetadataSerializationHelper {
         }
     }
 
-    public void writeRealisedConfigurationsData(Encoder encoder, AbstractRealisedModuleComponentResolveMetadata transformed) throws IOException {
+    public void writeRealisedConfigurationsData(Encoder encoder, AbstractRealisedModuleComponentResolveMetadata transformed, Map<ExternalDependencyDescriptor, Integer> deduplicationDependencyCache) throws IOException {
         encoder.writeSmallInt(transformed.getConfigurationNames().size());
         for (String configurationName: transformed.getConfigurationNames()) {
             ConfigurationMetadata configuration = transformed.getConfiguration(configurationName);
-            assert configuration != null;
-            encoder.writeString(configurationName);
-            attributeContainerSerializer.write(encoder, configuration.getAttributes());
-            writeCapabilities(encoder, configuration.getCapabilities().getCapabilities());
-            writeDependencies(encoder, configuration);
+            writeConfiguration(encoder, configuration);
+            writeDependencies(encoder, configuration, deduplicationDependencyCache);
         }
+    }
+
+    protected void writeConfiguration(Encoder encoder, ConfigurationMetadata configuration) throws IOException {
+        assert configuration != null;
+        encoder.writeString(configuration.getName());
+        attributeContainerSerializer.write(encoder, configuration.getAttributes());
+        writeCapabilities(encoder, configuration.getCapabilities().getCapabilities());
     }
 
     protected Map<String, List<GradleDependencyMetadata>> readVariantDependencies(Decoder decoder) throws IOException {
@@ -111,9 +116,10 @@ public abstract class AbstractRealisedModuleResolveMetadataSerializationHelper {
     protected GradleDependencyMetadata readDependencyMetadata(Decoder decoder) throws IOException {
         ModuleComponentSelector selector = componentSelectorSerializer.read(decoder);
         List<ExcludeMetadata> excludes = readMavenExcludes(decoder);
-        boolean pending = decoder.readBoolean();
+        boolean constraint = decoder.readBoolean();
+        boolean force = decoder.readBoolean();
         String reason = decoder.readNullableString();
-        return new GradleDependencyMetadata(selector, excludes, pending, reason);
+        return new GradleDependencyMetadata(selector, excludes, constraint, reason, force);
     }
 
     protected List<ExcludeMetadata> readMavenExcludes(Decoder decoder) throws IOException {
@@ -131,16 +137,29 @@ public abstract class AbstractRealisedModuleResolveMetadataSerializationHelper {
         int capabilitiesCount = decoder.readSmallInt();
         List<Capability> rawCapabilities = Lists.newArrayListWithCapacity(capabilitiesCount);
         for (int j = 0; j < capabilitiesCount; j++) {
-            rawCapabilities.add(new ImmutableCapability(decoder.readString(), decoder.readString(), decoder.readString()));
+            String appendix = decoder.readNullableString();
+            CapabilityInternal capability = new ImmutableCapability(decoder.readString(), decoder.readString(), decoder.readString());
+            if (appendix != null) {
+                capability = new DefaultShadowedCapability(capability, appendix);
+            }
+            rawCapabilities.add(capability);
         }
         return ImmutableCapabilities.of(rawCapabilities);
     }
 
-    protected abstract void writeDependencies(Encoder encoder, ConfigurationMetadata configuration) throws IOException;
+    protected abstract void writeDependencies(Encoder encoder, ConfigurationMetadata configuration, Map<ExternalDependencyDescriptor, Integer> deduplicationDependencyCache) throws IOException;
 
     private void writeCapabilities(Encoder encoder, List<? extends Capability> capabilities) throws IOException {
         encoder.writeSmallInt(capabilities.size());
         for (Capability capability: capabilities) {
+            boolean shadowed = capability instanceof ShadowedCapability;
+            if (shadowed) {
+                ShadowedCapability shadowedCapability = (ShadowedCapability) capability;
+                encoder.writeNullableString(shadowedCapability.getAppendix());
+                capability = shadowedCapability.getShadowedCapability();
+            } else {
+                encoder.writeNullableString(null);
+            }
             encoder.writeString(capability.getGroup());
             encoder.writeString(capability.getName());
             encoder.writeString(capability.getVersion());
@@ -151,7 +170,8 @@ public abstract class AbstractRealisedModuleResolveMetadataSerializationHelper {
         componentSelectorSerializer.write(encoder, dependencyMetadata.getSelector());
         List<ExcludeMetadata> excludes = dependencyMetadata.getExcludes();
         writeMavenExcludeRules(encoder, excludes);
-        encoder.writeBoolean(dependencyMetadata.isPending());
+        encoder.writeBoolean(dependencyMetadata.isConstraint());
+        encoder.writeBoolean(dependencyMetadata.isForce());
         encoder.writeNullableString(dependencyMetadata.getReason());
     }
 

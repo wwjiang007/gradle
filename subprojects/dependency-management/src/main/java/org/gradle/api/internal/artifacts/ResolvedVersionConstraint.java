@@ -17,8 +17,18 @@ package org.gradle.api.internal.artifacts;
 
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.VersionSelector;
 
-public interface ResolvedVersionConstraint extends ImmutableVersionConstraint {
+import javax.annotation.Nullable;
+
+public interface ResolvedVersionConstraint {
+    @Nullable
     VersionSelector getPreferredSelector();
+
+    @Nullable
+    VersionSelector getRequiredSelector();
+
+    @Nullable
     VersionSelector getRejectedSelector();
+
     boolean isRejectAll();
+    boolean isDynamic();
 }

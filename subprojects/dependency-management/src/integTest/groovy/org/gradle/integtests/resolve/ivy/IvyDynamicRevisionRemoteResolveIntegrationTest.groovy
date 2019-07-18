@@ -29,8 +29,9 @@ class IvyDynamicRevisionRemoteResolveIntegrationTest extends AbstractHttpDepende
     def setup() {
         settingsFile << "rootProject.name = 'test' "
 
-        resolve = new ResolveTestFixture(buildFile)
+        resolve = new ResolveTestFixture(buildFile, "compile")
         resolve.prepare()
+        resolve.addDefaultVariantDerivationStrategy()
     }
 
     @Issue("GRADLE-3264")
@@ -241,7 +242,11 @@ dependencies {
 configurations {
     staticVersions {
         // Force load the metadata
-        resolutionStrategy.componentSelection.all { ComponentSelection s, ComponentMetadata d -> if (d.status != 'release') { s.reject('nope') } }
+        resolutionStrategy.componentSelection.all { ComponentSelection s -> 
+            if (s.metadata.status != 'release') { 
+                s.reject('nope') 
+            } 
+        }
     }
     compile
 }
@@ -598,9 +603,9 @@ dependencies {
         succeeds "checkDeps"
         resolve.expectGraph {
             root(":", ":test:") {
-                edge("org.test:projectA:1.+", "org.test:projectA:3.0").byConflictResolution("between versions 1.2, 2.1 and 3.0")
-                edge("org.test:projectA:2.+", "org.test:projectA:3.0").byConflictResolution("between versions 1.2, 2.1 and 3.0")
-                edge("org.test:projectA:3.+", "org.test:projectA:3.0").byConflictResolution("between versions 1.2, 2.1 and 3.0")
+                edge("org.test:projectA:1.+", "org.test:projectA:3.0").byConflictResolution("between versions 3.0, 1.2 and 2.1")
+                edge("org.test:projectA:2.+", "org.test:projectA:3.0").byConflictResolution("between versions 3.0, 1.2 and 2.1")
+                edge("org.test:projectA:3.+", "org.test:projectA:3.0").byConflictResolution("between versions 3.0, 1.2 and 2.1")
             }
         }
     }
@@ -793,6 +798,7 @@ dependencies {
 }
 """
         resolve.prepare()
+        resolve.addDefaultVariantDerivationStrategy()
 
         and:
         mavenRepo.getModuleMetaData("org.test", "a").expectGet()
@@ -801,7 +807,7 @@ dependencies {
         mavenModule.artifact.sha1.expectGet()
 
         then:
-        checkResolve "org.test:a:[1.0,2.0)": "org.test:a:1.1"
+        checkResolve "org.test:a:[1.0,2.0)": "org.test:a:1.1:runtime"
     }
 
     def "can resolve dynamic versions from repository with multiple ivy patterns"() {
@@ -953,7 +959,8 @@ Versions that do not match:
   - 3.0
   - 1.2
   - 1.1
-Searched in the following locations: ${dirListRepo1.uri}
+Searched in the following locations:
+  - ${dirListRepo1.uri}
 Required by:
 """)
 
@@ -1032,7 +1039,8 @@ dependencies {
         then:
         fails "checkDeps"
         failure.assertHasCause("""Could not find any matches for group:projectA:2.+ as no versions of group:projectA are available.
-Searched in the following locations: ${directoryList.uri}
+Searched in the following locations:
+  - ${directoryList.uri}
 Required by:
 """)
 
@@ -1043,7 +1051,8 @@ Required by:
         then:
         fails "checkDeps"
         failure.assertHasCause("""Could not find any matches for group:projectA:2.+ as no versions of group:projectA are available.
-Searched in the following locations: ${directoryList.uri}
+Searched in the following locations:
+  - ${directoryList.uri}
 Required by:
 """)
 

@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.jar.Manifest;
 
+@SuppressWarnings("deprecation")
 public class DefaultOsgiManifest extends DefaultManifest implements OsgiManifest {
 
     // Because these properties can be convention mapped we need special handling in here.
@@ -127,6 +128,7 @@ public class DefaultOsgiManifest extends DefaultManifest implements OsgiManifest
         analyzer.setClasspath(getClasspath().getFiles().toArray(new File[0]));
     }
 
+    @Override
     public List<String> instructionValue(String instructionName) {
         if (instructionName.equals(Analyzer.BUNDLE_SYMBOLICNAME)) {
             return createListFromPropertyString(getSymbolicName());
@@ -147,6 +149,7 @@ public class DefaultOsgiManifest extends DefaultManifest implements OsgiManifest
         }
     }
 
+    @Override
     public OsgiManifest instruction(String name, String... values) {
         if (!maybeAppendModelledInstruction(name, values)) {
             if (unmodelledInstructions.get(name) == null) {
@@ -195,6 +198,7 @@ public class DefaultOsgiManifest extends DefaultManifest implements OsgiManifest
         }
     }
 
+    @Override
     public OsgiManifest instructionFirst(String name, String... values) {
         if (!maybePrependModelledInstruction(name, values)) {
             if (unmodelledInstructions.get(name) == null) {
@@ -242,6 +246,7 @@ public class DefaultOsgiManifest extends DefaultManifest implements OsgiManifest
         }
     }
 
+    @Override
     public OsgiManifest instructionReplace(String name, String... values) {
         if (!maybeSetModelledInstruction(name, values)) {
             if (values.length == 0 || (values.length == 1 && values[0] == null)) {
@@ -286,6 +291,7 @@ public class DefaultOsgiManifest extends DefaultManifest implements OsgiManifest
         }
     }
 
+    @Override
     public Map<String, List<String>> getInstructions() {
         Map<String, List<String>> instructions = new HashMap<String, List<String>>();
         instructions.putAll(unmodelledInstructions);
@@ -316,80 +322,99 @@ public class DefaultOsgiManifest extends DefaultManifest implements OsgiManifest
         modelledInstructions.put(Analyzer.BUNDLE_DOCURL, createListFromPropertyString(docURL));
 
         return CollectionUtils.filter(modelledInstructions, new Spec<Map.Entry<String, List<String>>>() {
+            @Override
             public boolean isSatisfiedBy(Map.Entry<String, List<String>> element) {
                 return element.getValue() != null;
             }
         });
     }
 
+    @Override
     public String getSymbolicName() {
         return symbolicName;
     }
 
+    @Override
     public void setSymbolicName(String symbolicName) {
         this.symbolicName = symbolicName;
     }
 
+    @Override
     public String getName() {
         return name;
     }
 
+    @Override
     public void setName(String name) {
         this.name = name;
     }
 
+    @Override
     public String getVersion() {
         return version;
     }
 
+    @Override
     public void setVersion(String version) {
         this.version = version;
     }
 
+    @Override
     public String getDescription() {
         return description;
     }
 
+    @Override
     public void setDescription(String description) {
         this.description = description;
     }
 
+    @Override
     public String getLicense() {
         return license;
     }
 
+    @Override
     public void setLicense(String license) {
         this.license = license;
     }
 
+    @Override
     public String getVendor() {
         return vendor;
     }
 
+    @Override
     public void setVendor(String vendor) {
         this.vendor = vendor;
     }
 
+    @Override
     public String getDocURL() {
         return docURL;
     }
 
+    @Override
     public void setDocURL(String docURL) {
         this.docURL = docURL;
     }
 
+    @Override
     public File getClassesDir() {
         return classesDir;
     }
 
+    @Override
     public void setClassesDir(File classesDir) {
         this.classesDir = classesDir;
     }
 
+    @Override
     public FileCollection getClasspath() {
         return classpath;
     }
 
+    @Override
     public void setClasspath(FileCollection classpath) {
         this.classpath = classpath;
     }

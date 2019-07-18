@@ -14,28 +14,25 @@
  * limitations under the License.
  */
 
-import org.gradle.api.internal.GradleInternal
+import org.gradle.build.BuildReceipt
 import org.gradle.build.Install
-import org.gradle.gradlebuild.ProjectGroups
-import org.gradle.modules.PatchExternalModules
-import org.gradle.gradlebuild.BuildEnvironment
 import org.gradle.gradlebuild.ProjectGroups.implementationPluginProjects
 import org.gradle.gradlebuild.ProjectGroups.javaProjects
 import org.gradle.gradlebuild.ProjectGroups.pluginProjects
-import org.gradle.gradlebuild.ProjectGroups.publishedProjects
-
-buildscript {
-    project.apply(from = "$rootDir/gradle/shared-with-buildSrc/mirrors.gradle.kts")
-}
+import org.gradle.gradlebuild.ProjectGroups.publicJavaProjects
+import org.gradle.gradlebuild.buildquality.incubation.IncubatingApiAggregateReportTask
+import org.gradle.gradlebuild.buildquality.incubation.IncubatingApiReportTask
 
 plugins {
     `java-base`
-    id("gradlebuild.build-types")
-    id("gradlebuild.ci-reporting")
+    gradlebuild.`build-types`
+    gradlebuild.`ci-reporting`
+    gradlebuild.security
     // TODO Apply this plugin in the BuildScanConfigurationPlugin once binary plugins can apply plugins via the new plugin DSL
     // We have to apply it here at the moment, so that when the build scan plugin is auto-applied via --scan can detect that
     // the plugin has been already applied. For that the plugin has to be applied with the new plugin DSL syntax.
-    id("com.gradle.build-scan")
+    com.gradle.`build-scan`
+    id("org.gradle.ci.tag-single-build") version("0.67")
 }
 
 defaultTasks("assemble")
@@ -43,11 +40,16 @@ defaultTasks("assemble")
 base.archivesBaseName = "gradle"
 
 buildTypes {
+    create("compileAllBuild") {
+        tasks(":createBuildReceipt", "compileAll", ":docs:distDocs")
+        projectProperties("ignoreIncomingBuildReceipt" to true)
+    }
+
     create("sanityCheck") {
         tasks(
-            "classes", "doc:checkstyleApi", "codeQuality",
-            "docs:check", "distribution:checkBinaryCompatibility", "javadocAll")
-        projectProperties("ignoreIncomingBuildReceipt" to true)
+            "classes", "doc:checkstyleApi", "codeQuality", "allIncubationReportsZip",
+            "docs:check", "distribution:checkBinaryCompatibility", "javadocAll",
+            "architectureTest:test", "toolingApi:toolingApiShadedJar")
     }
 
     // Used by the first phase of the build pipeline, running only last version on multiversion - tests
@@ -55,7 +57,7 @@ buildTypes {
         tasks("test", "integTest", "crossVersionTest")
     }
 
-    // Used for builds to run all tests, but not necessarily on all platforms
+    // Used for builds to run all tests
     create("fullTest") {
         tasks("test", "forkingIntegTest", "forkingCrossVersionTest")
         projectProperties("testAllVersions" to true)
@@ -64,10 +66,7 @@ buildTypes {
     // Used for builds to test the code on certain platforms
     create("platformTest") {
         tasks("test", "forkingIntegTest", "forkingCrossVersionTest")
-        projectProperties(
-            "testAllVersions" to true,
-            "testAllPlatforms" to true
-        )
+        projectProperties("testPartialVersions" to true)
     }
 
     // Tests not using the daemon mode
@@ -105,9 +104,14 @@ buildTypes {
         tasks("performance:distributedFullPerformanceTest")
     }
 
+    create("distributedFlakinessDetections") {
+        tasks("performance:distributedFlakinessDetection")
+    }
+
     // Used for cross version tests on CI
     create("allVersionsCrossVersionTest") {
-        tasks("allVersionsCrossVersionTests")
+        tasks("allVersionsCrossVersionTests", "integMultiVersionTest")
+        projectProperties("testAllVersions" to true)
     }
 
     create("quickFeedbackCrossVersionTest") {
@@ -132,17 +136,36 @@ buildTypes {
         tasks("soak:soakTest")
         projectProperties("testAllVersions" to true)
     }
+
+    // Used to run the dependency management engine in "force component realization" mode
+    create("forceRealizeDependencyManagementTest") {
+        tasks("integForceRealizeTest")
+    }
 }
 
 allprojects {
     group = "org.gradle"
 
     repositories {
-        maven(url = "https://repo.gradle.org/gradle/libs-releases")
-        maven(url = "https://repo.gradle.org/gradle/libs")
-        maven(url = "https://repo.gradle.org/gradle/libs-milestones")
-        maven(url = "https://repo.gradle.org/gradle/libs-snapshots")
-        maven(url = "https://dl.bintray.com/kotlin/kotlin-dev")
+        maven {
+            name = "Gradle libs"
+            url = uri("https://repo.gradle.org/gradle/libs")
+        }
+        maven {
+            name = "kotlinx"
+            url = uri("https://kotlin.bintray.com/kotlinx/")
+        }
+        maven {
+            name = "kotlin-eap"
+            url = uri("https://dl.bintray.com/kotlin/kotlin-eap")
+        }
+        maven {
+            name = "sonatype-snapshots"
+            url = uri("https://oss.sonatype.org/content/repositories/snapshots")
+            content {
+                includeGroup("org.openjdk.jmc")
+            }
+        }
     }
 
     // patchExternalModules lives in the root project - we need to activate normalization there, too.
@@ -162,22 +185,29 @@ apply(plugin = "gradlebuild.minify")
 apply(from = "gradle/testDependencies.gradle")
 apply(plugin = "gradlebuild.wrapper")
 apply(plugin = "gradlebuild.ide")
-apply(plugin = "gradlebuild.no-resolution-at-configuration")
 apply(plugin = "gradlebuild.update-versions")
 apply(plugin = "gradlebuild.dependency-vulnerabilities")
 apply(plugin = "gradlebuild.add-verify-production-environment-task")
 
+// https://github.com/gradle/gradle-private/issues/2463
+apply(from = "gradle/remove-teamcity-temp-property.gradle")
+
+allprojects {
+    apply(plugin = "gradlebuild.dependencies-metadata-rules")
+}
 
 subprojects {
     version = rootProject.version
 
     if (project in javaProjects) {
         apply(plugin = "gradlebuild.java-projects")
-        apply(plugin = "gradlebuild.dependencies-metadata-rules")
     }
 
-    if (project in publishedProjects) {
-        apply(plugin = "gradlebuild.publish-public-libraries")
+    if (project in publicJavaProjects) {
+        apply(plugin = "gradlebuild.public-java-projects")
+        if (project.name != "kotlinDslPlugins") {
+            apply(plugin = "gradlebuild.publish-public-libraries")
+        }
     }
 
     apply(from = "$rootDir/gradle/shared-with-buildSrc/code-quality-configuration.gradle.kts")
@@ -185,15 +215,17 @@ subprojects {
     apply(plugin = "gradlebuild.test-files-cleanup")
 }
 
+val runtimeUsage = objects.named(Usage::class.java, Usage.JAVA_RUNTIME)
+
 val coreRuntime by configurations.creating {
-    usage(Usage.JAVA_RUNTIME)
+    attributes.attribute(Usage.USAGE_ATTRIBUTE, runtimeUsage)
     isCanBeResolved = true
     isCanBeConsumed = false
     isVisible = false
 }
 
 val coreRuntimeExtensions by configurations.creating {
-    usage(Usage.JAVA_RUNTIME)
+    attributes.attribute(Usage.USAGE_ATTRIBUTE, runtimeUsage)
     isCanBeResolved = true
     isCanBeConsumed = false
     isVisible = false
@@ -201,15 +233,6 @@ val coreRuntimeExtensions by configurations.creating {
 
 val externalModules by configurations.creating {
     isVisible = false
-}
-
-/**
- * Configuration used to resolve external modules before patching them with versions from core runtime
- */
-val externalModulesRuntime by configurations.creating {
-    isVisible = false
-    extendsFrom(coreRuntime)
-    extendsFrom(externalModules)
 }
 
 /**
@@ -225,37 +248,96 @@ val gradlePlugins by configurations.creating {
 }
 
 val testRuntime by configurations.creating {
-    extendsFrom(runtime)
+    extendsFrom(coreRuntime)
     extendsFrom(gradlePlugins)
+}
+
+// TODO: These should probably be all collapsed into a single variant
+configurations {
+    create("gradleApiMetadataElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        extendsFrom(coreRuntime)
+        extendsFrom(gradlePlugins)
+        attributes.attribute(Attribute.of("org.gradle.api", String::class.java), "metadata")
+    }
+}
+configurations {
+    create("gradleApiRuntimeElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        extendsFrom(externalModules)
+        extendsFrom(gradlePlugins)
+        attributes.attribute(Attribute.of("org.gradle.api", String::class.java), "runtime")
+    }
+}
+configurations {
+    create("gradleApiCoreElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        extendsFrom(coreRuntime)
+        attributes.attribute(Attribute.of("org.gradle.api", String::class.java), "core")
+    }
+}
+configurations {
+    create("gradleApiCoreExtensionsElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        extendsFrom(coreRuntime)
+        extendsFrom(coreRuntimeExtensions)
+        attributes.attribute(Attribute.of("org.gradle.api", String::class.java), "core-ext")
+    }
+}
+configurations {
+    create("gradleApiPluginElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        extendsFrom(gradlePlugins)
+        attributes.attribute(Attribute.of("org.gradle.api", String::class.java), "plugins")
+    }
+}
+configurations {
+    create("gradleApiReceiptElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        attributes.attribute(Attribute.of("org.gradle.api", String::class.java), "build-receipt")
+
+        // TODO: Update BuildReceipt to retain dependency information by using Provider
+        val createBuildReceipt = tasks.named("createBuildReceipt", BuildReceipt::class.java)
+        val receiptFile = createBuildReceipt.map {
+            it.receiptFile
+        }
+        outgoing.artifact(receiptFile) {
+            builtBy(createBuildReceipt)
+        }
+    }
 }
 
 configurations {
     all {
-        usage(Usage.JAVA_RUNTIME)
+        attributes.attribute(Usage.USAGE_ATTRIBUTE, runtimeUsage)
     }
 }
 
 extra["allTestRuntimeDependencies"] = testRuntime.allDependencies
 
-val patchedExternalModulesDir = buildDir / "external/files"
-val patchedExternalModules = files(provider { fileTree(patchedExternalModulesDir).files.sorted() })
-patchedExternalModules.builtBy("patchExternalModules")
-
 dependencies {
-
-    externalModules("org.gradle:gradle-kotlin-dsl:${BuildEnvironment.gradleKotlinDslVersion}")
-    externalModules("org.gradle:gradle-kotlin-dsl-provider-plugins:${BuildEnvironment.gradleKotlinDslVersion}")
-    externalModules("org.gradle:gradle-kotlin-dsl-tooling-builders:${BuildEnvironment.gradleKotlinDslVersion}")
 
     coreRuntime(project(":launcher"))
     coreRuntime(project(":runtimeApiInfo"))
-
-    runtime(project(":wrapper"))
-    runtime(project(":installationBeacon"))
-    runtime(patchedExternalModules)
+    coreRuntime(project(":wrapper"))
+    coreRuntime(project(":installationBeacon"))
+    coreRuntime(project(":kotlinDsl"))
 
     pluginProjects.forEach { gradlePlugins(it) }
     implementationPluginProjects.forEach { gradlePlugins(it) }
+
     gradlePlugins(project(":workers"))
     gradlePlugins(project(":dependencyManagement"))
     gradlePlugins(project(":testKit"))
@@ -263,17 +345,13 @@ dependencies {
     coreRuntimeExtensions(project(":dependencyManagement")) //See: DynamicModulesClassPathProvider.GRADLE_EXTENSION_MODULES
     coreRuntimeExtensions(project(":pluginUse"))
     coreRuntimeExtensions(project(":workers"))
-    coreRuntimeExtensions(patchedExternalModules)
+    coreRuntimeExtensions(project(":kotlinDslProviderPlugins"))
+    coreRuntimeExtensions(project(":kotlinDslToolingBuilders"))
+
+    testRuntime(project(":apiMetadata"))
 }
 
 extra["allCoreRuntimeExtensions"] = coreRuntimeExtensions.allDependencies
-
-tasks.register<PatchExternalModules>("patchExternalModules") {
-    allModules = externalModulesRuntime
-    coreModules = coreRuntime
-    modulesToPatch = this@Build_gradle.externalModules
-    destination = patchedExternalModulesDir
-}
 
 evaluationDependsOn(":distributions")
 
@@ -294,19 +372,29 @@ tasks.register<Install>("installAll") {
 }
 
 fun distributionImage(named: String) =
-    project(":distributions").property(named) as CopySpec
+        project(":distributions").property(named) as CopySpec
 
-afterEvaluate {
-    if (gradle.startParameter.isBuildCacheEnabled) {
-        rootProject
-            .availableJavaInstallations
-            .validateBuildCacheConfiguration(buildCacheConfiguration())
+val allIncubationReports = tasks.register<IncubatingApiAggregateReportTask>("allIncubationReports") {
+    val allReports = collectAllIncubationReports()
+    dependsOn(allReports)
+    reports = allReports.associateBy({ it.title.get()}) { it.textReportFile.asFile.get() }
+}
+tasks.register<Zip>("allIncubationReportsZip") {
+    destinationDir = file("$buildDir/reports/incubation")
+    baseName = "incubating-apis"
+    from(allIncubationReports.get().htmlReportFile)
+    from(collectAllIncubationReports().map { it.htmlReportFile })
+}
+
+fun Project.collectAllIncubationReports() = subprojects.flatMap { it.tasks.withType(IncubatingApiReportTask::class) }
+
+// Ensure the archives produced are reproducible
+allprojects {
+    tasks.withType<AbstractArchiveTask>().configureEach {
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+        dirMode = Integer.parseInt("0755", 8)
+        fileMode = Integer.parseInt("0644", 8)
     }
 }
 
-fun Project.buildCacheConfiguration() =
-    (gradle as GradleInternal).settings.buildCache
-
-fun Configuration.usage(named: String) =
-    //TODO:kotlin-dsl - revert to reified syntax after nightly upgrade
-    attributes.attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class.java, named))

@@ -16,11 +16,10 @@
 
 package org.gradle.internal.operations.logging
 
+import org.gradle.api.internal.tasks.execution.ExecuteTaskBuildOperationType
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
-import org.gradle.internal.execution.ExecuteTaskBuildOperationType
-import org.gradle.internal.featurelifecycle.LoggingDeprecatedFeatureHandler
-import org.gradle.internal.featurelifecycle.LoggingIncubatingFeatureHandler
+import org.gradle.internal.logging.events.LogEvent
 import org.gradle.internal.logging.events.operations.LogEventBuildOperationProgressDetails
 import org.gradle.internal.logging.events.operations.ProgressStartBuildOperationProgressDetails
 import org.gradle.internal.logging.events.operations.StyledTextBuildOperationProgressDetails
@@ -32,7 +31,6 @@ import org.gradle.internal.operations.OperationIdentifier
 import org.gradle.internal.operations.OperationProgressEvent
 import org.gradle.internal.operations.OperationStartEvent
 import org.gradle.internal.operations.trace.BuildOperationRecord
-import org.gradle.internal.resource.transfer.ProgressLoggingExternalResourceAccessor
 import org.gradle.launcher.exec.RunBuildBuildOperationType
 import org.gradle.test.fixtures.server.http.MavenHttpRepository
 import org.gradle.test.fixtures.server.http.RepositoryHttpServer
@@ -71,7 +69,7 @@ class LoggingBuildOperationProgressIntegTest extends AbstractIntegrationSpec {
             }
             
             dependencies {
-                runtime 'org:foo:1.0'
+                runtimeOnly 'org:foo:1.0'
             }
             
             jar.doLast {
@@ -81,7 +79,7 @@ class LoggingBuildOperationProgressIntegTest extends AbstractIntegrationSpec {
             task resolve {
                 doLast {
                     // force resolve
-                    configurations.runtime.files
+                    configurations.runtimeClasspath.files
                 }
             }
             
@@ -118,7 +116,8 @@ class LoggingBuildOperationProgressIntegTest extends AbstractIntegrationSpec {
         applyBuildScriptProgress[0].details.category == 'org.gradle.api.Project'
         applyBuildScriptProgress[0].details.message == 'from build.gradle'
 
-        def notifyTaskGraphProgress = operations.only("Notify task graph whenReady listeners").progress
+        def notifyTaskGraph = operations.only("Notify task graph whenReady listeners")
+        def notifyTaskGraphProgress = notifyTaskGraph.children.first().progress
         notifyTaskGraphProgress.size() == 1
         notifyTaskGraphProgress[0].details.logLevel == 'WARN'
         notifyTaskGraphProgress[0].details.category == 'org.gradle.api.Project'
@@ -140,11 +139,84 @@ class LoggingBuildOperationProgressIntegTest extends AbstractIntegrationSpec {
         operations.parentsOf(downloadEvent).find {
             it.hasDetailsOfType(ExecuteTaskBuildOperationType.Details) && it.details.taskPath == ":resolve"
         }
-        def downloadProgress = downloadEvent.progress
-        downloadProgress.size() == 1
-        downloadProgress[0].details.logLevel == 'LIFECYCLE'
-        downloadProgress[0].details.category == ProgressLoggingExternalResourceAccessor.ProgressLoggingExternalResource.name
-        downloadProgress[0].details.description == "Download http://localhost:${server.port}/repo/org/foo/1.0/foo-1.0.jar"
+    }
+
+    def "captures threaded output sources with context"() {
+        given:
+        executer.requireOwnGradleUserHomeDir()
+        settingsFile << """
+            rootProject.name = 'root'
+            10.times {
+                include "project-\${it}"
+            }
+        """
+        file("build.gradle") << """
+            import java.util.concurrent.CountDownLatch
+            
+            subprojects {
+                10.times {
+                    task("myTask\$it") { tsk ->
+                        doLast {
+                            threaded {
+                                logger.lifecycle("from \${tsk.path} task external thread")
+                            }
+                        }
+                    }
+                }
+                task all(dependsOn: tasks.matching{it.name.startsWith('myTask')}) {
+                    doLast {
+                        tasks.matching{it.name.startsWith('myTask')}.each { myTask ->
+                            myTask.logger.lifecycle("log all task via \${myTask.path} logger")
+                        }
+                    }
+                }
+                
+                gradle.buildFinished {
+                    tasks.all.logger.lifecycle("build finished from \${tasks.all.path}")
+                }
+            }
+            
+            threaded {
+                println("threaded configuration output")
+            }
+            
+            def threaded(Closure action) {
+                Thread.start(action).join()
+            }
+        """
+
+        when:
+        succeeds("all")
+
+        then:
+        10.times {  projectCount ->
+            def allExecutionOp = operations.only("Execute doLast {} action for :project-${projectCount}:all")
+            def allExecutionOpTaskProgresses = allExecutionOp.progress
+
+            10.times { taskCount ->
+                def taskExecutionOp = operations.only("Task :project-${projectCount}:myTask$taskCount")
+                def classesTaskProgresses = taskExecutionOp.progress
+                def threadedTaskLoggingProgress = classesTaskProgresses.find { it.detailsType == LogEvent && it.details.message == "from :project-${projectCount}:myTask$taskCount task external thread" }
+                assert threadedTaskLoggingProgress.details.logLevel == 'LIFECYCLE'
+
+                // logging done from task-a logger during task-b execution will result in logging linked to task-b
+                def allLoggingProgress = allExecutionOpTaskProgresses.find { it.detailsType == LogEvent && it.details.message == "log all task via :project-${projectCount}:myTask$taskCount logger" }
+                assert allLoggingProgress.details.logLevel == 'LIFECYCLE'
+            }
+        }
+
+        def runBuildProgress = operations.only('Run build').progress
+        def threadedConfigurationProgress = runBuildProgress.find { it.details.spans[0].text == "threaded configuration output${getPlatformLineSeparator()}" }
+        threadedConfigurationProgress.details.category == 'system.out'
+        threadedConfigurationProgress.details.spans.size == 1
+        threadedConfigurationProgress.details.spans[0].styleName == 'Normal'
+        threadedConfigurationProgress.details.spans[0].text == "threaded configuration output${getPlatformLineSeparator()}"
+
+
+        // loggings from logger of finished task
+        10.times { projectCount ->
+            runBuildProgress.find { it.detailsType == LogEvent && it.details.message == "build finished from :project-${projectCount}:all" }
+        }
     }
 
     def "captures output from buildSrc"() {
@@ -326,10 +398,10 @@ class LoggingBuildOperationProgressIntegTest extends AbstractIntegrationSpec {
             apply plugin: 'java'
             
             repositories {
-                jcenter()
+                ${jcenterRepository()}
             }
             dependencies {
-                testCompile 'junit:junit:4.10'
+                testImplementation 'junit:junit:4.10'
             }
             
         """
@@ -340,7 +412,6 @@ class LoggingBuildOperationProgressIntegTest extends AbstractIntegrationSpec {
         then:
         def progressOutputEvents = operations.all(Pattern.compile('.*')).collect { it.progress }.flatten()
         assert progressOutputEvents
-            .findAll { it.details.containsKey('category') && (it.details.category != LoggingIncubatingFeatureHandler.name && it.details.category != LoggingDeprecatedFeatureHandler.name) }
             .size() == 14 // 11 tasks + "\n" + "BUILD SUCCESSFUL" + "2 actionable tasks: 2 executed" +
     }
 
@@ -355,7 +426,7 @@ class LoggingBuildOperationProgressIntegTest extends AbstractIntegrationSpec {
         assert nestedTaskProgress[0].details.spans[0].text == "foo println${getPlatformLineSeparator()}"
 
         assert nestedTaskProgress[1].details.logLevel == 'LIFECYCLE'
-        assert nestedTaskProgress[1].details.category == 'org.gradle.api.Task'
+        assert nestedTaskProgress[1].details.category == "org.gradle.api.Task"
         assert nestedTaskProgress[1].details.message == 'foo from logger'
     }
 

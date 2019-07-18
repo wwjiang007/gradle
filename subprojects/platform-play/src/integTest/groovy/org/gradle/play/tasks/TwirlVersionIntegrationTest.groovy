@@ -38,12 +38,12 @@ class TwirlVersionIntegrationTest extends AbstractIntegrationSpec {
     def twirlOutputDir = "build/src/play/binary/twirlTemplatesScalaSources"
 
     def setup() {
+        executer.noDeprecationChecks()
         settingsFile << """ rootProject.name = 'twirl-play-app' """
     }
 
     def "changing between twirl-incompatible versions of play causes Twirl to recompile" () {
-        executer.expectDeprecationWarning()
-        withPlayVersion("2.2.1")
+        withPlayVersion(DefaultPlayPlatform.DEFAULT_PLAY_VERSION)
         withTemplateSource(file("app", "views", "index.scala.html"))
 
         when:
@@ -56,7 +56,8 @@ class TwirlVersionIntegrationTest extends AbstractIntegrationSpec {
         file(twirlOutputDir + "/views/html/index.template.scala").exists()
 
         when:
-        withPlayVersion(DefaultPlayPlatform.DEFAULT_PLAY_VERSION)
+        executer.noDeprecationChecks()
+        withPlayVersion("2.4.1")
         succeeds "playBinary"
 
         then:
@@ -80,6 +81,7 @@ class TwirlVersionIntegrationTest extends AbstractIntegrationSpec {
         file(twirlOutputDir + "/views/html/index.template.scala").exists()
 
         when:
+        executer.noDeprecationChecks()
         withPlayVersion('2.3.10')
         succeeds "playBinary"
 

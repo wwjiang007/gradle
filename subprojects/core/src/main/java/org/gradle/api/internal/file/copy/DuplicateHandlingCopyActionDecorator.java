@@ -20,28 +20,31 @@ import org.gradle.api.file.DuplicateFileCopyingException;
 import org.gradle.api.file.DuplicatesStrategy;
 import org.gradle.api.file.RelativePath;
 import org.gradle.api.internal.file.CopyActionProcessingStreamAction;
-import org.gradle.api.logging.Logger;
-import org.gradle.api.logging.Logging;
 import org.gradle.api.tasks.WorkResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
 
 public class DuplicateHandlingCopyActionDecorator implements CopyAction {
 
-    private final static Logger LOGGER = Logging.getLogger(DuplicateHandlingCopyActionDecorator.class);
+    private final static Logger LOGGER = LoggerFactory.getLogger(DuplicateHandlingCopyActionDecorator.class);
     private final CopyAction delegate;
 
     public DuplicateHandlingCopyActionDecorator(CopyAction delegate) {
         this.delegate = delegate;
     }
 
+    @Override
     public WorkResult execute(final CopyActionProcessingStream stream) {
         final Set<RelativePath> visitedFiles = new HashSet<RelativePath>();
 
         return delegate.execute(new CopyActionProcessingStream() {
+            @Override
             public void process(final CopyActionProcessingStreamAction action) {
                 stream.process(new CopyActionProcessingStreamAction() {
+                    @Override
                     public void processFile(FileCopyDetailsInternal details) {
                         if (!details.isDirectory()) {
                             DuplicatesStrategy strategy = details.getDuplicatesStrategy();

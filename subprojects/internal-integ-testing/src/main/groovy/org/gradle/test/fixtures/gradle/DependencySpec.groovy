@@ -24,19 +24,24 @@ import groovy.transform.EqualsAndHashCode
 class DependencySpec {
     String group
     String module
-    String prefers
+    String version
+    String preferredVersion
+    String strictVersion
     List<String> rejects
     List<ExcludeSpec> exclusions = []
     String reason
-    Map<String, ?> attributes
+    Map<String, Object> attributes
+    List<CapabilitySpec> requestedCapabilities = []
 
-    DependencySpec(String g, String m, String version, List<String> r, Collection<Map> e, String reason, Map<String, ?> attributes) {
+    DependencySpec(String g, String m, String v, String preferredVersion, String strictVersion, List<String> rejects, Collection<Map> excludes, String reason, Map<String, Object> attributes) {
         group = g
         module = m
-        prefers = version
-        rejects = r?:Collections.<String>emptyList()
-        if (e) {
-            exclusions = e.collect { Map exclusion ->
+        version = v
+        this.preferredVersion = preferredVersion
+        this.strictVersion = strictVersion
+        this.rejects = rejects?:Collections.<String>emptyList()
+        if (excludes) {
+            exclusions = excludes.collect { Map exclusion ->
                 String group = exclusion.get('group')?.toString()
                 String module = exclusion.get('module')?.toString()
                 new ExcludeSpec(group, module)
@@ -48,6 +53,16 @@ class DependencySpec {
 
     DependencySpec attribute(String name, Object value) {
         attributes[name] = value
+        this
+    }
+
+    DependencySpec exclude(String group, String module) {
+        exclusions << new ExcludeSpec(group, module)
+        this
+    }
+
+    DependencySpec requestedCapability(String group, String name, String version) {
+        requestedCapabilities << new CapabilitySpec(group, name, version)
         this
     }
 }

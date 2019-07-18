@@ -25,7 +25,6 @@ import org.gradle.api.Named;
  *
  * @since 3.4
  */
-@Incubating
 public interface Usage extends Named {
     Attribute<Usage> USAGE_ATTRIBUTE = Attribute.of("org.gradle.usage", Usage.class);
 
@@ -34,6 +33,7 @@ public interface Usage extends Named {
      *
      * @since 4.0
      */
+    @Incubating
     String JAVA_API = "java-api";
 
     /**
@@ -41,13 +41,23 @@ public interface Usage extends Named {
      *
      * @since 4.0
      */
+    @Deprecated
     String JAVA_API_CLASSES = "java-api-classes";
+
+    /**
+     * The Java API of a library, packaged as a JAR only. Must not include classes directories.
+     *
+     * @since 5.3
+     */
+    @Deprecated
+    String JAVA_API_JARS = "java-api-jars";
 
     /**
      * The Java runtime of a component, packaged as class path elements, either a JAR or a classes directory.
      *
      * @since 4.0
      */
+    @Incubating
     String JAVA_RUNTIME = "java-runtime";
 
     /**
@@ -55,6 +65,7 @@ public interface Usage extends Named {
      *
      * @since 4.0
      */
+    @Deprecated
     String JAVA_RUNTIME_JARS = "java-runtime-jars";
 
     /**
@@ -62,6 +73,7 @@ public interface Usage extends Named {
      *
      * @since 4.0
      */
+    @Deprecated
     String JAVA_RUNTIME_CLASSES = "java-runtime-classes";
 
     /**
@@ -69,6 +81,7 @@ public interface Usage extends Named {
      *
      * @since 4.0
      */
+    @Deprecated
     String JAVA_RUNTIME_RESOURCES = "java-runtime-resources";
 
     /**
@@ -76,6 +89,7 @@ public interface Usage extends Named {
      *
      * @since 4.1
      */
+    @Incubating
     String C_PLUS_PLUS_API = "cplusplus-api";
 
     /**
@@ -83,6 +97,7 @@ public interface Usage extends Named {
      *
      * @since 4.1
      */
+    @Incubating
     String NATIVE_LINK = "native-link";
 
     /**
@@ -90,6 +105,7 @@ public interface Usage extends Named {
      *
      * @since 4.1
      */
+    @Incubating
     String NATIVE_RUNTIME = "native-runtime";
 
     /**
@@ -97,5 +113,6 @@ public interface Usage extends Named {
      *
      * @since 4.1
      */
+    @Incubating
     String SWIFT_API = "swift-api";
 }

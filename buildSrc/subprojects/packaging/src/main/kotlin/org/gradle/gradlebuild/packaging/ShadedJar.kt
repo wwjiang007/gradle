@@ -23,23 +23,30 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.file.Path
-import java.util.*
+import java.util.ArrayDeque
+import java.util.Queue
 import java.util.jar.JarFile
 import java.util.jar.JarOutputStream
 
 
 open class ShadedJar : DefaultTask() {
+    @PathSensitive(PathSensitivity.RELATIVE)
     @InputFiles
     val relocatedClassesConfiguration = project.files()
+    @PathSensitive(PathSensitivity.NONE)
     @InputFiles
     val classTreesConfiguration = project.files()
+    @PathSensitive(PathSensitivity.NONE)
     @InputFiles
     val entryPointsConfiguration = project.files()
+    @PathSensitive(PathSensitivity.NONE)
     @InputFiles
     val manifests = project.files()
 
@@ -48,14 +55,15 @@ open class ShadedJar : DefaultTask() {
      *
      * The file will be included in the shaded jar under {@code /org/gradle/build-receipt.properties}.
      */
+    @PathSensitive(PathSensitivity.NONE)
     @InputFile
-    val buildReceiptFile: RegularFileProperty = project.layout.fileProperty()
+    val buildReceiptFile: RegularFileProperty = project.objects.fileProperty()
 
     /**
       * The output Jar file.
       */
     @OutputFile
-    val jarFile = newOutputFile()
+    val jarFile = project.objects.fileProperty()
 
     @TaskAction
     fun shade() {
@@ -64,7 +72,7 @@ open class ShadedJar : DefaultTask() {
 
         val classesToInclude = mutableSetOf<String>()
 
-        val queue: Queue<String> = ArrayDeque<String>()
+        val queue: Queue<String> = ArrayDeque()
         queue.addAll(entryPoints)
         while (!queue.isEmpty()) {
             val className = queue.remove()
@@ -112,7 +120,7 @@ internal
 fun buildClassTrees(individualClassTrees: List<Map<String, List<String>>>): Map<String, Set<String>> =
     individualClassTrees.flatMap { it.entries }
         .groupingBy { it.key }
-        .aggregate<Map.Entry<String, List<String>>, String, Set<String>> { _, accumulator: Set<String>?, element: Map.Entry<String, List<String>>, first ->
+        .aggregate { _, accumulator: Set<String>?, element: Map.Entry<String, List<String>>, first ->
             if (first) {
                 element.value.toSet()
             } else {

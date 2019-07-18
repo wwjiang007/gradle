@@ -23,7 +23,6 @@ import org.gradle.internal.HasInternalProtocol;
  *
  * @param <T> the (base) type of domain objects in the container
  */
-@Incubating
 @HasInternalProtocol
 public interface PolymorphicDomainObjectContainer<T> extends NamedDomainObjectContainer<T> {
     /**
@@ -97,8 +96,7 @@ public interface PolymorphicDomainObjectContainer<T> extends NamedDomainObjectCo
      * @throws InvalidUserDataException If a object with the given name already exists in this project.
      * @since 4.10
      */
-    @Incubating
-    <U extends T> Provider<U> register(String name, Class<U> type, Action<? super U> configurationAction) throws InvalidUserDataException;
+    <U extends T> NamedDomainObjectProvider<U> register(String name, Class<U> type, Action<? super U> configurationAction) throws InvalidUserDataException;
 
     /**
      * Defines a new object, which will be created when it is required. A object is 'required' when the object is located using query methods such as {@link #getByName(String)} or when {@link Provider#get()} is called on the return value of this method.
@@ -112,6 +110,5 @@ public interface PolymorphicDomainObjectContainer<T> extends NamedDomainObjectCo
      * @throws InvalidUserDataException If a object with the given name already exists in this project.
      * @since 4.10
      */
-    @Incubating
-    <U extends T> Provider<U> register(String name, Class<U> type) throws InvalidUserDataException;
+    <U extends T> NamedDomainObjectProvider<U> register(String name, Class<U> type) throws InvalidUserDataException;
 }

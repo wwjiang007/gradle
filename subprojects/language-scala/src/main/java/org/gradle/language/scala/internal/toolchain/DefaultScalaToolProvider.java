@@ -16,16 +16,19 @@
 
 package org.gradle.language.scala.internal.toolchain;
 
-import org.gradle.api.internal.file.FileResolver;
-import org.gradle.workers.internal.WorkerDaemonFactory;
+import org.gradle.api.internal.ClassPathRegistry;
 import org.gradle.api.internal.tasks.scala.DaemonScalaCompiler;
 import org.gradle.api.internal.tasks.scala.NormalizingScalaCompiler;
 import org.gradle.api.internal.tasks.scala.ScalaJavaJointCompileSpec;
 import org.gradle.api.internal.tasks.scala.ZincScalaCompiler;
+import org.gradle.initialization.ClassLoaderRegistry;
+import org.gradle.internal.logging.text.DiagnosticsVisitor;
 import org.gradle.language.base.internal.compile.CompileSpec;
 import org.gradle.language.base.internal.compile.Compiler;
 import org.gradle.platform.base.internal.toolchain.ToolProvider;
-import org.gradle.util.TreeVisitor;
+import org.gradle.process.internal.JavaForkOptionsFactory;
+import org.gradle.workers.internal.ActionExecutionSpecFactory;
+import org.gradle.workers.internal.WorkerDaemonFactory;
 
 import java.io.File;
 import java.util.Set;
@@ -38,23 +41,39 @@ public class DefaultScalaToolProvider implements ToolProvider {
     private final WorkerDaemonFactory workerDaemonFactory;
     private final Set<File> resolvedScalaClasspath;
     private final Set<File> resolvedZincClasspath;
-    private final FileResolver fileResolver;
+    private final JavaForkOptionsFactory forkOptionsFactory;
+    private final ClassPathRegistry classPathRegistry;
+    private final ClassLoaderRegistry classLoaderRegistry;
+    private final ActionExecutionSpecFactory actionExecutionSpecFactory;
 
-    public DefaultScalaToolProvider(File gradleUserHomeDir, File daemonWorkingDir, WorkerDaemonFactory workerDaemonFactory, FileResolver fileResolver, Set<File> resolvedScalaClasspath, Set<File> resolvedZincClasspath) {
+    public DefaultScalaToolProvider(File gradleUserHomeDir, File daemonWorkingDir, WorkerDaemonFactory workerDaemonFactory, JavaForkOptionsFactory forkOptionsFactory, ClassPathRegistry classPathRegistry, Set<File> resolvedScalaClasspath, Set<File> resolvedZincClasspath, ClassLoaderRegistry classLoaderRegistry, ActionExecutionSpecFactory actionExecutionSpecFactory) {
         this.gradleUserHomeDir = gradleUserHomeDir;
         this.daemonWorkingDir = daemonWorkingDir;
         this.workerDaemonFactory = workerDaemonFactory;
-        this.fileResolver = fileResolver;
+        this.forkOptionsFactory = forkOptionsFactory;
         this.resolvedScalaClasspath = resolvedScalaClasspath;
         this.resolvedZincClasspath = resolvedZincClasspath;
+        this.classPathRegistry = classPathRegistry;
+        this.classLoaderRegistry = classLoaderRegistry;
+        this.actionExecutionSpecFactory = actionExecutionSpecFactory;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T extends CompileSpec> org.gradle.language.base.internal.compile.Compiler<T> newCompiler(Class<T> spec) {
         if (ScalaJavaJointCompileSpec.class.isAssignableFrom(spec)) {
-            Compiler<ScalaJavaJointCompileSpec> scalaCompiler = new ZincScalaCompiler(resolvedScalaClasspath, resolvedZincClasspath, gradleUserHomeDir);
-            return (Compiler<T>) new NormalizingScalaCompiler(new DaemonScalaCompiler<ScalaJavaJointCompileSpec>(daemonWorkingDir, scalaCompiler, workerDaemonFactory, resolvedZincClasspath, fileResolver));
+            return (Compiler<T>) new NormalizingScalaCompiler(
+                    new DaemonScalaCompiler<ScalaJavaJointCompileSpec>(
+                            daemonWorkingDir,
+                            ZincScalaCompiler.class,
+                            new Object[] {resolvedScalaClasspath, resolvedZincClasspath, gradleUserHomeDir},
+                            workerDaemonFactory,
+                            resolvedZincClasspath,
+                            forkOptionsFactory,
+                            classPathRegistry,
+                            classLoaderRegistry,
+                            actionExecutionSpecFactory)
+            );
         }
         throw new IllegalArgumentException(String.format("Cannot create Compiler for unsupported CompileSpec type '%s'", spec.getSimpleName()));
     }
@@ -70,7 +89,7 @@ public class DefaultScalaToolProvider implements ToolProvider {
     }
 
     @Override
-    public void explain(TreeVisitor<? super String> visitor) {
+    public void explain(DiagnosticsVisitor visitor) {
 
     }
 }

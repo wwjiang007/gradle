@@ -15,9 +15,12 @@
  */
 package org.gradle.api.internal.artifacts.ivyservice.ivyresolve;
 
+import org.gradle.api.attributes.Category;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSet;
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.ModuleExclusion;
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.excludes.specs.ExcludeSpec;
+import org.gradle.api.internal.artifacts.repositories.metadata.MavenImmutableAttributesFactory;
 import org.gradle.api.internal.artifacts.type.ArtifactTypeRegistry;
+import org.gradle.api.internal.attributes.AttributeValue;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.api.internal.component.ArtifactType;
 import org.gradle.internal.Transformers;
@@ -34,6 +37,8 @@ import org.gradle.internal.resolve.result.DefaultBuildableComponentArtifactsReso
 import javax.annotation.Nullable;
 import java.util.LinkedHashMap;
 import java.util.Map;
+
+import static org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactSet.NO_ARTIFACTS;
 
 class RepositoryChainArtifactResolver implements ArtifactResolver, OriginArtifactSelector {
     private final Map<String, ModuleComponentRepository> repositories = new LinkedHashMap<String, ModuleComponentRepository>();
@@ -55,7 +60,21 @@ class RepositoryChainArtifactResolver implements ArtifactResolver, OriginArtifac
 
     @Nullable
     @Override
-    public ArtifactSet resolveArtifacts(ComponentResolveMetadata component, ConfigurationMetadata configuration, ArtifactTypeRegistry artifactTypeRegistry, ModuleExclusion exclusions, ImmutableAttributes overriddenAttributes) {
+    public ArtifactSet resolveArtifacts(ComponentResolveMetadata component, ConfigurationMetadata configuration, ArtifactTypeRegistry artifactTypeRegistry, ExcludeSpec exclusions, ImmutableAttributes overriddenAttributes) {
+        if (component.getSource() == null) {
+            // virtual components have no source
+            return NO_ARTIFACTS;
+        }
+        if (configuration.getArtifacts().isEmpty()) {
+            // checks if it's a derived platform
+            AttributeValue<String> componentTypeEntry = configuration.getAttributes().findEntry(MavenImmutableAttributesFactory.CATEGORY_ATTRIBUTE);
+            if (componentTypeEntry.isPresent()) {
+                String value = componentTypeEntry.get();
+                if (Category.REGULAR_PLATFORM.equals(value) || Category.ENFORCED_PLATFORM.equals(value)) {
+                    return NO_ARTIFACTS;
+                }
+            }
+        }
         ModuleComponentRepository sourceRepository = findSourceRepository(component.getSource());
         ComponentResolveMetadata unpackedComponent = unpackSource(component);
         // First try to determine the artifacts locally before going remote

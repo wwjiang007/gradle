@@ -39,7 +39,7 @@ import static org.gradle.internal.component.external.model.DefaultModuleComponen
 
 public class ComponentSelectorParsers {
 
-    private static final NotationParserBuilder<ComponentSelector> BUILDER = NotationParserBuilder
+    private static final NotationParserBuilder<Object, ComponentSelector> BUILDER = NotationParserBuilder
             .toType(ComponentSelector.class)
             .fromCharSequence(new StringConverter())
             .converter(new MapConverter())
@@ -53,7 +53,7 @@ public class ComponentSelectorParsers {
         return builder().toComposite();
     }
 
-    private static NotationParserBuilder<ComponentSelector> builder() {
+    private static NotationParserBuilder<Object, ComponentSelector> builder() {
         return BUILDER;
     }
 
@@ -69,10 +69,12 @@ public class ComponentSelectorParsers {
     }
 
     static class StringConverter implements NotationConverter<String, ComponentSelector> {
+        @Override
         public void describe(DiagnosticsVisitor visitor) {
             visitor.example("String or CharSequence values, e.g. 'org.gradle:gradle-core:1.0'.");
         }
 
+        @Override
         public void convert(String notation, NotationConvertResult<? super ComponentSelector> result) throws TypeConversionException {
             ParsedModuleStringNotation parsed;
             try {

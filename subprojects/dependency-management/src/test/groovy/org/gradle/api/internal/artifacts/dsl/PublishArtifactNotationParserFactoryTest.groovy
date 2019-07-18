@@ -21,20 +21,19 @@ import org.gradle.api.artifacts.ConfigurablePublishArtifact
 import org.gradle.api.artifacts.PublishArtifact
 import org.gradle.api.file.Directory
 import org.gradle.api.file.RegularFile
-import org.gradle.api.internal.ThreadGlobalInstantiator
 import org.gradle.api.internal.artifacts.Module
 import org.gradle.api.internal.artifacts.configurations.DependencyMetaDataProvider
 import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact
 import org.gradle.api.internal.artifacts.publish.DecoratingPublishArtifact
 import org.gradle.api.internal.artifacts.publish.DefaultPublishArtifact
-import org.gradle.api.internal.tasks.TaskDependencyContainer
+import org.gradle.api.internal.provider.ProviderInternal
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.internal.tasks.TaskResolver
-import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.internal.reflect.Instantiator
 import org.gradle.internal.typeconversion.NotationParser
 import org.gradle.internal.typeconversion.UnsupportedNotationException
+import org.gradle.util.TestUtil
 import org.gradle.util.TextUtil
 import spock.lang.Specification
 
@@ -43,7 +42,7 @@ import java.awt.*
 class PublishArtifactNotationParserFactoryTest extends Specification {
     final DependencyMetaDataProvider provider = Mock()
     final TaskResolver taskResolver = Mock()
-    final Instantiator instantiator = ThreadGlobalInstantiator.getOrCreate()
+    final Instantiator instantiator = TestUtil.instantiatorFactory().decorateLenient()
     final PublishArtifactNotationParserFactory publishArtifactNotationParserFactory = new PublishArtifactNotationParserFactory(instantiator, provider, taskResolver)
     final NotationParser<Object, PublishArtifact> publishArtifactNotationParser = publishArtifactNotationParserFactory.create();
 
@@ -158,10 +157,11 @@ class PublishArtifactNotationParserFactoryTest extends Specification {
     }
 
     def "create artifact from File provider"() {
-        def provider = Mock(BuildableProvider)
+        def provider = Mock(ProviderInternal)
         def file1 = new File("classes-1.zip")
 
         _ * provider.get() >> file1
+        _ * provider.visitDependencies(_)
 
         when:
         def publishArtifact = publishArtifactNotationParser.parseNotation(provider)
@@ -183,7 +183,7 @@ class PublishArtifactNotationParserFactoryTest extends Specification {
     def "create artifact from buildable RegularFile provider"() {
         def task1 = Stub(Task)
         def task2 = Stub(Task)
-        def provider = Mock(BuildableProvider)
+        def provider = Mock(ProviderInternal)
         def value = Mock(RegularFile)
         def file1 = new File("classes-1.zip")
 
@@ -211,7 +211,7 @@ class PublishArtifactNotationParserFactoryTest extends Specification {
     def "create artifact from buildable Directory provider"() {
         def task1 = Stub(Task)
         def task2 = Stub(Task)
-        def provider = Mock(BuildableProvider)
+        def provider = Mock(ProviderInternal)
         def value = Mock(Directory)
         def file1 = new File("classes-1.dir")
 
@@ -237,7 +237,7 @@ class PublishArtifactNotationParserFactoryTest extends Specification {
     }
 
     def "fails when provider returns an unsupported type"() {
-        def provider = Mock(BuildableProvider)
+        def provider = Mock(ProviderInternal)
 
         given:
         def publishArtifact = publishArtifactNotationParser.parseNotation(provider)
@@ -294,8 +294,5 @@ The following types/formats are supported:
   - Instances of Directory.
   - Instances of File.
   - Maps with 'file' key'''))
-    }
-
-    interface BuildableProvider extends Provider, TaskDependencyContainer {
     }
 }

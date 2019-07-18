@@ -27,14 +27,15 @@ import com.google.common.io.Files;
 import org.gradle.api.GradleException;
 import org.gradle.api.Incubating;
 import org.gradle.api.InvalidUserDataException;
-import org.gradle.api.Task;
 import org.gradle.api.UncheckedIOException;
+import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.EmptyFileVisitor;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileVisitDetails;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.internal.DocumentationRegistry;
+import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.Input;
@@ -47,11 +48,12 @@ import org.gradle.api.tasks.SkipWhenEmpty;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskValidationException;
 import org.gradle.api.tasks.VerificationTask;
-import org.gradle.internal.Cast;
+import org.gradle.internal.classanalysis.AsmConstants;
 import org.gradle.internal.classloader.ClassLoaderFactory;
 import org.gradle.internal.classloader.ClassLoaderUtils;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.classpath.DefaultClassPath;
+import org.gradle.util.DeprecationLogger;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.Opcodes;
@@ -61,7 +63,6 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -98,27 +99,35 @@ import java.util.Map;
  *             <li>{@literal @}{@link javax.inject.Inject} marks a Gradle service used by the task.</li>
  *             <li>{@literal @}{@link org.gradle.api.tasks.Console Console} marks a property that only influences the console output of the task.</li>
  *             <li>{@literal @}{@link org.gradle.api.tasks.Internal Internal} mark an internal property of the task.</li>
+ *             <li>{@literal @}{@link org.gradle.api.model.ReplacedBy ReplacedBy} mark a property as replaced by another (similar to {@code Internal}).</li>
  *         </ul>
  *     </li>
  * </ul>
  *
  * @since 3.0
  */
-@Incubating
 @CacheableTask
-@SuppressWarnings("WeakerAccess")
-public class ValidateTaskProperties extends ConventionTask implements VerificationTask {
-    private FileCollection classes;
-    private FileCollection classpath;
-    private RegularFileProperty outputFile = newOutputFile();
+@SuppressWarnings("deprecation")
+public class ValidateTaskProperties extends ConventionTask implements VerificationTask, org.gradle.plugin.devel.tasks.internal.ValidateTaskPropertiesBackwardsCompatibleAdapter {
+    private final ConfigurableFileCollection classes;
+    private final ConfigurableFileCollection classpath;
+    private final RegularFileProperty outputFile;
+    private boolean enableStricterValidation;
     private boolean ignoreFailures;
     private boolean failOnWarning;
+
+    @Inject
+    public ValidateTaskProperties(ObjectFactory objects) {
+        this.classes = objects.fileCollection();
+        this.classpath = objects.fileCollection();
+        this.outputFile = objects.fileProperty();
+    }
 
     @TaskAction
     public void validateTaskClasses() throws IOException {
         ClassLoader previousContextClassLoader = Thread.currentThread().getContextClassLoader();
         ClassPath classPath = DefaultClassPath.of(Iterables.concat(getClasses(), getClasspath()));
-        ClassLoader classLoader = getClassLoaderFactory().createIsolatedClassLoader(classPath);
+        ClassLoader classLoader = getClassLoaderFactory().createIsolatedClassLoader("task-loader", classPath);
         Thread.currentThread().setContextClassLoader(classLoader);
         try {
             validateTaskClasses(classLoader);
@@ -130,15 +139,11 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
 
     private void validateTaskClasses(final ClassLoader classLoader) throws IOException {
         final Map<String, Boolean> taskValidationProblems = Maps.newTreeMap();
-        final Class<?> taskInterface;
         final Method validatorMethod;
         try {
-            taskInterface = classLoader.loadClass(Task.class.getName());
             Class<?> validatorClass = classLoader.loadClass("org.gradle.api.internal.tasks.properties.PropertyValidationAccess");
-            validatorMethod = validatorClass.getMethod("collectTaskValidationProblems", Class.class, Map.class);
-        } catch (ClassNotFoundException e) {
-            throw new RuntimeException(e);
-        } catch (NoSuchMethodException e) {
+            validatorMethod = validatorClass.getMethod("collectValidationProblems", Class.class, Map.class, Boolean.TYPE);
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
 
@@ -167,18 +172,8 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
                     } catch (NoClassDefFoundError e) {
                         throw new GradleException("Could not load class: " + className, e);
                     }
-                    if (!Modifier.isPublic(clazz.getModifiers())) {
-                        continue;
-                    }
-                    if (Modifier.isAbstract(clazz.getModifiers())) {
-                        continue;
-                    }
-                    if (!taskInterface.isAssignableFrom(clazz)) {
-                        continue;
-                    }
-                    Class<? extends Task> taskClass = Cast.uncheckedCast(clazz);
                     try {
-                        validatorMethod.invoke(null, taskClass, taskValidationProblems);
+                        validatorMethod.invoke(null, clazz, taskValidationProblems, enableStricterValidation);
                     } catch (IllegalAccessException e) {
                         throw new RuntimeException(e);
                     } catch (InvocationTargetException e) {
@@ -197,7 +192,7 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
             File output = outputFile.get().getAsFile();
             //noinspection ResultOfMethodCallIgnored
             output.createNewFile();
-            Files.write(Joiner.on('\n').join(problemMessages), output, Charsets.UTF_8);
+            Files.asCharSink(output, Charsets.UTF_8).write(Joiner.on('\n').join(problemMessages));
         }
     }
 
@@ -239,7 +234,7 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
     }
 
     private static List<InvalidUserDataException> toExceptionList(List<String> problemMessages) {
-        return  Lists.transform(problemMessages, new Function<String, InvalidUserDataException>() {
+        return Lists.transform(problemMessages, new Function<String, InvalidUserDataException>() {
             @Override
             @SuppressWarnings("NullableProblems")
             public InvalidUserDataException apply(String problemMessage) {
@@ -269,10 +264,11 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
      *
      * @since 4.0
      */
+    @Override
     @PathSensitive(PathSensitivity.RELATIVE)
     @InputFiles
     @SkipWhenEmpty
-    public FileCollection getClasses() {
+    public ConfigurableFileCollection getClasses() {
         return classes;
     }
 
@@ -280,24 +276,32 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
      * Sets the classes to validate.
      *
      * @since 4.0
+     * @deprecated Use {@link #getClasses()}.setFrom instead.
      */
+    @Deprecated
     public void setClasses(FileCollection classes) {
-        this.classes = classes;
+        DeprecationLogger.nagUserOfReplacedMethod("setClasses(FileCollection)", "getClasses().setFrom(FileCollection)");
+        this.classes.setFrom(classes);
     }
 
     /**
      * The classpath used to load the classes under validation.
      */
+    @Override
     @Classpath
-    public FileCollection getClasspath() {
+    public ConfigurableFileCollection getClasspath() {
         return classpath;
     }
 
     /**
      * Sets the classpath used to load the classes under validation.
+     *
+     * @deprecated Use {@link #getClasspath()}.setFrom instead.
      */
+    @Deprecated
     public void setClasspath(FileCollection classpath) {
-        this.classpath = classpath;
+        DeprecationLogger.nagUserOfReplacedMethod("setClasspath(FileCollection)", "getClasspath().setFrom(FileCollection)");
+        this.classpath.setFrom(classpath);
     }
 
     /**
@@ -306,6 +310,27 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
     @Input
     public boolean getFailOnWarning() {
         return failOnWarning;
+    }
+
+    /**
+     * Enable the stricter validation for cacheable tasks for all tasks.
+     *
+     * @since 5.1
+     */
+    @Incubating
+    @Input
+    public boolean getEnableStricterValidation() {
+        return enableStricterValidation;
+    }
+
+    /**
+     * Enable the stricter validation for cacheable tasks for all tasks.
+     *
+     * @since 5.1
+     */
+    @Incubating
+    public void setEnableStricterValidation(boolean enableStricterValidation) {
+        this.enableStricterValidation = enableStricterValidation;
     }
 
     /**
@@ -343,7 +368,7 @@ public class ValidateTaskProperties extends ConventionTask implements Verificati
         private final Collection<String> classNames;
 
         public TaskNameCollectorVisitor(Collection<String> classNames) {
-            super(Opcodes.ASM6);
+            super(AsmConstants.ASM_LEVEL);
             this.classNames = classNames;
         }
 

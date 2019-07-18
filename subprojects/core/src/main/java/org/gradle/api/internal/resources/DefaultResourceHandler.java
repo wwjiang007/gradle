@@ -26,22 +26,25 @@ import org.gradle.api.resources.internal.ReadableResourceInternal;
 import org.gradle.internal.resource.TextResourceLoader;
 
 public class DefaultResourceHandler implements ResourceHandler {
-    private final FileOperations fileOperations;
+    private final ResourceResolver resourceResolver;
     private final TextResourceFactory textResourceFactory;
 
-    public DefaultResourceHandler(FileOperations fileOperations, TemporaryFileProvider tempFileProvider, TextResourceLoader textResourceLoader) {
-        this.fileOperations = fileOperations;
-        textResourceFactory = new DefaultTextResourceFactory(fileOperations, tempFileProvider, textResourceLoader);
+    public DefaultResourceHandler(FileOperations fileOperations, ResourceResolver resourceResolver, TemporaryFileProvider tempFileProvider, TextResourceLoader textResourceLoader) {
+        this.resourceResolver = resourceResolver;
+        this.textResourceFactory = new DefaultTextResourceFactory(fileOperations, tempFileProvider, textResourceLoader);
     }
 
+    @Override
     public ReadableResourceInternal gzip(Object path) {
-        return new GzipArchiver(fileOperations.getFileResolver().resolveResource(path));
+        return new GzipArchiver(resourceResolver.resolveResource(path));
     }
 
+    @Override
     public ReadableResourceInternal bzip2(Object path) {
-        return new Bzip2Archiver(fileOperations.getFileResolver().resolveResource(path));
+        return new Bzip2Archiver(resourceResolver.resolveResource(path));
     }
 
+    @Override
     public TextResourceFactory getText() {
         return textResourceFactory;
     }

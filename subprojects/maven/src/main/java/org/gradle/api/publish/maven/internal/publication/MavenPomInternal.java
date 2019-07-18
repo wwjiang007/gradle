@@ -18,6 +18,7 @@ package org.gradle.api.publish.maven.internal.publication;
 
 import org.gradle.api.Action;
 import org.gradle.api.XmlProvider;
+import org.gradle.api.publish.internal.versionmapping.VersionMappingStrategyInternal;
 import org.gradle.api.publish.maven.MavenDependency;
 import org.gradle.api.publish.maven.MavenPom;
 import org.gradle.api.publish.maven.MavenPomCiManagement;
@@ -60,9 +61,17 @@ public interface MavenPomInternal extends MavenPom {
 
     Set<MavenDependency> getRuntimeDependencyManagement();
 
+    Set<MavenDependency> getImportDependencyManagement();
+
     Set<MavenDependencyInternal> getApiDependencies();
 
     Set<MavenDependencyInternal> getRuntimeDependencies();
 
+    Set<MavenDependencyInternal> getOptionalDependencies();
+
     Action<XmlProvider> getXmlAction();
+
+    VersionMappingStrategyInternal getVersionMappingStrategy();
+
+    boolean writeGradleMetadataMarker();
 }

@@ -25,6 +25,7 @@ import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 
 import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.GCC_COMPATIBLE
+import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.SUPPORTS_32
 
 @RequiresInstalledToolChain(GCC_COMPATIBLE)
 class GccToolChainCustomisationIntegrationTest extends AbstractInstalledToolChainIntegrationSpec {
@@ -53,6 +54,7 @@ model {
         helloWorldApp.library.writeSources(file("src/hello"))
     }
 
+    @RequiresInstalledToolChain(SUPPORTS_32)
     def "can configure platform specific args"() {
         when:
         buildFile << """
@@ -254,8 +256,7 @@ model {
         executable("build/exe/main/custom/main").exec().out == helloWorldApp.frenchOutput
     }
 
-
-    def wrapperTool(TestFile binDir, String wrapperName, String executable, String... additionalArgs) {
+    def wrapperTool(TestFile binDir, String wrapperName, File executable, String... additionalArgs) {
         def script = binDir.file(OperatingSystem.current().getExecutableName(wrapperName))
         if (OperatingSystem.current().windows) {
             script.text = "${executable} ${additionalArgs.join(' ')} %*"

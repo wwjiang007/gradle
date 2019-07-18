@@ -27,14 +27,17 @@ import org.gradle.api.internal.file.collections.DirectoryFileTreeFactory;
 import org.gradle.api.internal.file.collections.FileCollectionAdapter;
 import org.gradle.api.internal.file.collections.FileCollectionResolveContext;
 import org.gradle.api.internal.file.collections.MinimalFileSet;
-import org.gradle.api.internal.provider.DefaultProviderFactory;
+import org.gradle.api.internal.model.InstantiatorBackedObjectFactory;
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext;
+import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.TaskDependency;
 import org.gradle.api.tasks.util.PatternFilterable;
 import org.gradle.api.tasks.util.PatternSet;
+import org.gradle.internal.reflect.DirectInstantiator;
+import org.gradle.util.DeprecationLogger;
 import org.gradle.util.GUtil;
 
 import java.io.File;
@@ -56,7 +59,10 @@ public class DefaultSourceDirectorySet extends CompositeFileTree implements Sour
     private final FileCollection dirs;
     private final Property<File> outputDir;
 
-    public DefaultSourceDirectorySet(String name, String displayName, FileResolver fileResolver, DirectoryFileTreeFactory directoryFileTreeFactory) {
+    // Note: don't actually remove this in 6.0, the deprecation is here to encourage people to use ObjectFactory instead. Just remove the overload and the nag and leave the method here
+    @Deprecated
+    public DefaultSourceDirectorySet(String name, String displayName, FileResolver fileResolver, DirectoryFileTreeFactory directoryFileTreeFactory, ObjectFactory objectFactory) {
+        DeprecationLogger.nagUserOfDeprecated("The DefaultSourceDirectorySet constructor", "Please use the ObjectFactory service to create instances of SourceDirectorySet instead.");
         this.name = name;
         this.displayName = displayName;
         this.fileResolver = fileResolver;
@@ -64,14 +70,22 @@ public class DefaultSourceDirectorySet extends CompositeFileTree implements Sour
         this.patterns = fileResolver.getPatternSetFactory().create();
         this.filter = fileResolver.getPatternSetFactory().create();
         this.dirs = new FileCollectionAdapter(new SourceDirectories());
-        DefaultProviderFactory providerFactory = new DefaultProviderFactory();
-        this.outputDir = providerFactory.propertyNoNag(File.class);
+        this.outputDir = objectFactory.property(File.class);
     }
 
+    // Used by the JavaScript plugins
+    @Deprecated
+    public DefaultSourceDirectorySet(String name, String displayName, FileResolver fileResolver, DirectoryFileTreeFactory directoryFileTreeFactory) {
+        this(name, displayName, fileResolver, directoryFileTreeFactory, new InstantiatorBackedObjectFactory(DirectInstantiator.INSTANCE));
+    }
+
+    // Used by the Kotlin plugin
+    @Deprecated
     public DefaultSourceDirectorySet(String name, FileResolver fileResolver, DirectoryFileTreeFactory directoryFileTreeFactory) {
         this(name, name, fileResolver, directoryFileTreeFactory);
     }
 
+    @Override
     public String getName() {
         return this.name;
     }
@@ -81,6 +95,7 @@ public class DefaultSourceDirectorySet extends CompositeFileTree implements Sour
         return dirs;
     }
 
+    @Override
     public Set<File> getSrcDirs() {
         Set<File> dirs = new LinkedHashSet<File>();
         for (DirectoryTree tree : getSrcDirTrees()) {
@@ -89,64 +104,77 @@ public class DefaultSourceDirectorySet extends CompositeFileTree implements Sour
         return dirs;
     }
 
+    @Override
     public Set<String> getIncludes() {
         return patterns.getIncludes();
     }
 
+    @Override
     public Set<String> getExcludes() {
         return patterns.getExcludes();
     }
 
+    @Override
     public PatternFilterable setIncludes(Iterable<String> includes) {
         patterns.setIncludes(includes);
         return this;
     }
 
+    @Override
     public PatternFilterable setExcludes(Iterable<String> excludes) {
         patterns.setExcludes(excludes);
         return this;
     }
 
+    @Override
     public PatternFilterable include(String... includes) {
         patterns.include(includes);
         return this;
     }
 
+    @Override
     public PatternFilterable include(Iterable<String> includes) {
         patterns.include(includes);
         return this;
     }
 
+    @Override
     public PatternFilterable include(Spec<FileTreeElement> includeSpec) {
         patterns.include(includeSpec);
         return this;
     }
 
+    @Override
     public PatternFilterable include(Closure includeSpec) {
         patterns.include(includeSpec);
         return this;
     }
 
+    @Override
     public PatternFilterable exclude(Iterable<String> excludes) {
         patterns.exclude(excludes);
         return this;
     }
 
+    @Override
     public PatternFilterable exclude(String... excludes) {
         patterns.exclude(excludes);
         return this;
     }
 
+    @Override
     public PatternFilterable exclude(Spec<FileTreeElement> excludeSpec) {
         patterns.exclude(excludeSpec);
         return this;
     }
 
+    @Override
     public PatternFilterable exclude(Closure excludeSpec) {
         patterns.exclude(excludeSpec);
         return this;
     }
 
+    @Override
     public PatternFilterable getFilter() {
         return filter;
     }
@@ -166,6 +194,7 @@ public class DefaultSourceDirectorySet extends CompositeFileTree implements Sour
         this.outputDir.set(outputDir);
     }
 
+    @Override
     public Set<DirectoryTree> getSrcDirTrees() {
         // This implementation is broken. It does not consider include and exclude patterns
         Map<File, DirectoryTree> trees = new LinkedHashMap<File, DirectoryTree>();
@@ -218,11 +247,13 @@ public class DefaultSourceDirectorySet extends CompositeFileTree implements Sour
         return displayName;
     }
 
+    @Override
     public SourceDirectorySet srcDir(Object srcDir) {
         source.add(srcDir);
         return this;
     }
 
+    @Override
     public SourceDirectorySet srcDirs(Object... srcDirs) {
         for (Object srcDir : srcDirs) {
             source.add(srcDir);
@@ -230,12 +261,14 @@ public class DefaultSourceDirectorySet extends CompositeFileTree implements Sour
         return this;
     }
 
+    @Override
     public SourceDirectorySet setSrcDirs(Iterable<?> srcPaths) {
         source.clear();
         GUtil.addToCollection(source, srcPaths);
         return this;
     }
 
+    @Override
     public SourceDirectorySet source(SourceDirectorySet source) {
         this.source.add(source);
         return this;

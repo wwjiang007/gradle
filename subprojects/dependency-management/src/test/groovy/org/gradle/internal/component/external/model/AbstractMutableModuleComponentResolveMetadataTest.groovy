@@ -30,7 +30,7 @@ import org.gradle.internal.component.external.model.ivy.IvyDependencyDescriptor
 import org.gradle.internal.component.model.ComponentResolveMetadata
 import org.gradle.internal.component.model.DependencyMetadata
 import org.gradle.internal.hash.HashValue
-import org.gradle.util.TestUtil
+import org.gradle.util.AttributeTestUtil
 import spock.lang.Specification
 
 import static org.gradle.internal.component.external.model.AbstractMutableModuleComponentResolveMetadata.EMPTY_CONTENT
@@ -233,26 +233,26 @@ abstract class AbstractMutableModuleComponentResolveMetadataTest extends Specifi
         def metadata = createMetadata(id)
 
         given:
-        def v1 = metadata.addVariant("api", attributes(usage: "compile"),)
-        v1.addDependency("g1", "m1", v("v1"), [], null, ImmutableAttributes.EMPTY)
-        v1.addDependency("g2", "m2", v("v2"), [], "v2 is tested", ImmutableAttributes.EMPTY)
-        def v2 = metadata.addVariant("runtime", attributes(usage: "runtime"),)
-        v2.addDependency("g1", "m1", v("v1"), [], null, ImmutableAttributes.EMPTY)
+        def v1 = metadata.addVariant("api", attributes(usage: "compile"))
+        v1.addDependency("g1", "m1", v("v1"), [], null, ImmutableAttributes.EMPTY, [])
+        v1.addDependency("g2", "m2", v("v2"), [], "v2 is tested", ImmutableAttributes.EMPTY, [])
+        def v2 = metadata.addVariant("runtime", attributes(usage: "runtime"))
+        v2.addDependency("g1", "m1", v("v1"), [], null, ImmutableAttributes.EMPTY, [])
 
         expect:
         metadata.variants.size() == 2
         metadata.variants[0].dependencies.size() == 2
         metadata.variants[0].dependencies[0].group == "g1"
         metadata.variants[0].dependencies[0].module == "m1"
-        metadata.variants[0].dependencies[0].versionConstraint.preferredVersion == "v1"
+        metadata.variants[0].dependencies[0].versionConstraint.requiredVersion == "v1"
         metadata.variants[0].dependencies[1].group == "g2"
         metadata.variants[0].dependencies[1].module == "m2"
-        metadata.variants[0].dependencies[1].versionConstraint.preferredVersion == "v2"
+        metadata.variants[0].dependencies[1].versionConstraint.requiredVersion == "v2"
         metadata.variants[0].dependencies[1].reason == "v2 is tested"
         metadata.variants[1].dependencies.size() == 1
         metadata.variants[1].dependencies[0].group == "g1"
         metadata.variants[1].dependencies[0].module == "m1"
-        metadata.variants[1].dependencies[0].versionConstraint.preferredVersion == "v1"
+        metadata.variants[1].dependencies[0].versionConstraint.requiredVersion == "v1"
 
         def immutable = metadata.asImmutable()
         immutable.variants.size() == 2
@@ -285,11 +285,11 @@ abstract class AbstractMutableModuleComponentResolveMetadataTest extends Specifi
         def v1 = metadata.addVariant("api", attributes1,)
         v1.addFile("f1.jar", "f1.jar")
         v1.addFile("f2.jar", "f2-1.2.jar")
-        v1.addDependency("g1", "m1", v("v1"), [], null, ImmutableAttributes.EMPTY)
+        v1.addDependency("g1", "m1", v("v1"), [], null, ImmutableAttributes.EMPTY, [])
         def v2 = metadata.addVariant("runtime", attributes2,)
         v2.addFile("f2", "f2-version.zip")
-        v2.addDependency("g2", "m2", v("v2"), [], null, ImmutableAttributes.EMPTY)
-        v2.addDependency("g3", "m3", v("v3"), [], null, ImmutableAttributes.EMPTY)
+        v2.addDependency("g2", "m2", v("v2"), [], null, ImmutableAttributes.EMPTY, [])
+        v2.addDependency("g3", "m3", v("v3"), [], null, ImmutableAttributes.EMPTY, [])
 
         expect:
         def immutable = metadata.asImmutable()
@@ -352,7 +352,7 @@ abstract class AbstractMutableModuleComponentResolveMetadataTest extends Specifi
     }
 
     def attributes(Map<String, String> values) {
-        def attrs = TestUtil.attributesFactory().mutable()
+        def attrs = AttributeTestUtil.attributesFactory().mutable()
         attrs.attribute(ProjectInternal.STATUS_ATTRIBUTE, 'integration')
         if (values) {
             values.each { String key, String value ->

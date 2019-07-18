@@ -19,13 +19,11 @@ package org.gradle.integtests.tooling.r42
 import org.gradle.integtests.tooling.fixture.ProgressEvents
 import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
-import org.gradle.integtests.tooling.fixture.ToolingApiVersion
 import org.gradle.tooling.ProjectConnection
 import org.gradle.util.Requires
 
 import static org.gradle.util.TestPrecondition.KOTLIN_SCRIPT
 
-@ToolingApiVersion(">=2.5")
 @TargetGradleVersion(">=4.2")
 class BuildProgressTaskActionsCrossVersionSpec extends ToolingApiSpecification {
 
@@ -57,7 +55,7 @@ class BuildProgressTaskActionsCrossVersionSpec extends ToolingApiSpecification {
         task.child('Clean stale outputs')
     }
 
-    //This is the current behavior. Snapshoting might become not-a-task-action in the future.
+    //This is the current behavior. Snapshotting might become not-a-task-action in the future.
     def "snapshot task inputs action has an informative name"() {
         given:
         buildFile << "task custom { doLast {} }"
@@ -111,7 +109,7 @@ class BuildProgressTaskActionsCrossVersionSpec extends ToolingApiSpecification {
     def "task actions defined in doFirst and doLast blocks of Kotlin build scripts have informative names"() {
         given:
         buildFileKts << """
-            tasks { "custom" { 
+            tasks { create("custom") { 
                 doFirst {}
                 doLast {}
             }}
@@ -148,7 +146,7 @@ class BuildProgressTaskActionsCrossVersionSpec extends ToolingApiSpecification {
     def "task actions defined in doFirst and doLast blocks of Kotlin build scripts can be named"() {
         given:
         buildFileKts << """
-            tasks { "custom" { 
+            tasks { create("custom") { 
                 doFirst("A first step") {}
                 doLast("One last thing...") {}
             }}

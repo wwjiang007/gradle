@@ -23,18 +23,19 @@ import org.gradle.performance.fixture.BuildExperimentSpec
 import org.gradle.performance.fixture.CrossBuildPerformanceTestRunner
 import org.gradle.performance.fixture.GradleBuildExperimentSpec
 import org.gradle.performance.fixture.GradleSessionProvider
-import org.gradle.performance.fixture.PerformanceTestRetryRule
 import org.gradle.performance.results.BaselineVersion
 import org.gradle.performance.results.CrossBuildPerformanceResults
 import org.gradle.performance.results.CrossBuildResultsStore
+import org.gradle.test.fixtures.file.CleanupTestDirectory
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
-import org.gradle.testing.internal.util.RetryRule
 import org.junit.Rule
 import org.junit.experimental.categories.Category
 import org.junit.rules.TestName
 import spock.lang.AutoCleanup
 import spock.lang.Shared
 import spock.lang.Specification
+
+import static org.gradle.performance.regression.inception.GradleInceptionPerformanceTest.extraGradleBuildArguments
 /**
  * Test Gradle's build performance against current Gradle.
  *
@@ -49,13 +50,11 @@ import spock.lang.Specification
  * - be careful when rebasing/squashing/merging
  */
 @Category(PerformanceRegressionTest)
+@CleanupTestDirectory
 class GradleBuildPerformanceTest extends Specification {
 
     @Rule
-    RetryRule retry = new PerformanceTestRetryRule()
-
-    @Rule
-    TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
+    TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider()
 
     @Rule
     TestName testName = new TestName()
@@ -69,7 +68,7 @@ class GradleBuildPerformanceTest extends Specification {
     CrossBuildPerformanceTestRunner runner
 
     def warmupBuilds = 20
-    def measuredBuilds = 40
+    def measuredBuilds = 20
 
     def setup() {
         runner = new CrossBuildPerformanceTestRunner(
@@ -80,9 +79,9 @@ class GradleBuildPerformanceTest extends Specification {
             @Override
             protected void defaultSpec(BuildExperimentSpec.Builder builder) {
                 super.defaultSpec(builder)
-                builder.workingDirectory = tmpDir.testDirectory
+                builder.workingDirectory = temporaryFolder.testDirectory
                 if (builder instanceof GradleBuildExperimentSpec.GradleBuilder) {
-                    builder.invocation.args("-Djava9Home=${System.getProperty('java9Home')}")
+                    builder.invocation.args(extraGradleBuildArguments() as String[])
                 }
             }
         }
@@ -90,7 +89,6 @@ class GradleBuildPerformanceTest extends Specification {
     }
 
     def "help on the gradle build comparing the build"() {
-
         given:
         runner.testId = testName.methodName
 
@@ -126,9 +124,6 @@ class GradleBuildPerformanceTest extends Specification {
         def results = runner.run()
 
         then:
-        results.assertEveryBuildSucceeds()
-
-        and:
         def baselineResults = buildBaselineResults(results, baselineBuildName)
         def currentResults = results.buildResult(currentBuildName)
 
@@ -178,9 +173,6 @@ class GradleBuildPerformanceTest extends Specification {
         def results = runner.run()
 
         then:
-        results.assertEveryBuildSucceeds()
-
-        and:
         def baselineResults = buildBaselineResults(results, eagerBuildName)
         def currentResults = results.buildResult(lazyBuildName)
 

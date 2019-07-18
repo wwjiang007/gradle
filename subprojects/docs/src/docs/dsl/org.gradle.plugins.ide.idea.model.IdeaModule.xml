@@ -11,18 +11,13 @@
             </thead>
             <tr>
                 <td>name</td>
-                <td><literal><replaceable>${project.name}</replaceable> (sometimes prefixed with parts of <replaceable>${project.path}</replaceable> to guarantee uniqeness)</literal></td>
+                <td><literal><replaceable>${project.name}</replaceable> (sometimes prefixed with parts of <replaceable>${project.path}</replaceable> to guarantee uniqueness)</literal></td>
                 <td/>
             </tr>
             <tr>
                 <td>sourceDirs</td>
                 <td><literal>[]</literal></td>
-                <td>
-                    <itemizedlist>
-                        <listitem>with Gradle &lt; 5.0: source dirs from <literal>project.sourceSets.main.allSource</literal>.</listitem>
-                        <listitem>with Gradle &gt;= 5.0: source dirs from <literal>project.sourceSets.main.allJava</literal>.</listitem>
-                    </itemizedlist>
-                </td>
+                <td>project.sourceSets.main.allJava</td>
             </tr>
             <tr>
                 <td>scopes</td>
@@ -59,12 +54,7 @@
             <tr>
                 <td>testSourceDirs</td>
                 <td><literal>[]</literal></td>
-                <td>
-                    <itemizedlist>
-                        <listitem>with Gradle &lt; 5.0: source dirs from <literal>project.sourceSets.test.allSource</literal>.</listitem>
-                        <listitem>with Gradle &gt;= 5.0: source dirs from <literal>project.sourceSets.test.allJava</literal>.</listitem>
-                    </itemizedlist>
-                </td>
+                <td>project.sourceSets.test.allJava</td>
             </tr>
             <tr>
                 <td>resourceDirs</td>

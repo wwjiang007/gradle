@@ -19,7 +19,6 @@ package org.gradle.api.plugins.buildcomparison.gradle;
 import org.gradle.api.Action;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.Incubating;
 import org.gradle.api.Task;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.model.ObjectFactory;
@@ -64,9 +63,9 @@ import java.util.Map;
 /**
  * Executes two Gradle builds (that can be the same build) with specified versions and compares the outcomes.
  *
- * Please see the “Comparing Builds” chapter of the Gradle User Guide for more information.
+ * Please see the “Comparing Builds” chapter of the Gradle User Manual for more information.
  */
-@Incubating
+@Deprecated
 public class CompareGradleBuilds extends DefaultTask implements VerificationTask {
 
     public static final List<String> DEFAULT_TASKS = Arrays.asList("clean", "assemble");
@@ -88,6 +87,7 @@ public class CompareGradleBuilds extends DefaultTask implements VerificationTask
 
         // Never up to date
         getOutputs().upToDateWhen(new Spec<Task>() {
+            @Override
             public boolean isSatisfiedBy(Task element) {
                 return false;
             }
@@ -183,6 +183,7 @@ public class CompareGradleBuilds extends DefaultTask implements VerificationTask
      *
      * @return True if a comparison between non identical builds will fail the task execution, otherwise false.
      */
+    @Override
     public boolean getIgnoreFailures() {
         return ignoreFailures;
     }
@@ -192,6 +193,7 @@ public class CompareGradleBuilds extends DefaultTask implements VerificationTask
      *
      * @param ignoreFailures false to fail the task on non identical builds, true to not fail the task. The default is false.
      */
+    @Override
     public void setIgnoreFailures(boolean ignoreFailures) {
         this.ignoreFailures = ignoreFailures;
     }

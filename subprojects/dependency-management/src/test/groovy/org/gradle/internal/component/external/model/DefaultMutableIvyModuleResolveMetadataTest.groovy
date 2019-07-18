@@ -17,9 +17,9 @@
 package org.gradle.internal.component.external.model
 
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
-import org.gradle.api.internal.artifacts.DefaultImmutableModuleIdentifierFactory
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
+import org.gradle.api.internal.artifacts.DependencyManagementTestUtil
 import org.gradle.api.internal.artifacts.repositories.metadata.IvyMutableModuleMetadataFactory
 import org.gradle.internal.component.external.descriptor.Artifact
 import org.gradle.internal.component.external.descriptor.Configuration
@@ -29,10 +29,9 @@ import org.gradle.internal.component.model.DefaultIvyArtifactName
 import org.gradle.internal.component.model.DependencyMetadata
 import org.gradle.internal.component.model.ModuleSource
 import org.gradle.internal.hash.HashValue
-import org.gradle.util.TestUtil
 
 class DefaultMutableIvyModuleResolveMetadataTest extends AbstractMutableModuleComponentResolveMetadataTest {
-    private final IvyMutableModuleMetadataFactory ivyMetadataFactory = new IvyMutableModuleMetadataFactory(new DefaultImmutableModuleIdentifierFactory(), TestUtil.attributesFactory())
+    private final IvyMutableModuleMetadataFactory ivyMetadataFactory = DependencyManagementTestUtil.ivyMetadataFactory()
 
     @Override
     AbstractMutableModuleComponentResolveMetadata createMetadata(ModuleComponentIdentifier id, List<Configuration> configurations, List<DependencyMetadata> dependencies) {
@@ -75,7 +74,7 @@ class DefaultMutableIvyModuleResolveMetadataTest extends AbstractMutableModuleCo
         runtime.artifacts.name.name == ["runtime.jar"]
         runtime.excludes.empty
         def defaultConfig = immutable.getConfiguration("default")
-        defaultConfig.hierarchy == ["default", "runtime"]
+        defaultConfig.hierarchy as List == ["default", "runtime"]
         defaultConfig.transitive
         defaultConfig.visible
         defaultConfig.artifacts.name.name == ["api.jar", "runtime.jar"]
@@ -224,16 +223,6 @@ class DefaultMutableIvyModuleResolveMetadataTest extends AbstractMutableModuleCo
         immutableCopy.id == newId
         immutableCopy.source == source
         immutableCopy.statusScheme == ["1", "2"]
-    }
-
-    def "treats ivy configurations as variants when checking if a variant exists"() {
-        when:
-        configuration("compile")
-        def metadata = getMetadata()
-
-        then:
-        metadata.definesVariant("compile")
-        !metadata.definesVariant("runtime")
     }
 
     def exclude(String group, String module, String... confs) {

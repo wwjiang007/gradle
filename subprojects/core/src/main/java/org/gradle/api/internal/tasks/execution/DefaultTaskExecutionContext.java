@@ -15,61 +15,86 @@
  */
 package org.gradle.api.internal.tasks.execution;
 
-import org.gradle.api.internal.changedetection.TaskArtifactState;
-import org.gradle.api.internal.tasks.OriginTaskExecutionMetadata;
+import com.google.common.collect.ImmutableSortedMap;
+import org.gradle.api.internal.OverlappingOutputs;
+import org.gradle.api.internal.changedetection.TaskExecutionMode;
 import org.gradle.api.internal.tasks.TaskExecutionContext;
-import org.gradle.caching.internal.tasks.TaskOutputCachingBuildCacheKey;
+import org.gradle.api.internal.tasks.properties.TaskProperties;
+import org.gradle.execution.plan.LocalTaskNode;
+import org.gradle.internal.execution.history.AfterPreviousExecutionState;
+import org.gradle.internal.operations.ExecutingBuildOperation;
+import org.gradle.internal.snapshot.FileSystemSnapshot;
 import org.gradle.internal.time.Time;
 import org.gradle.internal.time.Timer;
 
 import javax.annotation.Nullable;
-import java.util.List;
+import java.util.Optional;
 
 public class DefaultTaskExecutionContext implements TaskExecutionContext {
 
-    private TaskArtifactState taskArtifactState;
-    private TaskOutputCachingBuildCacheKey buildCacheKey;
-    private List<String> upToDateMessages;
-    private TaskProperties taskProperties;
-    private OriginTaskExecutionMetadata originExecutionMetadata;
+    private final LocalTaskNode localTaskNode;
+    private AfterPreviousExecutionState afterPreviousExecution;
+    private OverlappingOutputs overlappingOutputs;
+    private ImmutableSortedMap<String, FileSystemSnapshot> outputFilesBeforeExecution;
+    private TaskExecutionMode taskExecutionMode;
+    private TaskProperties properties;
     private Long executionTime;
+    private ExecutingBuildOperation snapshotTaskInputsBuildOperation;
 
     private final Timer executionTimer;
 
-    public DefaultTaskExecutionContext() {
+    public DefaultTaskExecutionContext(LocalTaskNode localTaskNode) {
+        this.localTaskNode = localTaskNode;
         this.executionTimer = Time.startTimer();
     }
 
     @Override
-    public TaskArtifactState getTaskArtifactState() {
-        return taskArtifactState;
+    public LocalTaskNode getLocalTaskNode() {
+        return localTaskNode;
+    }
+
+    @Nullable
+    @Override
+    public AfterPreviousExecutionState getAfterPreviousExecution() {
+        return afterPreviousExecution;
     }
 
     @Override
-    public void setTaskArtifactState(TaskArtifactState taskArtifactState) {
-        this.taskArtifactState = taskArtifactState;
+    public void setAfterPreviousExecution(@Nullable AfterPreviousExecutionState afterPreviousExecution) {
+        this.afterPreviousExecution = afterPreviousExecution;
     }
 
     @Override
-    public TaskOutputCachingBuildCacheKey getBuildCacheKey() {
-        return buildCacheKey;
+    public ImmutableSortedMap<String, FileSystemSnapshot> getOutputFilesBeforeExecution() {
+        return outputFilesBeforeExecution;
     }
 
     @Override
-    public void setBuildCacheKey(TaskOutputCachingBuildCacheKey buildCacheKey) {
-        this.buildCacheKey = buildCacheKey;
+    public void setOutputFilesBeforeExecution(ImmutableSortedMap<String, FileSystemSnapshot> outputFilesBeforeExecution) {
+        this.outputFilesBeforeExecution = outputFilesBeforeExecution;
     }
 
     @Override
-    public OriginTaskExecutionMetadata getOriginExecutionMetadata() {
-        return originExecutionMetadata;
+    public Optional<OverlappingOutputs> getOverlappingOutputs() {
+        return Optional.ofNullable(overlappingOutputs);
     }
 
     @Override
-    public void setOriginExecutionMetadata(OriginTaskExecutionMetadata originExecutionMetadata) {
-        this.originExecutionMetadata = originExecutionMetadata;
+    public void setOverlappingOutputs(OverlappingOutputs overlappingOutputs) {
+        this.overlappingOutputs = overlappingOutputs;
     }
 
+    @Override
+    public TaskExecutionMode getTaskExecutionMode() {
+        return taskExecutionMode;
+    }
+
+    @Override
+    public void setTaskExecutionMode(TaskExecutionMode taskExecutionMode) {
+        this.taskExecutionMode = taskExecutionMode;
+    }
+
+    @Override
     public long markExecutionTime() {
         if (this.executionTime != null) {
             throw new IllegalStateException("execution time already set");
@@ -79,33 +104,24 @@ public class DefaultTaskExecutionContext implements TaskExecutionContext {
     }
 
     @Override
-    public long getExecutionTime() {
-        if (this.executionTime == null) {
-            throw new IllegalStateException("execution time not yet set");
-        }
-
-        return executionTime;
-    }
-
-    @Override
-    @Nullable
-    public List<String> getUpToDateMessages() {
-        return upToDateMessages;
-    }
-
-    @Override
-    public void setUpToDateMessages(List<String> upToDateMessages) {
-        this.upToDateMessages = upToDateMessages;
-    }
-
-    @Override
-    public void setTaskProperties(TaskProperties taskProperties) {
-        this.taskProperties = taskProperties;
+    public void setTaskProperties(TaskProperties properties) {
+        this.properties = properties;
     }
 
     @Override
     public TaskProperties getTaskProperties() {
-        return taskProperties;
+        return properties;
     }
 
+    @Override
+    public Optional<ExecutingBuildOperation> removeSnapshotTaskInputsBuildOperation() {
+        Optional<ExecutingBuildOperation> result = Optional.ofNullable(snapshotTaskInputsBuildOperation);
+        snapshotTaskInputsBuildOperation = null;
+        return result;
+    }
+
+    @Override
+    public void setSnapshotTaskInputsBuildOperation(ExecutingBuildOperation snapshotTaskInputsBuildOperation) {
+        this.snapshotTaskInputsBuildOperation = snapshotTaskInputsBuildOperation;
+    }
 }

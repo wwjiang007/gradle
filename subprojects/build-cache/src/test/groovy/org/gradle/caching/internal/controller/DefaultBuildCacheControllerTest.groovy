@@ -25,7 +25,7 @@ import org.gradle.caching.internal.controller.service.BuildCacheServicesConfigur
 import org.gradle.caching.local.internal.LocalBuildCacheService
 import org.gradle.internal.operations.TestBuildOperationExecutor
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
-import org.gradle.testing.internal.util.Specification
+import spock.lang.Specification
 import org.junit.Rule
 
 class DefaultBuildCacheControllerTest extends Specification {
@@ -43,6 +43,7 @@ class DefaultBuildCacheControllerTest extends Specification {
     def localPush = true
     def remote = Mock(BuildCacheService)
     def remotePush = true
+    def loadmetadata = Mock(Object)
 
     BuildCacheService legacyLocal = null
 
@@ -71,7 +72,7 @@ class DefaultBuildCacheControllerTest extends Specification {
 
                 @Override
                 Object getMetadata() {
-                    return null
+                    return loadmetadata
                 }
             }
         }

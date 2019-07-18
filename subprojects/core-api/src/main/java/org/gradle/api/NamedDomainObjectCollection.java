@@ -18,6 +18,7 @@ package org.gradle.api;
 import groovy.lang.Closure;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.specs.Spec;
+import org.gradle.api.tasks.Internal;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
@@ -80,6 +81,7 @@ public interface NamedDomainObjectCollection<T> extends DomainObjectCollection<T
      * @param e the item to add to the collection
      * @return {@code true} if the item was added, or {@code} false if an item with the same name already exists.
      */
+    @Override
     boolean add(T e);
 
     /**
@@ -88,6 +90,7 @@ public interface NamedDomainObjectCollection<T> extends DomainObjectCollection<T
      * @param c the items to add to the collection
      * @return {@code true} if any item was added, or {@code} false if all items have non unique names within this collection.
      */
+    @Override
     boolean addAll(Collection<? extends T> c);
 
     /**
@@ -205,28 +208,71 @@ public interface NamedDomainObjectCollection<T> extends DomainObjectCollection<T
     /**
      * {@inheritDoc}
      */
+    @Override
     <S extends T> NamedDomainObjectCollection<S> withType(Class<S> type);
 
     /**
      * {@inheritDoc}
      */
+    @Override
     NamedDomainObjectCollection<T> matching(Spec<? super T> spec);
 
     /**
      * {@inheritDoc}
      */
+    @Override
     NamedDomainObjectCollection<T> matching(Closure spec);
 
     /**
      * Locates a object by name, without triggering its creation or configuration, failing if there is no such object.
-     *
      *
      * @param name The object's name
      * @return A {@link Provider} that will return the object when queried. The object may be created and configured at this point, if not already.
      * @throws UnknownDomainObjectException If a object with the given name is not defined.
      * @since 4.10
      */
-    @Incubating
-    Provider<T> named(String name) throws UnknownDomainObjectException;
+    NamedDomainObjectProvider<T> named(String name) throws UnknownDomainObjectException;
 
+    /**
+     * Locates a object by name, without triggering its creation or configuration, failing if there is no such object.
+     * The given configure action is executed against the object before it is returned from the provider.
+     *
+     * @param name The object's name
+     * @return A {@link Provider} that will return the object when queried. The object may be created and configured at this point, if not already.
+     * @throws UnknownDomainObjectException If a object with the given name is not defined.
+     * @since 5.0
+     */
+    NamedDomainObjectProvider<T> named(String name, Action<? super T> configurationAction) throws UnknownDomainObjectException;
+
+    /**
+     * Locates a object by name and type, without triggering its creation or configuration, failing if there is no such object.
+     *
+     * @param name The object's name
+     * @param type The object's type
+     * @return A {@link Provider} that will return the object when queried. The object may be created and configured at this point, if not already.
+     * @throws UnknownDomainObjectException If a object with the given name is not defined.
+     * @since 5.0
+     */
+    <S extends T> NamedDomainObjectProvider<S> named(String name, Class<S> type) throws UnknownDomainObjectException;
+
+    /**
+     * Locates a object by name and type, without triggering its creation or configuration, failing if there is no such object.
+     * The given configure action is executed against the object before it is returned from the provider.
+     *
+     * @param name The object's name
+     * @param type The object's type
+     * @param configurationAction The action to use to configure the object.
+     * @return A {@link Provider} that will return the object when queried. The object may be created and configured at this point, if not already.
+     * @throws UnknownDomainObjectException If a object with the given name is not defined.
+     * @since 5.0
+     */
+    <S extends T> NamedDomainObjectProvider<S> named(String name, Class<S> type, Action<? super S> configurationAction) throws UnknownDomainObjectException;
+
+    /**
+     * Provides access to the schema of all created or registered named domain objects in this collection.
+     *
+     * @since 4.10
+     */
+    @Internal
+    NamedDomainObjectCollectionSchema getCollectionSchema();
 }

@@ -38,20 +38,29 @@ public class DefaultNamedDomainObjectList<T> extends DefaultNamedDomainObjectCol
         super(objects, filter, instantiator, namer);
     }
 
+    /**
+     * only left here to not break `nebula.dependency-recommender` plugin.
+     */
     public DefaultNamedDomainObjectList(Class<T> type, Instantiator instantiator, Namer<? super T> namer) {
-        super(type, new ListElementSource<T>(), instantiator, namer);
+        super(type, new ListElementSource<T>(), instantiator, namer, CollectionCallbackActionDecorator.NOOP);
     }
 
+    public DefaultNamedDomainObjectList(Class<T> type, Instantiator instantiator, Namer<? super T> namer, CollectionCallbackActionDecorator decorator) {
+        super(type, new ListElementSource<T>(), instantiator, namer, decorator);
+    }
+
+    @Override
     public void add(int index, T element) {
-        assertMutable();
+        assertMutable("add(int, T)");
         assertCanAdd(element);
         getStore().add(index, element);
         didAdd(element);
         getEventRegister().fireObjectAdded(element);
     }
 
+    @Override
     public boolean addAll(int index, Collection<? extends T> c) {
-        assertMutable();
+        assertMutable("addAll(int, Collection)");
         boolean changed = false;
         int current = index;
         for (T t : c) {
@@ -71,12 +80,14 @@ public class DefaultNamedDomainObjectList<T> extends DefaultNamedDomainObjectCol
         return (IndexedElementSource<T>) super.getStore();
     }
 
+    @Override
     public T get(int index) {
         return getStore().get(index);
     }
 
+    @Override
     public T set(int index, T element) {
-        assertMutable();
+        assertMutable("set(int, T)");
         assertCanAdd(element);
         T oldElement = getStore().set(index, element);
         if (oldElement != null) {
@@ -88,8 +99,9 @@ public class DefaultNamedDomainObjectList<T> extends DefaultNamedDomainObjectCol
         return oldElement;
     }
 
+    @Override
     public T remove(int index) {
-        assertMutable();
+        assertMutable("remove(int)");
         T element = getStore().remove(index);
         if (element != null) {
             didRemove(element);
@@ -98,22 +110,27 @@ public class DefaultNamedDomainObjectList<T> extends DefaultNamedDomainObjectCol
         return element;
     }
 
+    @Override
     public int indexOf(Object o) {
         return getStore().indexOf(o);
     }
 
+    @Override
     public int lastIndexOf(Object o) {
         return getStore().lastIndexOf(o);
     }
 
+    @Override
     public ListIterator<T> listIterator() {
         return new ListIteratorImpl(getStore().listIterator());
     }
 
+    @Override
     public ListIterator<T> listIterator(int index) {
         return new ListIteratorImpl(getStore().listIterator(index));
     }
 
+    @Override
     public List<T> subList(int fromIndex, int toIndex) {
         return Collections.unmodifiableList(getStore().subList(fromIndex, toIndex));
     }
@@ -151,50 +168,59 @@ public class DefaultNamedDomainObjectList<T> extends DefaultNamedDomainObjectCol
             this.iterator = iterator;
         }
 
+        @Override
         public boolean hasNext() {
             return iterator.hasNext();
         }
 
+        @Override
         public boolean hasPrevious() {
             return iterator.hasPrevious();
         }
 
+        @Override
         public T next() {
             lastElement = iterator.next();
             return lastElement;
         }
 
+        @Override
         public T previous() {
             lastElement = iterator.previous();
             return lastElement;
         }
 
+        @Override
         public int nextIndex() {
             return iterator.nextIndex();
         }
 
+        @Override
         public int previousIndex() {
             return iterator.previousIndex();
         }
 
+        @Override
         public void add(T t) {
-            assertMutable();
+            assertMutable("listIterator().add(T)");
             assertCanAdd(t);
             iterator.add(t);
             didAdd(t);
             getEventRegister().fireObjectAdded(t);
         }
 
+        @Override
         public void remove() {
-            assertMutable();
+            assertMutable("listIterator().remove()");
             iterator.remove();
             didRemove(lastElement);
             getEventRegister().fireObjectRemoved(lastElement);
             lastElement = null;
         }
 
+        @Override
         public void set(T t) {
-            assertMutable();
+            assertMutable("listIterator().set(T)");
             assertCanAdd(t);
             iterator.set(t);
             didRemove(lastElement);

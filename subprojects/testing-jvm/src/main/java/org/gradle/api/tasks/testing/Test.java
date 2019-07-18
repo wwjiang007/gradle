@@ -31,7 +31,6 @@ import org.gradle.api.internal.classpath.ModuleRegistry;
 import org.gradle.api.internal.file.FileResolver;
 import org.gradle.api.internal.initialization.loadercache.ClassLoaderCache;
 import org.gradle.api.internal.tasks.testing.JvmTestExecutionSpec;
-import org.gradle.api.internal.tasks.testing.NoMatchingTestsReporter;
 import org.gradle.api.internal.tasks.testing.TestExecuter;
 import org.gradle.api.internal.tasks.testing.TestFramework;
 import org.gradle.api.internal.tasks.testing.detection.DefaultTestExecuter;
@@ -50,10 +49,12 @@ import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
+import org.gradle.api.tasks.SkipWhenEmpty;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.options.Option;
 import org.gradle.api.tasks.testing.junit.JUnitOptions;
 import org.gradle.api.tasks.testing.junitplatform.JUnitPlatformOptions;
+import org.gradle.api.tasks.testing.testng.TestNGOptions;
 import org.gradle.api.tasks.util.PatternFilterable;
 import org.gradle.internal.Actions;
 import org.gradle.internal.Cast;
@@ -66,11 +67,9 @@ import org.gradle.internal.work.WorkerLeaseRegistry;
 import org.gradle.process.CommandLineArgumentProvider;
 import org.gradle.process.JavaForkOptions;
 import org.gradle.process.ProcessForkOptions;
-import org.gradle.process.internal.DefaultJavaForkOptions;
+import org.gradle.process.internal.JavaForkOptionsFactory;
 import org.gradle.process.internal.worker.WorkerProcessFactory;
-import org.gradle.util.CollectionUtils;
 import org.gradle.util.ConfigureUtil;
-import org.gradle.util.SingleMessageLogger;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -80,12 +79,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 
 import static org.gradle.util.ConfigureUtil.configureUsing;
 
 /**
  * Executes JUnit (3.8.x, 4.x or 5.x) or TestNG tests. Test are always run in (one or more) separate JVMs.
+ *
+ * <p>
  * The sample below shows various configuration options.
  *
  * <pre class='autoTested'>
@@ -133,13 +133,12 @@ import static org.gradle.util.ConfigureUtil.configureUsing;
  * <pre>
  * gradle someTestTask --debug-jvm
  * </pre>
-
  */
 @NonNullApi
 @CacheableTask
 public class Test extends AbstractTestTask implements JavaForkOptions, PatternFilterable {
 
-    private final DefaultJavaForkOptions forkOptions;
+    private final JavaForkOptions forkOptions;
 
     private FileCollection testClassesDirs;
     private PatternFilterable patternSet;
@@ -152,21 +151,8 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
 
     public Test() {
         patternSet = getFileResolver().getPatternSetFactory().create();
-        forkOptions = new DefaultJavaForkOptions(getFileResolver());
+        forkOptions = getForkOptionsFactory().newJavaForkOptions();
         forkOptions.setEnableAssertions(true);
-
-        // TODO: This can go away when we remove -Dtest.single
-        String singleTest = getTestSingleSystemPropertyValue();
-        if (singleTest==null) {
-            getInputs().files(new Callable<FileTree>() {
-                @Override
-                public FileTree call() throws Exception {
-                    return getCandidateClassFiles();
-                }
-            }).withPropertyName("nonEmptyCandidateClassFiles").withPathSensitivity(PathSensitivity.RELATIVE).skipWhenEmpty();
-        } else {
-            addTestListener(new NoMatchingTestsReporter("Could not find matching test for pattern: " + singleTest));
-        }
     }
 
     @Inject
@@ -186,6 +172,11 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
 
     @Inject
     protected FileResolver getFileResolver() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Inject
+    protected JavaForkOptionsFactory getForkOptionsFactory() {
         throw new UnsupportedOperationException();
     }
 
@@ -450,7 +441,6 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      */
     @Override
     public boolean getDebug() {
-        checkBackwardsCompatibilitySystemPropertyDebugFlag();
         return forkOptions.getDebug();
     }
 
@@ -458,7 +448,7 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      * {@inheritDoc}
      */
     @Override
-    @Option(option = "debug-jvm", description = "Enable debugging for the test process. The process is started suspended and listening on port 5005. [INCUBATING]")
+    @Option(option = "debug-jvm", description = "Enable debugging for the test process. The process is started suspended and listening on port 5005.")
     public void setDebug(boolean enabled) {
         forkOptions.setDebug(enabled);
     }
@@ -561,11 +551,12 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
 
     /**
      * {@inheritDoc}
+     *
      * @since 4.4
      */
     @Override
     protected JvmTestExecutionSpec createTestExecutionSpec() {
-        DefaultJavaForkOptions javaForkOptions = new DefaultJavaForkOptions(getFileResolver());
+        JavaForkOptions javaForkOptions = getForkOptionsFactory().newJavaForkOptions();
         copyTo(javaForkOptions);
         return new JvmTestExecutionSpec(getTestFramework(), getClasspath(), getCandidateClassFiles(), isScanForTestClasses(), getTestClassesDirs(), getPath(), getIdentityPath(), getForkEvery(), javaForkOptions, getMaxParallelForks(), getPreviousFailedTestClasses());
     }
@@ -588,6 +579,7 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
         }
     }
 
+    @Override
     @TaskAction
     public void executeTests() {
         JavaVersion javaVersion = getJavaVersion();
@@ -721,35 +713,6 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
     public Test setTestNameIncludePatterns(List<String> testNamePattern) {
         super.setTestNameIncludePatterns(testNamePattern);
         return this;
-    }
-
-    /**
-     * Returns the root folder for the compiled test sources.
-     *
-     * @return All test class directories to be used.
-     * @deprecated Use {@link #getTestClassesDirs()}.
-     */
-    @Deprecated
-    @Internal
-    @Nullable
-    public File getTestClassesDir() {
-        SingleMessageLogger.nagUserOfReplacedMethod("getTestClassesDir()", "getTestClassesDirs()");
-        if (testClassesDirs==null || testClassesDirs.isEmpty()) {
-            return null;
-        }
-        return getProject().file(CollectionUtils.first(testClassesDirs));
-    }
-
-    /**
-     * Sets the root folder for the compiled test sources.
-     *
-     * @param testClassesDir The root folder
-     * @deprecated Use {@link #setTestClassesDirs(FileCollection)}.
-     */
-    @Deprecated
-    public void setTestClassesDir(File testClassesDir) {
-        SingleMessageLogger.nagUserOfReplacedMethod("setTestClassesDir(File)", "setTestClassesDirs(FileCollection)");
-        setTestClassesDirs(getProject().files(testClassesDir));
     }
 
     /**
@@ -973,7 +936,7 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      * @param testFrameworkConfigure An action used to configure the TestNG options.
      * @since 3.5
      */
-    public void useTestNG(Action<? super TestFrameworkOptions> testFrameworkConfigure) {
+    public void useTestNG(Action<? super TestNGOptions> testFrameworkConfigure) {
         useTestFramework(new TestNGTestFramework(this, (DefaultTestFilter) getFilter(), getInstantiator(), getClassLoaderCache()), testFrameworkConfigure);
     }
 
@@ -1003,9 +966,18 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
     }
 
     /**
-     * Returns the maximum number of test classes to execute in a forked test process. The forked test process will be restarted when this limit is reached. The default value is 0 (no maximum).
+     * Returns the maximum number of test classes to execute in a forked test process. The forked test process will be restarted when this limit is reached.
      *
-     * @return The maximum number of test classes. Returns 0 when there is no maximum.
+     * <p>
+     * By default, Gradle automatically uses a separate JVM when executing tests.
+     * <ul>
+     *  <li>A value of <code>0</code> (no limit) means to reuse the test process for all test classes. This is the default.</li>
+     *  <li>A value of <code>1</code> means that a new test process is started for <b>every</b> test class. <b>This is very expensive.</b></li>
+     *  <li>A value of <code>N</code> means that a new test process is started after <code>N</code> test classes.</li>
+     * </ul>
+     * This property can have a large impact on performance due to the cost of stopping and starting each test process. It is unusual for this property to be changed from the default.
+     *
+     * @return The maximum number of test classes to execute in a test process. Returns 0 when there is no maximum.
      */
     @Internal
     public long getForkEvery() {
@@ -1013,7 +985,10 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
     }
 
     /**
-     * Sets the maximum number of test classes to execute in a forked test process. Use null or 0 to use no maximum.
+     * Sets the maximum number of test classes to execute in a forked test process.
+     * <p>
+     * By default, Gradle automatically uses a separate JVM when executing tests, so changing this property is usually not necessary.
+     * </p>
      *
      * @param forkEvery The maximum number of test classes. Use null or 0 to specify no maximum.
      */
@@ -1025,8 +1000,16 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
     }
 
     /**
-     * Returns the maximum number of forked test processes to execute in parallel. The default value is 1 (no parallel test execution).
-     * It cannot exceed the value of {@literal max-workers} for the current build.
+     * Returns the maximum number of test processes to start in parallel.
+     *
+     * <p>
+     * By default, Gradle executes a single test class at a time.
+     * <ul>
+     * <li>A value of <code>1</code> means to only execute a single test class in a single test process at a time. This is the default.</li>
+     * <li>A value of <code>N</code> means that up to <code>N</code> test processes will be started to execute test classes. <b>This can improve test execution time by running multiple test classes in parallel.</b></li>
+     * </ul>
+     *
+     * This property cannot exceed the value of {@literal max-workers} for the current build. Gradle will also limit the number of started test processes across all {@link Test} tasks.
      *
      * @return The maximum number of forked test processes.
      */
@@ -1036,9 +1019,12 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
     }
 
     /**
-     * Sets the maximum number of forked test processes to execute in parallel. Set to 1 to disable parallel test execution.
+     * Sets the maximum number of test processes to start in parallel.
+     * <p>
+     * By default, Gradle executes a single test class at a time but allows multiple {@link Test} tasks to run in parallel.
+     * </p>
      *
-     * @param maxParallelForks The maximum number of forked test processes.
+     * @param maxParallelForks The maximum number of forked test processes. Use 1 to disable parallel test execution for this task.
      */
     public void setMaxParallelForks(int maxParallelForks) {
         if (maxParallelForks < 1) {
@@ -1054,8 +1040,8 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      */
     @PathSensitive(PathSensitivity.RELATIVE)
     @InputFiles
+    @SkipWhenEmpty
     public FileTree getCandidateClassFiles() {
-        checkBackwardsCompatibilitySystemPropertySingleTest();
         return getTestClassesDirs().getAsFileTree().matching(patternSet);
     }
 
@@ -1065,7 +1051,6 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      * @param action configuration of the test filter
      * @since 1.10
      */
-    @Incubating
     public void filter(Action<TestFilter> action) {
         action.execute(getFilter());
     }
@@ -1077,49 +1062,5 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      */
     void setTestExecuter(TestExecuter<JvmTestExecutionSpec> testExecuter) {
         this.testExecuter = testExecuter;
-    }
-
-    private void checkBackwardsCompatibilitySystemPropertyDebugFlag() {
-        String debugProp = getTaskPrefixedProperty("debug", "Use --debug-jvm to enable remote debugging of tests.");
-        if (debugProp != null) {
-            setDebug(true);
-        }
-    }
-
-    private void checkBackwardsCompatibilitySystemPropertySingleTest() {
-        String singleTest = getTestSingleSystemPropertyValue();
-        if (singleTest != null) {
-            setIncludes(Collections.singletonList("**/" + singleTest + "*.class"));
-        }
-    }
-
-    @Nullable
-    private String getTestSingleSystemPropertyValue() {
-        return getTaskPrefixedProperty("single", "Use --tests to filter which tests to run instead.");
-    }
-
-    /**
-     * This returns the value of a system property named
-     * ${path}.${propertyName} or ${name}.${propertyName}
-     * which would look like:
-     * :subproject:test.debug or test.debug
-     */
-    @Nullable
-    private String getTaskPrefixedProperty(String propertyName, String replacement) {
-        String suffix = '.' + propertyName;
-        String value = getPrefixedProperty(getPath() + suffix, replacement);
-        if (value == null) {
-            return getPrefixedProperty(getName() + suffix, replacement);
-        }
-        return value;
-    }
-
-    @Nullable
-    private String getPrefixedProperty(String propertyName, String replacement) {
-        String value = System.getProperty(propertyName);
-        if (value != null) {
-            SingleMessageLogger.nagUserWithDeprecatedBuildInvocationFeature("System property '" + propertyName + "'", replacement);
-        }
-        return value;
     }
 }

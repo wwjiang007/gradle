@@ -19,6 +19,7 @@ package org.gradle.testing.junitplatform
 import org.gradle.testing.AbstractTestFrameworkIntegrationTest
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
+
 import static org.gradle.testing.fixture.JUnitCoverage.LATEST_JUPITER_VERSION
 
 @Requires(TestPrecondition.JDK8_OR_LATER)
@@ -29,7 +30,7 @@ class JUnitPlatformTestFrameworkIntegrationTest extends AbstractTestFrameworkInt
             apply plugin: 'java'
             ${mavenCentralRepository()}
             dependencies { 
-                testCompile 'org.junit.jupiter:junit-jupiter-api:${LATEST_JUPITER_VERSION}','org.junit.jupiter:junit-jupiter-engine:${LATEST_JUPITER_VERSION}'
+                testImplementation 'org.junit.jupiter:junit-jupiter-api:${LATEST_JUPITER_VERSION}','org.junit.jupiter:junit-jupiter-engine:${LATEST_JUPITER_VERSION}'
             }
             test {
                 useJUnitPlatform()

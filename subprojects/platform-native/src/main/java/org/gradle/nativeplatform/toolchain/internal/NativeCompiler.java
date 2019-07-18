@@ -20,8 +20,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.gradle.api.Action;
 import org.gradle.api.Transformer;
-import org.gradle.api.logging.Logger;
-import org.gradle.api.logging.Logging;
 import org.gradle.api.tasks.WorkResult;
 import org.gradle.api.tasks.WorkResults;
 import org.gradle.internal.FileUtils;
@@ -38,7 +36,6 @@ import java.util.List;
 public abstract class NativeCompiler<T extends NativeCompileSpec> extends AbstractCompiler<T> {
     private final Transformer<T, T> specTransformer;
     private final String objectFileExtension;
-    private final Logger logger = Logging.getLogger(NativeCompiler.class);
 
     private final CompilerOutputFileNamingSchemeFactory compilerOutputFileNamingSchemeFactory;
 
@@ -59,6 +56,7 @@ public abstract class NativeCompiler<T extends NativeCompileSpec> extends Abstra
     }
 
     // TODO(daniel): Should support in a better way multi file invocation.
+    @Override
     protected Action<BuildOperationQueue<CommandLineToolInvocation>> newInvocationAction(final T spec, final List<String> genericArgs) {
         final File objectDir = spec.getObjectFileDir();
         return new Action<BuildOperationQueue<CommandLineToolInvocation>>() {
@@ -79,6 +77,7 @@ public abstract class NativeCompiler<T extends NativeCompileSpec> extends Abstra
 
     protected abstract List<String> getOutputArgs(T spec, File outputFile);
 
+    @Override
     protected abstract void addOptionsFileArgs(List<String> args, File tempDir);
 
     protected abstract List<String> getPCHArgs(T spec);

@@ -26,7 +26,7 @@ import org.gradle.util.UsesNativeServices
 import spock.lang.Specification
 
 @UsesNativeServices
-public class AbstractFileTreeTest extends Specification {
+class AbstractFileTreeTest extends Specification {
     def isEmptyWhenVisitsNoFiles() {
         def tree = new TestFileTree([])
 
@@ -132,13 +132,13 @@ public class AbstractFileTreeTest extends Specification {
 
     public void "can visit root elements"() {
         def tree = new TestFileTree([])
-        def visitor = Mock(FileCollectionVisitor)
+        def visitor = Mock(FileCollectionLeafVisitor)
 
         when:
-        tree.visitRootElements(visitor)
+        tree.visitLeafCollections(visitor)
 
         then:
-        1 * visitor.visitTree(tree)
+        1 * visitor.visitGenericFileTree(tree)
         0 * visitor._
     }
 

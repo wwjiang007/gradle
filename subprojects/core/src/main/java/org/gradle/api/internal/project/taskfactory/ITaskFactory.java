@@ -17,11 +17,15 @@ package org.gradle.api.internal.project.taskfactory;
 
 import org.gradle.api.Task;
 import org.gradle.api.internal.project.ProjectInternal;
-import org.gradle.internal.reflect.Instantiator;
-import org.gradle.model.internal.core.NamedEntityInstantiator;
+import org.gradle.internal.instantiation.InstantiationScheme;
 
-public interface ITaskFactory extends NamedEntityInstantiator<Task> {
-    ITaskFactory createChild(ProjectInternal project, Instantiator instantiator);
+import javax.annotation.Nullable;
 
-    <S extends Task> S create(TaskIdentity<S> taskIdentity, Object... args);
+public interface ITaskFactory {
+    ITaskFactory createChild(ProjectInternal project, InstantiationScheme instantiationScheme);
+
+    /**
+     * @param constructorArgs null == do not invoke constructor, empty == invoke constructor with no args, non-empty = invoke constructor with args
+     */
+    <S extends Task> S create(TaskIdentity<S> taskIdentity, @Nullable Object[] constructorArgs);
 }

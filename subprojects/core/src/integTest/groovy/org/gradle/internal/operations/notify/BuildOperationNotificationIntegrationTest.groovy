@@ -30,7 +30,7 @@ import org.gradle.initialization.NotifyProjectsEvaluatedBuildOperationType
 import org.gradle.initialization.NotifyProjectsLoadedBuildOperationType
 import org.gradle.initialization.buildsrc.BuildBuildSrcBuildOperationType
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.internal.execution.ExecuteTaskBuildOperationType
+import org.gradle.api.internal.tasks.execution.ExecuteTaskBuildOperationType
 import org.gradle.internal.taskgraph.CalculateTaskGraphBuildOperationType
 import org.gradle.launcher.exec.RunBuildBuildOperationType
 
@@ -42,10 +42,9 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         when:
         executer.requireOwnGradleUserHomeDir()
         def init = executer.gradleUserHomeDir.file("init.d/init.gradle") << """
-            println "init script"
         """
         buildScript """
-           ${notifications.registerListenerWithDrainRecordings()}
+           ${notifications.registerListener()}
             task t
         """
 
@@ -54,21 +53,21 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         succeeds "t"
 
         then:
-        notifications.started(ApplyScriptPluginBuildOperationType.Details, [targetType: "gradle", targetPath: null, file: init.absolutePath, buildPath: ":", uri: null])
-        notifications.started(ApplyScriptPluginBuildOperationType.Details, [targetType: "gradle", targetPath: null, file: init.absolutePath, buildPath: ":buildSrc", uri: null])
+        notifications.started(ApplyScriptPluginBuildOperationType.Details, [targetType: "gradle", targetPath: null, file: init.absolutePath, buildPath: ":", uri: null, applicationId: { it instanceof Number }])
+        notifications.started(ApplyScriptPluginBuildOperationType.Details, [targetType: "gradle", targetPath: null, file: init.absolutePath, buildPath: ":buildSrc", uri: null, applicationId: { it instanceof Number }])
     }
 
     def "can emit notifications from start of build"() {
         when:
         buildScript """
-           ${notifications.registerListenerWithDrainRecordings()}
+           ${notifications.registerListener()}
             task t
         """
 
         succeeds "t", "-S"
 
         then:
-        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":"])
+        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":", includedBy: null])
         notifications.started(EvaluateSettingsBuildOperationType.Details, [settingsDir: testDirectory.absolutePath, settingsFile: settingsFile.absolutePath, buildPath: ":"])
         notifications.finished(EvaluateSettingsBuildOperationType.Result, [:])
         notifications.started(LoadProjectsBuildOperationType.Details, [buildPath: ":"])
@@ -80,7 +79,7 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         notifications.started(NotifyProjectBeforeEvaluatedBuildOperationType.Details, [buildPath: ':', projectPath: ':'])
         notifications.started(ApplyPluginBuildOperationType.Details, [pluginId: "org.gradle.help-tasks", pluginClass: "org.gradle.api.plugins.HelpTasksPlugin", targetType: "project", targetPath: ":", buildPath: ":"])
         notifications.finished(ApplyPluginBuildOperationType.Result, [:])
-        notifications.started(ApplyScriptPluginBuildOperationType.Details, [targetType: "project", targetPath: ":", file: buildFile.absolutePath, buildPath: ":", uri: null])
+        notifications.started(ApplyScriptPluginBuildOperationType.Details, [targetType: "project", targetPath: ":", file: buildFile.absolutePath, buildPath: ":", uri: null, applicationId: { it instanceof Number }])
         notifications.finished(ApplyScriptPluginBuildOperationType.Result, [:])
         notifications.started(NotifyProjectAfterEvaluatedBuildOperationType.Details, [buildPath: ':', projectPath: ':'])
         notifications.finished(ConfigureProjectBuildOperationType.Result, [:])
@@ -91,31 +90,7 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         notifications.finished(CalculateTaskGraphBuildOperationType.Result, [excludedTaskPaths: [], requestedTaskPaths: [":t"]])
         notifications.started(NotifyTaskGraphWhenReadyBuildOperationType.Details, [buildPath: ':'])
         notifications.started(ExecuteTaskBuildOperationType.Details, [taskPath: ":t", buildPath: ":", taskClass: "org.gradle.api.DefaultTask"])
-        notifications.finished(ExecuteTaskBuildOperationType.Result, [actionable: false, originExecutionTime: null, cachingDisabledReasonMessage: "Cacheability was not determined", upToDateMessages: null, cachingDisabledReasonCategory: "UNKNOWN", skipMessage: "UP-TO-DATE", originBuildInvocationId: null])
-    }
-
-    def "can emit notifications from point of registration"() {
-        when:
-        buildScript """
-           ${notifications.registerListener()}
-            task t
-        """
-
-        succeeds "t", "-S"
-
-        then:
-        // Operations that started before the listener registration are not included (even if they finish _after_ listener registration)
-        notifications.notIncluded(EvaluateSettingsBuildOperationType.Details)
-        notifications.notIncluded(LoadProjectsBuildOperationType.Details)
-        notifications.notIncluded(NotifyProjectsLoadedBuildOperationType.Details)
-        notifications.notIncluded(ApplyPluginBuildOperationType.Details)
-        notifications.notIncluded(ConfigureProjectBuildOperationType.Details)
-
-        notifications.started(NotifyProjectsEvaluatedBuildOperationType.Details, [buildPath: ':'])
-        notifications.started(CalculateTaskGraphBuildOperationType.Details, [buildPath: ':'])
-        notifications.finished(CalculateTaskGraphBuildOperationType.Result, [excludedTaskPaths: [], requestedTaskPaths: [":t"]])
-        notifications.started(ExecuteTaskBuildOperationType.Details, [taskPath: ":t", buildPath: ":", taskClass: "org.gradle.api.DefaultTask"])
-        notifications.finished(ExecuteTaskBuildOperationType.Result, [actionable: false, originExecutionTime: null, cachingDisabledReasonMessage: "Cacheability was not determined", upToDateMessages: null, cachingDisabledReasonCategory: "UNKNOWN", skipMessage: "UP-TO-DATE", originBuildInvocationId: null])
+        notifications.finished(ExecuteTaskBuildOperationType.Result, [actionable: false, originExecutionTime: null, cachingDisabledReasonMessage: "Cacheability was not determined", upToDateMessages: [], cachingDisabledReasonCategory: "UNKNOWN", skipMessage: "UP-TO-DATE", originBuildInvocationId: null])
     }
 
     def "can emit notifications for nested builds"() {
@@ -126,7 +101,7 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         file("a/settings.gradle") << ""
         file("settings.gradle") << "includeBuild 'a'"
         buildScript """
-           ${notifications.registerListenerWithDrainRecordings()}
+           ${notifications.registerListener()}
             task t {
                 dependsOn gradle.includedBuild("a").task(":t")
             }
@@ -135,12 +110,10 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         succeeds "t"
 
         then:
-        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":"])
-
-        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":"])
-        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":buildSrc"])
-        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":a"])
-        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":a:buildSrc"])
+        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":", includedBy: null])
+        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":buildSrc", includedBy: ":"])
+        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":a", includedBy: ":"])
+        notifications.started(LoadBuildBuildOperationType.Details, [buildPath: ":a:buildSrc", includedBy: ":a"])
 
         notifications.started(EvaluateSettingsBuildOperationType.Details, [settingsDir: file('buildSrc').absolutePath, settingsFile: file('buildSrc/settings.gradle').absolutePath, buildPath: ":buildSrc"])
         notifications.started(EvaluateSettingsBuildOperationType.Details, [settingsDir: file('a').absolutePath, settingsFile: file('a/settings.gradle').absolutePath, buildPath: ":a"])
@@ -236,11 +209,10 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
                 ${notifications.registerListener()}
             }
         """
-
+        settingsFile << "rootProject.name = 'parent'"
         buildScript """
             task t(type: GradleBuild) {
                 tasks = ["o"]
-                startParameter.searchUpwards = false
             }
             task o
         """
@@ -248,7 +220,7 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         succeeds "t", "-I", initScript.absolutePath
 
         then:
-        executedTasks.find { it.endsWith(":o") }
+        executed(":parent:o")
 
         notifications.started(ConfigureProjectBuildOperationType.Details, [buildPath: ":", projectPath: ":"])
         notifications.started(ConfigureProjectBuildOperationType.Details) {
@@ -282,7 +254,7 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         given:
         file("buildSrc/build.gradle") << ""
         file("build.gradle") << """
-            ${notifications.registerListenerWithDrainRecordings()}
+            ${notifications.registerListener()}
             task t
         """
 
@@ -290,7 +262,7 @@ class BuildOperationNotificationIntegrationTest extends AbstractIntegrationSpec 
         succeeds "t"
 
         then:
-        output.contains(":buildSrc:compileJava") // executedTasks check fails with in process executer
+        result.assertTaskExecuted(":buildSrc:compileJava")
         notifications.recordedOps.findAll { it.detailsType == ConfigureProjectBuildOperationType.Details.name }.size() == 2
         notifications.recordedOps.findAll { it.detailsType == ExecuteTaskBuildOperationType.Details.name }.size() == 14 // including all buildSrc task execution events
     }

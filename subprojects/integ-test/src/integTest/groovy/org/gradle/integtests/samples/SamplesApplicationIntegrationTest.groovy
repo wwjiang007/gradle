@@ -16,76 +16,90 @@
 package org.gradle.integtests.samples
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.RepoScriptBlockUtil
 import org.gradle.integtests.fixtures.Sample
 import org.gradle.integtests.fixtures.ScriptExecuter
 import org.gradle.test.fixtures.file.TestFile
+import org.gradle.util.Requires
 import org.junit.Rule
 import spock.lang.Unroll
 
+import static org.gradle.util.TestPrecondition.KOTLIN_SCRIPT
+
+@Requires(KOTLIN_SCRIPT)
 class SamplesApplicationIntegrationTest extends AbstractIntegrationSpec {
 
     @Rule Sample sample = new Sample(temporaryFolder, 'application')
 
     def setup() {
-        executer.usingInitScript(RepoScriptBlockUtil.createMirrorInitScript())
+        executer.withRepositoryMirrors()
     }
 
-    def canRunTheApplicationUsingRunTask() {
+    @Unroll
+    def "can run the application using run task with #dsl dsl"() {
         when:
-        executer.inDirectory(sample.dir)
+        executer.inDirectory(sample.dir.file(dsl))
         succeeds('run')
 
         then:
         outputContains('Greetings from the sample application.')
+
+        where:
+        dsl << ['groovy', 'kotlin']
     }
 
     @Unroll
-    def canBuildAndRunTheInstalledApplication() {
+    def "can build and run the installed application with #dsl dsl"() {
         when:
-        appendExecutableDir(executableDir)
-        executer.inDirectory(sample.dir)
+        def dslDir = sample.dir.file(dsl)
+        appendExecutableDir(dslDir, executableDir)
+        executer.inDirectory(dslDir)
         succeeds('installDist')
 
         then:
-        def installDir = sample.dir.file('build/install/application')
+        def installDir = dslDir.file('build/install/my-app')
         installDir.assertIsDir()
 
         checkApplicationImage(installDir, executableDir)
 
         where:
         executableDir << ['bin', 'customBin']
+        dsl << ['groovy', 'kotlin']
     }
 
     @Unroll
-    def canBuildAndRunTheZippedDistribution() {
+    def "can build and run the zipped distribution with #dsl dsl"() {
         when:
-        appendExecutableDir(executableDir)
-        executer.inDirectory(sample.dir)
+        def dslDir = sample.dir.file(dsl)
+        appendExecutableDir(dslDir, executableDir)
+        executer.inDirectory(dslDir)
         succeeds('distZip')
 
         then:
-        def distFile = sample.dir.file('build/distributions/application-1.0.2.zip')
+        def distFile = dslDir.file('build/distributions/my-app-1.0.2.zip')
         distFile.assertIsFile()
 
-        def installDir = sample.dir.file('unzip')
+        def installDir = dslDir.file('unzip')
         distFile.usingNativeTools().unzipTo(installDir)
 
-        checkApplicationImage(installDir.file('application-1.0.2'), executableDir)
+        checkApplicationImage(installDir.file('my-app-1.0.2'), executableDir)
 
         where:
+        dsl << ['groovy', 'kotlin']
         executableDir << ['bin', 'customBin']
     }
 
-    private void appendExecutableDir(String executableDir) {
-        sample.dir.file('build.gradle') << """
-executableDir = '${executableDir}' 
+    private void appendExecutableDir(TestFile dslDir, String executableDir) {
+        def extension = dslDir.name == 'groovy' ? 'gradle' : 'gradle.kts'
+        dslDir.file("build.$extension") << """
+application {
+    executableDir = "${executableDir}" 
+}
 """
     }
 
     private void checkApplicationImage(TestFile installDir, String executableDir) {
-        installDir.file("${executableDir}/application").assertIsFile()
-        installDir.file("${executableDir}/application.bat").assertIsFile()
+        installDir.file("${executableDir}/my-app").assertIsFile()
+        installDir.file("${executableDir}/my-app.bat").assertIsFile()
         installDir.file('lib/application-1.0.2.jar').assertIsFile()
         installDir.file('lib/commons-collections-3.2.2.jar').assertIsFile()
 
@@ -94,7 +108,7 @@ executableDir = '${executableDir}'
 
         def builder = new ScriptExecuter()
         builder.workingDir installDir.file(executableDir)
-        builder.executable 'application'
+        builder.executable 'my-app'
         builder.standardOutput = new ByteArrayOutputStream()
         builder.errorOutput = new ByteArrayOutputStream()
 

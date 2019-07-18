@@ -17,6 +17,12 @@
 package org.gradle.internal.service.scopes;
 
 import org.gradle.StartParameter;
+import org.gradle.api.internal.CollectionCallbackActionDecorator;
+import org.gradle.api.internal.DefaultCollectionCallbackActionDecorator;
+import org.gradle.configuration.internal.DefaultListenerBuildOperationDecorator;
+import org.gradle.configuration.internal.DefaultUserCodeApplicationContext;
+import org.gradle.configuration.internal.ListenerBuildOperationDecorator;
+import org.gradle.configuration.internal.UserCodeApplicationContext;
 import org.gradle.initialization.DefaultGradleLauncherFactory;
 import org.gradle.initialization.GradleLauncherFactory;
 import org.gradle.internal.concurrent.CompositeStoppable;
@@ -59,7 +65,6 @@ import java.io.IOException;
  * It, importantly, is not the parent of build session scope services.
  */
 public class CrossBuildSessionScopeServices implements Closeable {
-
     private final BuildOperationTrace buildOperationTrace;
     private final BuildOperationNotificationBridge buildOperationNotificationBridge;
     private final LoggingBuildOperationProgressBroadcaster loggingBuildOperationProgressBroadcaster;
@@ -90,9 +95,21 @@ public class CrossBuildSessionScopeServices implements Closeable {
         return buildOperationListenerManager;
     }
 
+    LoggingBuildOperationProgressBroadcaster createLoggingBuildOperationProgressBroadcaster() {
+        return loggingBuildOperationProgressBroadcaster;
+    }
+
     BuildOperationExecutor createBuildOperationExecutor() {
         // Wrap to prevent exposing Stoppable, as we don't want to stop at this scope
         return new DelegatingBuildOperationExecutor(services.get(BuildOperationExecutor.class));
+    }
+
+    ListenerBuildOperationDecorator createListenerBuildOperationDecorator() {
+        return services.get(ListenerBuildOperationDecorator.class);
+    }
+
+    UserCodeApplicationContext createUserCodeApplicationContext() {
+        return services.get(UserCodeApplicationContext.class);
     }
 
     BuildOperationNotificationListenerRegistrar createBuildOperationNotificationListenerRegistrar() {
@@ -101,6 +118,10 @@ public class CrossBuildSessionScopeServices implements Closeable {
 
     BuildOperationNotificationValve createBuildOperationNotificationValve() {
         return buildOperationNotificationBridge.getValve();
+    }
+
+    CollectionCallbackActionDecorator createDomainObjectCollectioncallbackActionDecorator(BuildOperationExecutor buildOperationExecutor, UserCodeApplicationContext userCodeApplicationContext) {
+        return services.get(CollectionCallbackActionDecorator.class);
     }
 
     @Override
@@ -147,6 +168,18 @@ public class CrossBuildSessionScopeServices implements Closeable {
                 parallelismConfigurationManager,
                 buildOperationIdFactory
             );
+        }
+
+        UserCodeApplicationContext createUserCodeApplicationContext() {
+            return new DefaultUserCodeApplicationContext();
+        }
+
+        ListenerBuildOperationDecorator createListenerBuildOperationDecorator(BuildOperationExecutor buildOperationExecutor, UserCodeApplicationContext userCodeApplicationContext) {
+            return new DefaultListenerBuildOperationDecorator(buildOperationExecutor, userCodeApplicationContext);
+        }
+
+        CollectionCallbackActionDecorator createDomainObjectCollectioncallbackActionDecorator(BuildOperationExecutor buildOperationExecutor, UserCodeApplicationContext userCodeApplicationContext) {
+            return new DefaultCollectionCallbackActionDecorator(buildOperationExecutor, userCodeApplicationContext);
         }
     }
 }

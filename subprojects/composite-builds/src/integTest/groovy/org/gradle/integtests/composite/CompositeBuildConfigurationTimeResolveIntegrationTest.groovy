@@ -37,7 +37,7 @@ class CompositeBuildConfigurationTimeResolveIntegrationTest extends AbstractComp
         buildA.buildFile << """
             println "Configured buildA"
             task resolve(type: Copy) {
-                from configurations.compile
+                from configurations.compileClasspath
                 into 'libs'
             }
 """
@@ -81,7 +81,7 @@ class CompositeBuildConfigurationTimeResolveIntegrationTest extends AbstractComp
         configured("buildB") == 1
     }
 
-    def "uses substituted dependency when same root build dependency is resolved at both configuration and executiong time"() {
+    def "uses substituted dependency when same root build dependency is resolved at both configuration and execution time"() {
         configurationTimeDependency 'org.test:buildB:1.0'
         dependency 'org.test:buildB:1.0'
 
@@ -171,15 +171,6 @@ class CompositeBuildConfigurationTimeResolveIntegrationTest extends AbstractComp
     }
 
     private void executedInOrder(String... tasks) {
-        def executedTasks = result.executedTasks
-        def beforeTask
-        for (String task : tasks) {
-            result.assertTaskExecuted(task)
-
-            if (beforeTask != null) {
-                assert executedTasks.indexOf(beforeTask) < executedTasks.indexOf(task) : "task ${beforeTask} must be executed before ${task}"
-            }
-            beforeTask = task
-        }
+        result.assertTaskOrder(tasks)
     }
 }

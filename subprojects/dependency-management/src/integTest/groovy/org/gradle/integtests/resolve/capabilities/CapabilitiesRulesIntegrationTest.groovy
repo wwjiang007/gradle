@@ -20,6 +20,7 @@ import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
 import org.gradle.integtests.fixtures.RequiredFeature
 import org.gradle.integtests.fixtures.RequiredFeatures
 import org.gradle.integtests.resolve.AbstractModuleDependencyResolveTest
+import spock.lang.Unroll
 
 class CapabilitiesRulesIntegrationTest extends AbstractModuleDependencyResolveTest {
 
@@ -66,10 +67,18 @@ class CapabilitiesRulesIntegrationTest extends AbstractModuleDependencyResolveTe
         fails ':checkDeps'
 
         then:
-        failure.assertHasCause("Cannot choose between cglib:cglib-nodep:3.2.5 and cglib:cglib:3.2.5 because they provide the same capability: cglib:cglib:3.2.5")
+        def variant = 'runtime'
+        if (!isGradleMetadataEnabled() && useIvy()) {
+            variant = 'default'
+        }
+        failure.assertHasCause("""Module 'cglib:cglib-nodep' has been rejected:
+   Cannot select module with conflict on capability 'cglib:cglib:3.2.5' also provided by [cglib:cglib:3.2.5($variant)]""")
+        failure.assertHasCause("""Module 'cglib:cglib' has been rejected:
+   Cannot select module with conflict on capability 'cglib:cglib:3.2.5' also provided by [cglib:cglib-nodep:3.2.5($variant)]""")
     }
 
-    def "can detect conflict with capability in different versions and upgrade automatically to latest version"() {
+    @Unroll
+    def "can detect conflict with capability in different versions (#rule)"() {
         given:
         repository {
             'cglib:cglib:3.2.5'()
@@ -98,6 +107,10 @@ class CapabilitiesRulesIntegrationTest extends AbstractModuleDependencyResolveTe
                   withModule('cglib:cglib-nodep', CapabilityRule)
                }
             }
+            
+            configurations.conf.resolutionStrategy.capabilitiesResolution {
+                $rule
+            }
         """
 
         when:
@@ -115,10 +128,17 @@ class CapabilitiesRulesIntegrationTest extends AbstractModuleDependencyResolveTe
         resolve.expectGraph {
             root(":", ":test:") {
                 edge('cglib:cglib-nodep:3.2.4', 'cglib:cglib:3.2.5')
-                    .byConflictResolution('latest version of capability cglib:cglib')
+                    .byConflictResolution(reason)
                 module('cglib:cglib:3.2.5')
             }
         }
+
+        where:
+        rule                                                                               | reason
+        'all { selectHighestVersion() }'                                                   | 'latest version of capability cglib:cglib'
+        'withCapability("cglib:cglib") { selectHighestVersion() }'                         | 'latest version of capability cglib:cglib'
+        'withCapability("cglib", "cglib") { selectHighestVersion() }'                      | 'latest version of capability cglib:cglib'
+        'all { select(candidates.find { it.module == "cglib" }) because "custom reason" }' | 'On capability cglib:cglib custom reason'
     }
 
     def "can detect conflict between local project and capability from external dependency"() {
@@ -168,7 +188,8 @@ class CapabilitiesRulesIntegrationTest extends AbstractModuleDependencyResolveTe
         fails ':checkDeps'
 
         then:
-        failure.assertHasCause("Cannot choose between :test:unspecified and org:test:1.0 because they provide the same capability: org:capability:1.0")
+        failure.assertHasCause("""Module 'org:test' has been rejected:
+   Cannot select module with conflict on capability 'org:capability:1.0' also provided by [:test:unspecified(conf)]""")
     }
 
     @RequiredFeatures(

@@ -32,14 +32,14 @@ public class DeprecatedFeatureUsage extends FeatureUsage {
 
     public DeprecatedFeatureUsage(
         String summary,
-        @Nullable String removalDetails,
+        String removalDetails,
         @Nullable String advice,
         @Nullable String contextualAdvice,
         Type type,
         Class<?> calledFrom
     ) {
         super(summary, calledFrom);
-        this.removalDetails = removalDetails;
+        this.removalDetails = Preconditions.checkNotNull(removalDetails);
         this.advice = advice;
         this.contextualAdvice = contextualAdvice;
         this.type = Preconditions.checkNotNull(type);
@@ -119,6 +119,7 @@ public class DeprecatedFeatureUsage extends FeatureUsage {
         return type;
     }
 
+    @Override
     public String formattedMessage() {
         StringBuilder outputBuilder = new StringBuilder(getSummary());
         append(outputBuilder, removalDetails);
@@ -127,9 +128,9 @@ public class DeprecatedFeatureUsage extends FeatureUsage {
         return outputBuilder.toString();
     }
 
-    private void append(StringBuilder outputBuilder, String removalDetails) {
-        if (!StringUtils.isEmpty(removalDetails)) {
-            outputBuilder.append(" ").append(removalDetails);
+    private void append(StringBuilder outputBuilder, String message) {
+        if (!StringUtils.isEmpty(message)) {
+            outputBuilder.append(" ").append(message);
         }
     }
 

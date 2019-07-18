@@ -164,6 +164,19 @@ class FilteringClassLoaderTest extends Specification {
         canSeePackage('org.junit.runner')
     }
 
+    void passesThroughDefaultPackage() {
+        given:
+        cannotLoadClass(ClassInDefaultPackage)
+
+        and:
+        withSpec { FilteringClassLoader.Spec spec ->
+            spec.allowPackage(FilteringClassLoader.DEFAULT_PACKAGE)
+        }
+
+        expect:
+        canLoadClass(ClassInDefaultPackage)
+    }
+
     void passesThroughResourcesInSpecifiedPackages() {
         given:
         cannotSeeResource('org/gradle/util/ClassLoaderTest.txt')
@@ -223,6 +236,18 @@ class FilteringClassLoaderTest extends Specification {
 
         expect:
         cannotLoadClass(Test)
+    }
+
+    void "allow class wins over disallow package"() {
+        given:
+        withSpec { FilteringClassLoader.Spec spec ->
+            spec.disallowPackage("org.junit")
+            spec.allowClass(Test)
+        }
+
+        expect:
+        canLoadClass(Test)
+        cannotLoadClass(Before)
     }
 
     void "visits self and parent"() {

@@ -17,24 +17,27 @@
 package org.gradle.process.internal.worker.request;
 
 import org.gradle.api.Action;
-import org.gradle.api.internal.AsmBackedClassGenerator;
-import org.gradle.api.internal.DefaultInstantiatorFactory;
-import org.gradle.api.internal.InstantiatorFactory;
-import org.gradle.cache.internal.CrossBuildInMemoryCacheFactory;
+import org.gradle.cache.internal.DefaultCrossBuildInMemoryCacheFactory;
 import org.gradle.internal.UncheckedException;
+import org.gradle.internal.concurrent.Stoppable;
+import org.gradle.internal.dispatch.StreamCompletion;
 import org.gradle.internal.event.DefaultListenerManager;
+import org.gradle.internal.instantiation.DefaultInstantiatorFactory;
+import org.gradle.internal.instantiation.InstantiatorFactory;
 import org.gradle.internal.operations.CurrentBuildOperationRef;
-import org.gradle.internal.operations.BuildOperationRef;
 import org.gradle.internal.remote.ObjectConnection;
 import org.gradle.internal.remote.internal.hub.StreamFailureHandler;
+import org.gradle.internal.service.DefaultServiceRegistry;
+import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.process.internal.worker.WorkerProcessContext;
 
 import java.io.Serializable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 
-public class WorkerAction implements Action<WorkerProcessContext>, Serializable, RequestProtocol, StreamFailureHandler {
+public class WorkerAction implements Action<WorkerProcessContext>, Serializable, RequestProtocol, StreamFailureHandler, Stoppable, StreamCompletion {
     private final String workerImplementationName;
     private transient CountDownLatch completed;
     private transient ResponseProtocol responder;
@@ -51,11 +54,18 @@ public class WorkerAction implements Action<WorkerProcessContext>, Serializable,
     public void execute(WorkerProcessContext workerProcessContext) {
         completed = new CountDownLatch(1);
         try {
+            ServiceRegistry parentServices = workerProcessContext.getServiceRegistry();
             if (instantiatorFactory == null) {
-                instantiatorFactory = new DefaultInstantiatorFactory(new AsmBackedClassGenerator(), new CrossBuildInMemoryCacheFactory(new DefaultListenerManager()));
+                instantiatorFactory = new DefaultInstantiatorFactory(new DefaultCrossBuildInMemoryCacheFactory(new DefaultListenerManager()), Collections.emptyList());
             }
+            DefaultServiceRegistry serviceRegistry = new DefaultServiceRegistry("worker-action-services", parentServices);
+            // Make the argument serializers available so work implementations can register their own serializers
+            RequestArgumentSerializers argumentSerializers = new RequestArgumentSerializers();
+            serviceRegistry.add(RequestArgumentSerializers.class, argumentSerializers);
+            serviceRegistry.add(InstantiatorFactory.class, instantiatorFactory);
+            workerProcessContext.getServerConnection().useParameterSerializers(RequestSerializerRegistry.create(this.getClass().getClassLoader(), argumentSerializers));
             workerImplementation = Class.forName(workerImplementationName);
-            implementation = instantiatorFactory.inject(workerProcessContext.getServiceRegistry()).newInstance(workerImplementation);
+            implementation = instantiatorFactory.inject(serviceRegistry).newInstance(workerImplementation);
         } catch (Throwable e) {
             failure = e;
         }
@@ -79,26 +89,33 @@ public class WorkerAction implements Action<WorkerProcessContext>, Serializable,
     }
 
     @Override
-    public void runThenStop(String methodName, Class<?>[] paramTypes, Object[] args, BuildOperationRef buildOperation) {
+    public void endStream() {
+        // This happens when the connection between the worker and the build daemon is closed for some reason,
+        // possibly because the build daemon died unexpectedly.
+        stop();
+    }
+
+    @Override
+    public void runThenStop(Request request) {
         try {
-            run(methodName, paramTypes, args, buildOperation);
+            run(request);
         } finally {
             stop();
         }
     }
 
     @Override
-    public void run(String methodName, Class<?>[] paramTypes, Object[] args, BuildOperationRef buildOperation) {
+    public void run(Request request) {
         if (failure != null) {
             responder.infrastructureFailed(failure);
             return;
         }
         try {
-            Method method = workerImplementation.getDeclaredMethod(methodName, paramTypes);
-            CurrentBuildOperationRef.instance().set(buildOperation);
+            Method method = workerImplementation.getDeclaredMethod(request.getMethodName(), request.getParamTypes());
+            CurrentBuildOperationRef.instance().set(request.getBuildOperation());
             Object result;
             try {
-                result = method.invoke(implementation, args);
+                result = method.invoke(implementation, request.getArgs());
             } catch (InvocationTargetException e) {
                 Throwable failure = e.getCause();
                 if (failure instanceof NoClassDefFoundError) {

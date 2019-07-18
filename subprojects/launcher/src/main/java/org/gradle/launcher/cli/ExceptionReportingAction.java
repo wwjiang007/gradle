@@ -16,9 +16,9 @@
 package org.gradle.launcher.cli;
 
 import org.gradle.api.Action;
+import org.gradle.initialization.ReportedException;
 import org.gradle.internal.logging.LoggingOutputInternal;
 import org.gradle.launcher.bootstrap.ExecutionListener;
-import org.gradle.initialization.ReportedException;
 
 public class ExceptionReportingAction implements Action<ExecutionListener> {
     private final Action<ExecutionListener> action;
@@ -31,6 +31,7 @@ public class ExceptionReportingAction implements Action<ExecutionListener> {
         this.loggingOutput = loggingOutput;
     }
 
+    @Override
     public void execute(ExecutionListener executionListener) {
         try {
             try {
@@ -39,7 +40,8 @@ public class ExceptionReportingAction implements Action<ExecutionListener> {
                 loggingOutput.flush();
             }
         } catch (ReportedException e) {
-            executionListener.onFailure(e.getCause());
+            // Exception has already been reported
+            executionListener.onFailure(e);
         } catch (Throwable t) {
             reporter.execute(t);
             executionListener.onFailure(t);

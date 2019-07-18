@@ -22,8 +22,9 @@ import org.gradle.api.internal.initialization.ClassLoaderScope;
 import org.gradle.api.internal.plugins.PluginAwareInternal;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.invocation.Gradle;
-import org.gradle.execution.TaskExecutionGraphInternal;
+import org.gradle.execution.taskgraph.TaskExecutionGraphInternal;
 import org.gradle.internal.build.BuildState;
+import org.gradle.internal.build.PublicBuildPath;
 import org.gradle.internal.scan.UsedByScanPlugin;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.scopes.ServiceRegistryFactory;
@@ -41,8 +42,11 @@ public interface GradleInternal extends Gradle, PluginAwareInternal {
     /**
      * {@inheritDoc}
      */
+    @Override
     ProjectInternal getRootProject() throws IllegalStateException;
 
+    @Override
+    @Nullable
     GradleInternal getParent();
 
     GradleInternal getRoot();
@@ -55,6 +59,7 @@ public interface GradleInternal extends Gradle, PluginAwareInternal {
     /**
      * {@inheritDoc}
      */
+    @Override
     TaskExecutionGraphInternal getTaskGraph();
 
     /**
@@ -129,4 +134,17 @@ public interface GradleInternal extends Gradle, PluginAwareInternal {
     void setIdentityPath(Path path);
 
     String contextualize(String description);
+
+    PublicBuildPath getPublicBuildPath();
+
+    enum BuildType {
+        NONE,
+        TASKS,
+        MODEL
+    }
+
+    void setBuildType(BuildType buildType);
+
+    BuildType getBuildType();
+
 }

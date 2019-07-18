@@ -2,9 +2,8 @@
 // and make available to all Kotlin DSL users
 package org.gradle.kotlin.dsl
 
-import org.gradle.api.Named
 import org.gradle.api.Project
-import org.gradle.api.model.ObjectFactory
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.concurrent.Callable
 
@@ -25,15 +24,26 @@ fun <T> deferred(value: () -> T): Any =
     Callable { value() }
 
 
-/**
- * See [ObjectFactory.named].
- */
-inline fun <reified T : Named> ObjectFactory.named(name: String): T =
-    named(T::class.java, name)
+fun Project.execAndGetStdout(workingDir: File, vararg args: String): String {
+    val out = ByteArrayOutputStream()
+    exec {
+        isIgnoreExitValue = true
+        commandLine(*args)
+        standardOutput = out
+        this.workingDir = workingDir
+    }
+    return out.toString().trim()
+}
+
+
+fun Project.execAndGetStdout(vararg args: String) = execAndGetStdout(File("."), *args)
 
 
 fun Project.stringPropertyOrNull(projectPropertyName: String): String? =
     project.findProperty(projectPropertyName) as? String
+
+
+fun Project.stringPropertyOrEmpty(projectPropertyName: String): String = stringPropertyOrNull(projectPropertyName) ?: ""
 
 
 fun Project.selectStringProperties(vararg propertyNames: String): Map<String, String> =

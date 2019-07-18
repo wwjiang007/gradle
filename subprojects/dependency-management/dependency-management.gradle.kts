@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import org.gradle.build.ClasspathManifest
 import org.gradle.gradlebuild.testing.integrationtests.cleanup.WhenNotEmpty
 import org.gradle.gradlebuild.unittestandcompile.ModuleType
 
@@ -23,55 +22,103 @@ plugins {
 }
 
 dependencies {
-    api(project(":core"))
-    api(project(":versionControl"))
+    api(library("jsr305"))
 
+    implementation(project(":baseServices"))
+    implementation(project(":messaging"))
+    implementation(project(":native"))
+    implementation(project(":logging"))
+    implementation(project(":files"))
+    implementation(project(":fileCollections"))
+    implementation(project(":persistentCache"))
+    implementation(project(":coreApi"))
+    implementation(project(":modelCore"))
+    implementation(project(":baseServicesGroovy"))
+    implementation(project(":buildCache"))
+    implementation(project(":core"))
     implementation(project(":resources"))
     implementation(project(":resourcesHttp"))
+    implementation(project(":snapshots"))
+    implementation(project(":execution"))
 
+    implementation(library("slf4j_api"))
+    implementation(library("groovy"))
     implementation(library("asm"))
     implementation(library("asm_commons"))
     implementation(library("asm_util"))
+    implementation(library("guava"))
     implementation(library("commons_lang"))
     implementation(library("commons_io"))
-    implementation(library("ivy"))
-    implementation(library("slf4j_api"))
+    implementation(library("commons_httpclient"))
+    implementation(library("inject"))
     implementation(library("gson"))
-    implementation(library("jcip"))
+    implementation(library("ant"))
+    implementation(library("ivy"))
     implementation(library("maven3"))
 
     runtimeOnly(library("bouncycastle_provider"))
     runtimeOnly(project(":installationBeacon"))
     runtimeOnly(project(":compositeBuilds"))
+    runtimeOnly(project(":versionControl"))
 
+    testImplementation(project(":processServices"))
+    testImplementation(project(":diagnostics"))
+    testImplementation(project(":buildCachePackaging"))
     testImplementation(library("nekohtml"))
+    testImplementation(testFixtures(project(":core")))
+    testImplementation(testFixtures(project(":messaging")))
+    testImplementation(testFixtures(project(":coreApi")))
+    testImplementation(testFixtures(project(":versionControl")))
+    testImplementation(testFixtures(project(":resourcesHttp")))
+    testImplementation(testFixtures(project(":baseServices")))
+    testImplementation(testFixtures(project(":snapshots")))
+    testImplementation(testFixtures(project(":execution")))
+
+    testRuntimeOnly(project(":runtimeApiInfo"))
+
+    integTestImplementation(project(":buildOption"))
+    integTestImplementation(library("jansi"))
+    integTestImplementation(library("ansi_control_sequence_util"))
+    integTestImplementation(testLibrary("jetty")) {
+        because("tests use HttpServlet directly")
+    }
 
     integTestRuntimeOnly(project(":ivy"))
     integTestRuntimeOnly(project(":maven"))
     integTestRuntimeOnly(project(":resourcesS3"))
     integTestRuntimeOnly(project(":resourcesSftp"))
     integTestRuntimeOnly(project(":testKit"))
+    integTestRuntimeOnly(project(":kotlinDsl"))
 
-    testFixturesCompile(project(":resourcesHttp", "testFixturesUsageCompile"))
+    testFixturesApi(project(":baseServices")) {
+        because("Test fixtures export the Action class")
+    }
+    testFixturesApi(project(":persistentCache")) {
+        because("Test fixtures export the CacheAccess class")
+    }
+
+    testFixturesApi(testLibrary("jetty"))
+    testFixturesImplementation(project(":core"))
+    testFixturesImplementation(testFixtures(project(":core")))
+    testFixturesImplementation(testFixtures(project(":resourcesHttp")))
+    testFixturesImplementation(project(":coreApi"))
+    testFixturesImplementation(project(":messaging"))
+    testFixturesImplementation(project(":internalTesting"))
     testFixturesImplementation(project(":internalIntegTesting"))
+    testFixturesImplementation(library("slf4j_api"))
+    testFixturesImplementation(library("inject"))
+
+    crossVersionTestRuntimeOnly(project(":maven"))
 }
 
 gradlebuildJava {
     moduleType = ModuleType.CORE
 }
 
-testFixtures {
-    from(":core")
-    from(":messaging")
-    from(":modelCore")
-    from(":versionControl")
-    from(":resourcesHttp")
-}
-
 testFilesCleanup {
     policy.set(WhenNotEmpty.REPORT)
 }
 
-tasks.named("classpathManifest").configureAs<ClasspathManifest> {
-    additionalProjects = listOf(project(":runtimeApiInfo"))
+tasks.classpathManifest {
+    additionalProjects.add(":runtimeApiInfo")
 }

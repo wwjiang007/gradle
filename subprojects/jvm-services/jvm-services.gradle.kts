@@ -5,18 +5,23 @@ import org.gradle.gradlebuild.unittestandcompile.ModuleType
  */
 plugins {
     `java-library`
-    id("gradlebuild.classycle")
+    gradlebuild.classycle
 }
 
 dependencies {
-    api(project(":baseServices"))
-    api(project(":processServices"))
+    implementation(project(":baseServices"))
+    implementation(project(":processServices"))
+
+    testImplementation(project(":native"))
+    testImplementation(project(":coreApi"))
+    testImplementation(project(":fileCollections"))
+    testImplementation(project(":snapshots"))
+    testImplementation(project(":resources"))
+    testImplementation(library("slf4j_api"))
+    testImplementation(testFixtures(project(":core")))
 }
 
 gradlebuildJava {
-    moduleType = ModuleType.ENTRY_POINT
+    moduleType = ModuleType.CORE
 }
 
-testFixtures {
-    from(":core")
-}

@@ -16,72 +16,17 @@
 
 package org.gradle.api.internal.tasks.compile.incremental.recomp;
 
-import org.gradle.api.internal.changedetection.rules.FileChange;
-import org.gradle.api.internal.tasks.compile.incremental.classpath.ClasspathEntrySnapshot;
-import org.gradle.api.internal.tasks.compile.incremental.classpath.ClasspathSnapshot;
-import org.gradle.internal.file.FileType;
-import org.gradle.internal.util.Alignment;
+import org.gradle.api.internal.tasks.compile.JavaCompileSpec;
 
-import java.io.File;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+/**
+ * In a typical incremental recompilation, there're two steps:
+ * First, examine the incremental change files to get the classes to be recompiled: {@link #provideRecompilationSpec(CurrentCompilation, PreviousCompilation)}
+ * Second, initialize the recompilation (e.g. delete stale class files and narrow down the source files to be recompiled): {@link #initializeCompilation(JavaCompileSpec, RecompilationSpec)}
+ */
+public interface RecompilationSpecProvider {
+    boolean isIncremental();
 
-public class RecompilationSpecProvider {
+    RecompilationSpec provideRecompilationSpec(CurrentCompilation current, PreviousCompilation previous);
 
-    private final SourceToNameConverter sourceToNameConverter;
-
-    public RecompilationSpecProvider(SourceToNameConverter sourceToNameConverter) {
-        this.sourceToNameConverter = sourceToNameConverter;
-    }
-
-    public RecompilationSpec provideRecompilationSpec(CurrentCompilation current, PreviousCompilation previous) {
-        RecompilationSpec spec = new RecompilationSpec();
-        processClasspathChanges(current, previous, spec);
-        processOtherChanges(current, previous, spec);
-        spec.getClassesToProcess().addAll(previous.getTypesToReprocess());
-        return spec;
-    }
-
-    private void processClasspathChanges(CurrentCompilation current, PreviousCompilation previous, RecompilationSpec spec) {
-        ClasspathEntryChangeProcessor classpathEntryChangeProcessor = new ClasspathEntryChangeProcessor(current.getClasspathSnapshot(), previous);
-        Map<File, ClasspathEntrySnapshot> previousCompilationSnapshots = previous.getSnapshots();
-        ClasspathSnapshot currentSnapshots = current.getClasspathSnapshot();
-
-        Set<File> previousCompilationEntries = previousCompilationSnapshots.keySet();
-        Set<File> currentCompilationEntries = currentSnapshots.getEntries();
-        List<Alignment<File>> alignment = Alignment.align(currentCompilationEntries.toArray(new File[0]), previousCompilationEntries.toArray(new File[0]));
-        for (Alignment<File> fileAlignment : alignment) {
-            switch (fileAlignment.getKind()) {
-                case added:
-                    classpathEntryChangeProcessor.processChange(FileChange.added(fileAlignment.getCurrentValue().getAbsolutePath(), "classpathEntry", FileType.RegularFile), spec);
-                    break;
-                case removed:
-                    classpathEntryChangeProcessor.processChange(FileChange.removed(fileAlignment.getPreviousValue().getAbsolutePath(), "classpathEntry", FileType.RegularFile), spec);
-                    break;
-                case transformed:
-                    // If we detect a transformation in the classpath, we need to recompile, because we could typically be facing the case where
-                    // 2 entries are reversed in the order of classpath elements, and one class that was shadowing the other is now visible
-                    spec.setFullRebuildCause("Classpath has been changed", null);
-                    return;
-                case identical:
-                    File key = fileAlignment.getPreviousValue();
-                    ClasspathEntrySnapshot previousSnapshot = previousCompilationSnapshots.get(key);
-                    ClasspathEntrySnapshot snapshot = currentSnapshots.getSnapshot(key);
-                    if (!snapshot.getHash().equals(previousSnapshot.getHash())) {
-                        classpathEntryChangeProcessor.processChange(FileChange.modified(key.getAbsolutePath(), "classpathEntry", FileType.RegularFile, FileType.RegularFile), spec);
-                    }
-                    break;
-            }
-        }
-    }
-
-    private void processOtherChanges(CurrentCompilation current, PreviousCompilation previous, RecompilationSpec spec) {
-        JavaChangeProcessor javaChangeProcessor = new JavaChangeProcessor(previous, sourceToNameConverter);
-        AnnotationProcessorChangeProcessor annotationProcessorChangeProcessor = new AnnotationProcessorChangeProcessor(current, previous);
-        InputChangeAction action = new InputChangeAction(spec, javaChangeProcessor, annotationProcessorChangeProcessor);
-        current.visitChanges(action);
-    }
-
-
+    void initializeCompilation(JavaCompileSpec spec, RecompilationSpec recompilationSpec);
 }

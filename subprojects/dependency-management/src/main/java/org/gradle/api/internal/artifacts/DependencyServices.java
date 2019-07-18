@@ -16,15 +16,18 @@
 
 package org.gradle.api.internal.artifacts;
 
-import org.gradle.api.internal.artifacts.transform.DefaultTransformInfoFactory;
-import org.gradle.api.internal.artifacts.transform.TransformInfoDependencyResolver;
-import org.gradle.api.internal.artifacts.transform.TransformInfoExecutor;
-import org.gradle.api.internal.artifacts.transform.TransformInfoFactory;
+import org.gradle.api.internal.artifacts.transform.ArtifactTransformListener;
+import org.gradle.api.internal.artifacts.transform.DefaultTransformationNodeRegistry;
+import org.gradle.api.internal.artifacts.transform.TransformationNodeDependencyResolver;
+import org.gradle.api.internal.artifacts.transform.TransformationNodeExecutor;
+import org.gradle.api.internal.artifacts.transform.TransformationNodeRegistry;
+import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.service.ServiceRegistration;
 import org.gradle.internal.service.scopes.AbstractPluginServiceRegistry;
 
 public class DependencyServices extends AbstractPluginServiceRegistry {
+    @Override
     public void registerGlobalServices(ServiceRegistration registration) {
         registration.addProvider(new DependencyManagementGlobalScopeServices());
     }
@@ -32,11 +35,6 @@ public class DependencyServices extends AbstractPluginServiceRegistry {
     @Override
     public void registerGradleUserHomeServices(ServiceRegistration registration) {
         registration.addProvider(new DependencyManagementGradleUserHomeScopeServices());
-    }
-
-    @Override
-    public void registerBuildSessionServices(ServiceRegistration registration) {
-        registration.addProvider(new DependencyManagementBuildSessionServices());
     }
 
     @Override
@@ -49,17 +47,26 @@ public class DependencyServices extends AbstractPluginServiceRegistry {
         registration.addProvider(new DependencyManagementBuildTreeScopeServices());
     }
 
-    private static class DependencyManagementBuildSessionServices {
-        TransformInfoFactory createTransformInfoFactory() {
-            return new DefaultTransformInfoFactory();
+    @Override
+    public void registerGradleServices(ServiceRegistration registration) {
+        registration.addProvider(new DependencyManagementGradleServices());
+    }
+
+    private static class DependencyManagementGradleServices {
+        ArtifactTransformListener createArtifactTransformListener(ListenerManager listenerManager) {
+            return listenerManager.getBroadcaster(ArtifactTransformListener.class);
         }
 
-        TransformInfoDependencyResolver createTransformInfoResolver(TransformInfoFactory transformInfoFactory) {
-            return new TransformInfoDependencyResolver(transformInfoFactory);
+        TransformationNodeRegistry createTransformationNodeRegistry() {
+            return new DefaultTransformationNodeRegistry();
         }
 
-        TransformInfoExecutor createTransformInfoExecutor(BuildOperationExecutor buildOperationExecutor) {
-            return new TransformInfoExecutor(buildOperationExecutor);
+        TransformationNodeDependencyResolver createTransformationNodeDependencyResolver(TransformationNodeRegistry transformationNodeRegistry) {
+            return new TransformationNodeDependencyResolver(transformationNodeRegistry);
+        }
+
+        TransformationNodeExecutor createTransformationNodeExecutor(BuildOperationExecutor buildOperationExecutor, ArtifactTransformListener transformListener) {
+            return new TransformationNodeExecutor(buildOperationExecutor, transformListener);
         }
     }
 }

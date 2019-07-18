@@ -16,43 +16,88 @@
 
 package org.gradle.workers.internal;
 
-import org.gradle.api.internal.AsmBackedClassGenerator;
-import org.gradle.api.internal.DefaultInstantiatorFactory;
-import org.gradle.api.internal.InstantiatorFactory;
-import org.gradle.cache.internal.CrossBuildInMemoryCacheFactory;
-import org.gradle.internal.event.DefaultListenerManager;
-import org.gradle.internal.nativeintegration.ProcessEnvironment;
-import org.gradle.internal.nativeintegration.services.NativeServices;
-import org.gradle.process.internal.worker.child.WorkerDirectoryProvider;
+import org.gradle.internal.hash.ClassLoaderHierarchyHasher;
+import org.gradle.internal.hash.HashCode;
+import org.gradle.internal.instantiation.InstantiatorFactory;
+import org.gradle.internal.isolation.IsolatableFactory;
+import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.internal.service.ServiceRegistryBuilder;
+import org.gradle.internal.service.scopes.WorkerSharedGlobalScopeServices;
+import org.gradle.internal.snapshot.impl.DefaultValueSnapshotter;
+import org.gradle.internal.state.ManagedFactoryRegistry;
+import org.gradle.process.internal.worker.request.RequestArgumentSerializers;
 
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 
-public class WorkerDaemonServer extends DefaultWorkerServer {
-    // Services for this process. They shouldn't be static, make them injectable instead
-    private static final ProcessEnvironment PROCESS_ENVIRONMENT = NativeServices.getInstance().get(ProcessEnvironment.class);
-    private static final InstantiatorFactory INSTANTIATOR_FACTORY = new DefaultInstantiatorFactory(new AsmBackedClassGenerator(), new CrossBuildInMemoryCacheFactory(new DefaultListenerManager()));
-    private final WorkerDirectoryProvider workerDirectoryProvider;
+public class WorkerDaemonServer implements WorkerProtocol {
+    private final ServiceRegistry serviceRegistry;
+    private Worker isolatedClassloaderWorker;
 
     @Inject
-    WorkerDaemonServer(WorkerDirectoryProvider workerDirectoryProvider) {
-        super(INSTANTIATOR_FACTORY.inject());
-        this.workerDirectoryProvider = workerDirectoryProvider;
+    public WorkerDaemonServer(ServiceRegistry parent, RequestArgumentSerializers argumentSerializers) {
+        this.serviceRegistry = createWorkerDaemonServices(parent);
+        argumentSerializers.add(WorkerDaemonMessageSerializer.create());
+    }
+
+    static ServiceRegistry createWorkerDaemonServices(ServiceRegistry parent) {
+        return ServiceRegistryBuilder.builder()
+                .parent(parent)
+                .provider(new WorkerSharedGlobalScopeServices())
+                .provider(new WorkerDaemonServices())
+                .build();
     }
 
     @Override
     public DefaultWorkResult execute(ActionExecutionSpec spec) {
         try {
-            PROCESS_ENVIRONMENT.maybeSetProcessDir(spec.getExecutionWorkingDir());
-            return super.execute(spec);
+            Worker worker = getIsolatedClassloaderWorker(spec.getClassLoaderStructure());
+            return worker.execute(spec);
         } catch (Throwable t) {
             return new DefaultWorkResult(true, t);
-        } finally {
-            PROCESS_ENVIRONMENT.maybeSetProcessDir(workerDirectoryProvider.getIdleWorkingDirectory());
         }
+    }
+
+    private Worker getIsolatedClassloaderWorker(ClassLoaderStructure classLoaderStructure) {
+        if (isolatedClassloaderWorker == null) {
+            if (classLoaderStructure instanceof FlatClassLoaderStructure) {
+                isolatedClassloaderWorker = new FlatClassLoaderWorker(this.getClass().getClassLoader(), serviceRegistry);
+            } else {
+                isolatedClassloaderWorker = new IsolatedClassloaderWorker(classLoaderStructure, this.getClass().getClassLoader(), serviceRegistry, true);
+            }
+        }
+        return isolatedClassloaderWorker;
     }
 
     @Override
     public String toString() {
         return "WorkerDaemonServer{}";
+    }
+
+    private static class WorkerDaemonServices {
+        IsolatableSerializerRegistry createIsolatableSerializerRegistry(ClassLoaderHierarchyHasher classLoaderHierarchyHasher, ManagedFactoryRegistry managedFactoryRegistry) {
+            return new IsolatableSerializerRegistry(classLoaderHierarchyHasher, managedFactoryRegistry);
+        }
+
+        ActionExecutionSpecFactory createActionExecutionSpecFactory(IsolatableFactory isolatableFactory, IsolatableSerializerRegistry serializerRegistry, InstantiatorFactory instantiatorFactory) {
+            return new DefaultActionExecutionSpecFactory(isolatableFactory, serializerRegistry, instantiatorFactory);
+        }
+
+        DefaultValueSnapshotter createValueSnapshotter(ClassLoaderHierarchyHasher classLoaderHierarchyHasher, ManagedFactoryRegistry managedFactoryRegistry) {
+            return new DefaultValueSnapshotter(classLoaderHierarchyHasher, managedFactoryRegistry);
+        }
+
+        ClassLoaderHierarchyHasher createClassLoaderHierarchyHasher() {
+            // Return a dummy implementation of this as creating a real hasher drags ~20 more services
+            // along with it, and a hasher isn't actually needed on the worker process side at the moment.
+            return new ClassLoaderHierarchyHasher() {
+                @Nullable
+                @Override
+                public HashCode getClassLoaderHash(@Nonnull ClassLoader classLoader) {
+                    throw new UnsupportedOperationException();
+                }
+            };
+        }
     }
 }

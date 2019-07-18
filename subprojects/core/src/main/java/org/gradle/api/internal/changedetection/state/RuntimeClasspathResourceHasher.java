@@ -17,17 +17,14 @@
 package org.gradle.api.internal.changedetection.state;
 
 import com.google.common.io.ByteStreams;
-import org.gradle.api.internal.changedetection.state.mirror.PhysicalFileSnapshot;
-import org.gradle.caching.internal.BuildCacheHasher;
 import org.gradle.internal.hash.HashCode;
+import org.gradle.internal.hash.Hasher;
 import org.gradle.internal.hash.Hashing;
 import org.gradle.internal.hash.HashingOutputStream;
-import org.gradle.internal.io.NullOutputStream;
+import org.gradle.internal.snapshot.RegularFileSnapshot;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.zip.ZipEntry;
 
 /**
  * Hashes contents of resources files and {@link ZipEntry}s) in runtime classpath entries.
@@ -38,19 +35,19 @@ public class RuntimeClasspathResourceHasher implements ResourceHasher {
 
     @Nullable
     @Override
-    public HashCode hash(PhysicalFileSnapshot fileSnapshot) {
-        return fileSnapshot.getContentHash();
+    public HashCode hash(RegularFileSnapshot fileSnapshot) {
+        return fileSnapshot.getHash();
     }
 
     @Override
-    public HashCode hash(ZipEntry zipEntry, InputStream zipInput) throws IOException {
-        HashingOutputStream hasher = new HashingOutputStream(Hashing.md5(), NullOutputStream.INSTANCE);
-        ByteStreams.copy(zipInput, hasher);
+    public HashCode hash(ZipEntry zipEntry) throws IOException {
+        HashingOutputStream hasher = Hashing.primitiveStreamHasher();
+        ByteStreams.copy(zipEntry.getInputStream(), hasher);
         return hasher.hash();
     }
 
     @Override
-    public void appendConfigurationToHasher(BuildCacheHasher hasher) {
+    public void appendConfigurationToHasher(Hasher hasher) {
         hasher.putString(getClass().getName());
     }
 }

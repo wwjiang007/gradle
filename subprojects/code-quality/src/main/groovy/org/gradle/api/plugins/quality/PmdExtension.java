@@ -19,6 +19,7 @@ import org.gradle.api.Incubating;
 import org.gradle.api.Project;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.provider.Property;
 import org.gradle.api.resources.TextResource;
 
 import javax.annotation.Nullable;
@@ -40,24 +41,31 @@ public class PmdExtension extends CodeQualityExtension {
     private TextResource ruleSetConfig;
     private ConfigurableFileCollection ruleSetFiles;
     private boolean consoleOutput;
+    private Property<Boolean> incrementalAnalysis;
 
     public PmdExtension(Project project) {
         this.project = project;
+        // TODO: Enable this by default when toolVersion >= 6.0.0 if it's stable enough.
+        this.incrementalAnalysis = project.getObjects().property(Boolean.class).convention(false);
     }
 
     /**
-     * The built-in rule sets to be used. See the <a href="http://pmd.sourceforge.net/rules/index.html">official list</a> of built-in rule sets.
+     * The built-in rule sets to be used. See the <a href="https://pmd.github.io/pmd-6.15.0/pmd_rules_java.html">official list</a> of built-in rule sets.
      *
-     * Example: ruleSets = ["basic", "braces"]
+     * <pre>
+     *     ruleSets = ["category/java/errorprone.xml", "category/java/bestpractices.xml"]
+     * </pre>
      */
     public List<String> getRuleSets() {
         return ruleSets;
     }
 
     /**
-     * The built-in rule sets to be used. See the <a href="http://pmd.sourceforge.net/rules/index.html">official list</a> of built-in rule sets.
+     * The built-in rule sets to be used. See the <a href="https://pmd.github.io/pmd-6.15.0/pmd_rules_java.html">official list</a> of built-in rule sets.
      *
-     * Example: ruleSets = ["basic", "braces"]
+     * <pre>
+     *     ruleSets = ["category/java/errorprone.xml", "category/java/bestpractices.xml"]
+     * </pre>
      */
     public void setRuleSets(List<String> ruleSets) {
         this.ruleSets = ruleSets;
@@ -66,7 +74,9 @@ public class PmdExtension extends CodeQualityExtension {
     /**
      * Convenience method for adding rule sets.
      *
-     * Example: ruleSets "basic", "braces"
+     * <pre>
+     *     ruleSets "category/java/errorprone.xml", "category/java/bestpractices.xml"
+     * </pre>
      *
      * @param ruleSets the rule sets to be added
      */
@@ -107,9 +117,10 @@ public class PmdExtension extends CodeQualityExtension {
      *
      * See the official documentation for the <a href="http://pmd.sourceforge.net/rule-guidelines.html">list of priorities</a>.
      *
-     * Example: rulePriority = 3
+     * <pre>
+     *     rulePriority = 3
+     * </pre>
      */
-    @Incubating
     public int getRulePriority() {
         return rulePriority;
     }
@@ -117,7 +128,6 @@ public class PmdExtension extends CodeQualityExtension {
     /**
      * Sets the rule priority threshold.
      */
-    @Incubating
     public void setRulePriority(int intValue) {
         Pmd.validate(intValue);
         rulePriority = intValue;
@@ -128,11 +138,12 @@ public class PmdExtension extends CodeQualityExtension {
      *
      * See the <a href="http://pmd.sourceforge.net/howtomakearuleset.html">official documentation</a> for how to author a rule set.
      *
-     * Example: ruleSetConfig = resources.text.fromFile("config/pmd/myRuleSet.xml")
+     * <pre>
+     *     ruleSetConfig = resources.text.fromFile("config/pmd/myRuleSet.xml")
+     * </pre>
      *
      * @since 2.2
      */
-    @Incubating
     @Nullable
     public TextResource getRuleSetConfig() {
         return ruleSetConfig;
@@ -143,19 +154,23 @@ public class PmdExtension extends CodeQualityExtension {
      *
      * See the <a href="http://pmd.sourceforge.net/howtomakearuleset.html">official documentation</a> for how to author a rule set.
      *
-     * Example: ruleSetConfig = resources.text.fromFile("config/pmd/myRuleSet.xml")
+     * <pre>
+     *     ruleSetConfig = resources.text.fromFile("config/pmd/myRuleSet.xml")
+     * </pre>
      *
      * @since 2.2
      */
-    @Incubating
     public void setRuleSetConfig(@Nullable TextResource ruleSetConfig) {
         this.ruleSetConfig = ruleSetConfig;
     }
 
     /**
      * The custom rule set files to be used. See the <a href="http://pmd.sourceforge.net/howtomakearuleset.html">official documentation</a> for how to author a rule set file.
+     * If you want to only use custom rule sets, you must clear {@code ruleSets}.
      *
-     * Example: ruleSetFiles = files("config/pmd/myRuleSet.xml")
+     * <pre>
+     *     ruleSetFiles = files("config/pmd/myRuleSet.xml")
+     * </pre>
      */
     public FileCollection getRuleSetFiles() {
         return ruleSetFiles;
@@ -163,17 +178,22 @@ public class PmdExtension extends CodeQualityExtension {
 
     /**
      * The custom rule set files to be used. See the <a href="http://pmd.sourceforge.net/howtomakearuleset.html">official documentation</a> for how to author a rule set file.
+     * This adds to the default rule sets defined by {@link #getRuleSets()}.
      *
-     * Example: ruleSetFiles = files("config/pmd/myRuleSet.xml")
+     * <pre>
+     *     ruleSetFiles = files("config/pmd/myRuleSets.xml")
+     * </pre>
      */
     public void setRuleSetFiles(FileCollection ruleSetFiles) {
-        this.ruleSetFiles = project.getLayout().configurableFiles(ruleSetFiles);
+        this.ruleSetFiles = project.getObjects().fileCollection().from(ruleSetFiles);
     }
 
     /**
      * Convenience method for adding rule set files.
      *
-     * Example: ruleSetFiles "config/pmd/myRuleSet.xml"
+     * <pre>
+     *     ruleSetFiles "config/pmd/myRuleSet.xml"
+     * </pre>
      *
      * @param ruleSetFiles the rule set files to be added
      */
@@ -184,7 +204,6 @@ public class PmdExtension extends CodeQualityExtension {
     /**
      * Whether or not to write PMD results to {@code System.out}.
      */
-    @Incubating
     public boolean isConsoleOutput() {
         return consoleOutput;
     }
@@ -192,8 +211,19 @@ public class PmdExtension extends CodeQualityExtension {
     /**
      * Whether or not to write PMD results to {@code System.out}.
      */
-    @Incubating
     public void setConsoleOutput(boolean consoleOutput) {
         this.consoleOutput = consoleOutput;
+    }
+
+    /**
+     * Controls whether to use incremental analysis or not.
+     *
+     * This is only supported for PMD 6.0.0 or better. See <a href="https://pmd.github.io/pmd-6.15.0/pmd_userdocs_incremental_analysis.html"></a> for more details.
+     *
+     * @since 5.6
+     */
+    @Incubating
+    public Property<Boolean> getIncrementalAnalysis() {
+        return incrementalAnalysis;
     }
 }

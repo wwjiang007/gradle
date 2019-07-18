@@ -18,7 +18,7 @@ package org.gradle.jvm.test
 
 import groovy.transform.NotYetImplemented
 import org.gradle.integtests.fixtures.DefaultTestExecutionResult
-import org.hamcrest.Matchers
+import org.hamcrest.CoreMatchers
 import spock.lang.Ignore
 import spock.lang.Unroll
 
@@ -56,7 +56,7 @@ class JUnitStandaloneTestExecutionIntegrationTest extends AbstractJUnitTestExecu
         fails ':myTestBinaryTest'
 
         then:
-        failure.assertHasDescription "Could not resolve all dependencies for 'Test suite 'myTest:binary'' source set 'Java source 'myTest:java''"
+        failure.assertHasCause "Could not resolve all dependencies for 'Test suite 'myTest:binary'' source set 'Java source 'myTest:java''"
         failure.assertHasCause "Cannot resolve external dependency junit:junit:4.12 because no repositories are defined."
     }
 
@@ -198,7 +198,7 @@ class JUnitStandaloneTestExecutionIntegrationTest extends AbstractJUnitTestExecu
             .assertTestCount(testCount, testCount, 0)
             .assertTestsExecuted(tests.keySet() as String[])
         tests.each { test, error ->
-            check.assertTestFailed(test, Matchers.equalTo(error))
+            check.assertTestFailed(test, CoreMatchers.equalTo(error))
         }
 
         where:

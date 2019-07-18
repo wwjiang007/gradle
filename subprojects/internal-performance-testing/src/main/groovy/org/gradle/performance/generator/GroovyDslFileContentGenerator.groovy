@@ -27,17 +27,31 @@ class GroovyDslFileContentGenerator extends FileContentGenerator {
     }
 
     @Override
+    protected String noJavaLibraryPluginFlag() {
+        "def noJavaLibraryPlugin = hasProperty('noJavaLibraryPlugin')"
+    }
+
+    @Override
     protected String tasksConfiguration() {
         """
         String compilerMemory = getProperty('compilerMemory')
         String testRunnerMemory = getProperty('testRunnerMemory')
         int testForkEvery = getProperty('testForkEvery') as Integer
+        List<String> javaCompileJvmArgs = findProperty('javaCompileJvmArgs')?.tokenize(';') ?: []
 
-        tasks.withType(JavaCompile) {
+        tasks.withType(AbstractCompile) {
             options.fork = true
             options.incremental = true
             options.forkOptions.memoryInitialSize = compilerMemory
             options.forkOptions.memoryMaximumSize = compilerMemory
+            options.forkOptions.jvmArgs.addAll(javaCompileJvmArgs)
+        }
+
+        tasks.withType(GroovyCompile) {
+            groovyOptions.fork = true
+            groovyOptions.forkOptions.memoryInitialSize = compilerMemory
+            groovyOptions.forkOptions.memoryMaximumSize = compilerMemory
+            groovyOptions.forkOptions.jvmArgs.addAll(javaCompileJvmArgs)
         }
         
         tasks.withType(Test) {
@@ -86,13 +100,18 @@ class GroovyDslFileContentGenerator extends FileContentGenerator {
                 compile.extendsFrom implementation
                 testCompile.extendsFrom testImplementation
             }
+        } else if (noJavaLibraryPlugin) {
+            configurations {
+                ${hasParent ? 'api' : ''}
+                ${hasParent ? 'compile.extendsFrom api' : ''}
+            }
         }
         """
     }
 
     @Override
     protected String directDependencyDeclaration(String configuration, String notation) {
-        "$configuration '$notation'"
+        notation.endsWith('()') ? "$configuration $notation" : "$configuration '$notation'"
     }
 
     @Override

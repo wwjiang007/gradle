@@ -45,7 +45,7 @@ class TestedProjectFixture implements RichConsoleStyling {
             ${RepoScriptBlockUtil.jcenterRepository()}
             
             dependencies {
-                testCompile '${testDependency}'
+                testImplementation '${testDependency}'
             }
             
             tasks.withType(Test) {
@@ -62,8 +62,8 @@ class TestedProjectFixture implements RichConsoleStyling {
         """
     }
 
-    static boolean containsTestExecutionWorkInProgressLine(GradleHandle gradleHandle, String taskPath, String testName) {
-        gradleHandle.standardOutput.contains(workInProgressLine("> $taskPath > Executing test $testName"))
+    static void containsTestExecutionWorkInProgressLine(GradleHandle gradleHandle, String taskPath, String testName) {
+        assertHasWorkInProgress(gradleHandle, "> $taskPath > Executing test $testName")
     }
 
     static class JavaTestClass {

@@ -67,11 +67,15 @@ public class DefaultPathKeyFileStore implements PathKeyFileStore {
         return baseDir;
     }
 
-    private File getFile(String path) {
-        return new File(baseDir, path);
+    private File getFile(String... path) {
+        File result = baseDir;
+        for (String p : path) {
+            result = new File(result, p);
+        }
+        return result;
     }
 
-    private File getFileWhileCleaningInProgress(String path) {
+    private File getFileWhileCleaningInProgress(String... path) {
         File file = getFile(path);
         File markerFile = getInProgressMarkerFile(file);
         if (markerFile.exists()) {
@@ -109,6 +113,7 @@ public class DefaultPathKeyFileStore implements PathKeyFileStore {
 
         try {
             return doAdd(path, new Action<File>() {
+                @Override
                 public void execute(File file) {
                     if (source.isDirectory()) {
                         GFileUtils.moveExistingDirectory(source, file);
@@ -151,6 +156,7 @@ public class DefaultPathKeyFileStore implements PathKeyFileStore {
 
         final Set<LocallyAvailableResource> entries = new HashSet<LocallyAvailableResource>();
         findFiles(pattern).visit(new EmptyFileVisitor() {
+            @Override
             public void visitFile(FileVisitDetails fileDetails) {
                 final File file = fileDetails.getFile();
                 // We cannot clean in progress markers, or in progress files here because
@@ -189,10 +195,10 @@ public class DefaultPathKeyFileStore implements PathKeyFileStore {
     }
 
     @Override
-    public LocallyAvailableResource get(String key) {
-        final File file = getFileWhileCleaningInProgress(key);
+    public LocallyAvailableResource get(String... path) {
+        final File file = getFileWhileCleaningInProgress(path);
         if (file.exists()) {
-            return new DefaultLocallyAvailableResource(getFile(key));
+            return new DefaultLocallyAvailableResource(getFile(path));
         } else {
             return null;
         }

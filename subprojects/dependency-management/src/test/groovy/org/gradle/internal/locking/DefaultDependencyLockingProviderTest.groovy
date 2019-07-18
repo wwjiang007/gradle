@@ -17,12 +17,17 @@
 package org.gradle.internal.locking
 
 import org.gradle.StartParameter
+import org.gradle.api.Action
+import org.gradle.api.artifacts.DependencySubstitution
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.internal.DomainObjectContext
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.api.internal.artifacts.ivyservice.dependencysubstitution.DependencySubstitutionRules
 import org.gradle.api.internal.file.FileResolver
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
+import org.gradle.util.Path
 import org.junit.Rule
 import spock.lang.Specification
 import spock.lang.Subject
@@ -38,21 +43,24 @@ class DefaultDependencyLockingProviderTest extends Specification {
 
     FileResolver resolver = Mock()
     StartParameter startParameter = Mock()
+    DomainObjectContext context = Mock()
+    DependencySubstitutionRules dependencySubstitutionRules = Mock()
 
     @Subject
     DefaultDependencyLockingProvider provider
 
     def setup() {
+        context.identityPath(_) >> { String value -> Path.path(value) }
         resolver.canResolveRelativePath() >> true
         resolver.resolve(LockFileReaderWriter.DEPENDENCY_LOCKING_FOLDER) >> lockDir
         startParameter.getLockedDependenciesToUpdate() >> []
-        provider = new DefaultDependencyLockingProvider(resolver, startParameter)
+        provider = new DefaultDependencyLockingProvider(resolver, startParameter, context, dependencySubstitutionRules)
     }
 
     def 'can persist resolved modules as lockfile'() {
         given:
         startParameter.isWriteDependencyLocks() >> true
-        provider = new DefaultDependencyLockingProvider(resolver, startParameter)
+        provider = new DefaultDependencyLockingProvider(resolver, startParameter, context, dependencySubstitutionRules)
         def modules = [module('org', 'foo', '1.0'), module('org','bar','1.3')] as Set
 
         when:
@@ -82,7 +90,7 @@ org:foo:1.0
         startParameter = Mock()
         startParameter.isWriteDependencyLocks() >> true
         startParameter.getLockedDependenciesToUpdate() >> ['org:foo']
-        provider = new DefaultDependencyLockingProvider(resolver, startParameter)
+        provider = new DefaultDependencyLockingProvider(resolver, startParameter, context, dependencySubstitutionRules)
         lockDir.file('conf.lockfile') << """org:bar:1.3
 org:foo:1.0
 """
@@ -99,7 +107,7 @@ org:foo:1.0
         startParameter = Mock()
         startParameter.isWriteDependencyLocks() >> true
         startParameter.getLockedDependenciesToUpdate() >> ['org:*']
-        provider = new DefaultDependencyLockingProvider(resolver, startParameter)
+        provider = new DefaultDependencyLockingProvider(resolver, startParameter, context, dependencySubstitutionRules)
         lockDir.file('conf.lockfile') << """org:bar:1.3
 org:foo:1.0
 """
@@ -116,7 +124,7 @@ org:foo:1.0
         startParameter = Mock()
         startParameter.isWriteDependencyLocks() >> true
         startParameter.getLockedDependenciesToUpdate() >> ['org.*:foo']
-        provider = new DefaultDependencyLockingProvider(resolver, startParameter)
+        provider = new DefaultDependencyLockingProvider(resolver, startParameter, context, dependencySubstitutionRules)
         lockDir.file('conf.lockfile') << """org.bar:foo:1.3
 com:foo:1.0
 """
@@ -128,6 +136,27 @@ com:foo:1.0
         result.getLockedDependencies() == [newId(DefaultModuleIdentifier.newId('com', 'foo'), '1.0')] as Set
     }
 
+    def 'can filter lock entries impacted by dependency substitutions'() {
+        given:
+        dependencySubstitutionRules.hasRules() >> true
+        Action< DependencySubstitution> substitutionAction = Mock()
+        dependencySubstitutionRules.ruleAction >> substitutionAction
+        substitutionAction.execute(_ as DependencySubstitution) >> { DependencySubstitution ds ->
+            if (ds.requested.displayName.contains('foo')) {
+                ds.useTarget(null)
+            }
+        }
+        lockDir.file('conf.lockfile') << """org:bar:1.1
+org:foo:1.1
+"""
+
+        when:
+        def result = provider.loadLockState('conf')
+
+        then:
+        result.getLockedDependencies() == [newId(DefaultModuleIdentifier.newId('org', 'bar'), '1.1')] as Set
+    }
+
     def 'fails with invalid content in lock file'() {
         given:
         lockDir.file('conf.lockfile') << """invalid"""
@@ -137,7 +166,8 @@ com:foo:1.0
 
         then:
         def ex = thrown(InvalidLockFileException)
-        ex.message == 'Invalid lock file content for configuration \'conf\''
+        1 * context.identityPath('conf') >> Path.path(':conf')
+        ex.message == 'Invalid lock file content for configuration \':conf\''
         ex.cause.message == 'The module notation does not respect the lock file format of \'group:name:version\' - received \'invalid\''
     }
 

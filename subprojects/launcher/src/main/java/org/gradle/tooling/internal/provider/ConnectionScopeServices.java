@@ -16,12 +16,12 @@
 
 package org.gradle.tooling.internal.provider;
 
+import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.initialization.BuildLayoutParameters;
 import org.gradle.initialization.layout.BuildLayoutFactory;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.jvm.inspection.JvmVersionDetector;
 import org.gradle.internal.logging.events.OutputEventListener;
-import org.gradle.internal.logging.services.LoggingServiceRegistry;
 import org.gradle.internal.service.ServiceRegistration;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.scopes.GlobalScopeServices;
@@ -44,20 +44,13 @@ import org.gradle.tooling.internal.provider.serialization.WellKnownClassLoaderRe
  * Shared services for a tooling API provider connection.
  */
 public class ConnectionScopeServices {
-    private final LoggingServiceRegistry loggingServices;
-
-    public ConnectionScopeServices(LoggingServiceRegistry loggingServices) {
-        this.loggingServices = loggingServices;
-    }
-
     void configure(ServiceRegistration serviceRegistration) {
-        serviceRegistration.add(LoggingServiceRegistry.class, loggingServices);
         serviceRegistration.addProvider(new GlobalScopeServices(true));
         serviceRegistration.addProvider(new DaemonClientGlobalServices());
     }
 
-    ShutdownCoordinator createShutdownCoordinator(ListenerManager listenerManager, DaemonClientFactory daemonClientFactory, OutputEventListener outputEventListener) {
-        ServiceRegistry clientServices = daemonClientFactory.createStopDaemonServices(outputEventListener, new DaemonParameters(new BuildLayoutParameters()));
+    ShutdownCoordinator createShutdownCoordinator(ListenerManager listenerManager, DaemonClientFactory daemonClientFactory, OutputEventListener outputEventListener, FileCollectionFactory fileCollectionFactory) {
+        ServiceRegistry clientServices = daemonClientFactory.createStopDaemonServices(outputEventListener, new DaemonParameters(new BuildLayoutParameters(), fileCollectionFactory));
         DaemonStopClient client = clientServices.get(DaemonStopClient.class);
         ShutdownCoordinator shutdownCoordinator = new ShutdownCoordinator(client);
         listenerManager.addListener(shutdownCoordinator);
@@ -69,12 +62,12 @@ public class ConnectionScopeServices {
                                                 BuildLayoutFactory buildLayoutFactory,
                                                 ServiceRegistry serviceRegistry,
                                                 JvmVersionDetector jvmVersionDetector,
+                                                FileCollectionFactory fileCollectionFactory,
                                                 // This is here to trigger creation of the ShutdownCoordinator. Could do this in a nicer way
                                                 ShutdownCoordinator shutdownCoordinator) {
         ClassLoaderCache classLoaderCache = new ClassLoaderCache();
         return new ProviderConnection(
                 serviceRegistry,
-                loggingServices,
                 buildLayoutFactory,
                 daemonClientFactory,
                 buildActionExecuter,
@@ -87,7 +80,8 @@ public class ConnectionScopeServices {
                                         new ModelClassLoaderFactory())),
                                 new ClasspathInferer(),
                                 classLoaderCache))),
-            jvmVersionDetector
+            jvmVersionDetector,
+            fileCollectionFactory
         );
     }
 

@@ -15,8 +15,9 @@
  */
 package org.gradle.cache.internal;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
-import net.jcip.annotations.ThreadSafe;
+import javax.annotation.concurrent.ThreadSafe;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.cache.AsyncCacheAccess;
@@ -165,6 +166,10 @@ public class DefaultCacheAccess implements CacheCoordinator {
         try {
             // Take ownership
             takeOwnershipNow();
+            if (fileLockHeldByOwner != null) {
+                fileLockHeldByOwner.run();
+            }
+            crossProcessCacheAccess.close();
             if (cleanupAction != null) {
                 try {
                     if (cleanupAction.requiresCleanup()) {
@@ -174,10 +179,6 @@ public class DefaultCacheAccess implements CacheCoordinator {
                     LOG.debug("Cache {} could not run cleanup action {}", cacheDisplayName, cleanupAction);
                 }
             }
-            if (fileLockHeldByOwner != null) {
-                fileLockHeldByOwner.run();
-            }
-            crossProcessCacheAccess.close();
             if (cacheClosedCount != 1) {
                 LOG.debug("Cache {} was closed {} times.", cacheDisplayName, cacheClosedCount);
             }
@@ -285,6 +286,7 @@ public class DefaultCacheAccess implements CacheCoordinator {
                 final File cacheFile = new File(baseDir, parameters.getCacheName() + ".bin");
                 LOG.debug("Creating new cache for {}, path {}, access {}", parameters.getCacheName(), cacheFile, this);
                 Factory<BTreePersistentIndexedCache<K, V>> indexedCacheFactory = new Factory<BTreePersistentIndexedCache<K, V>>() {
+                    @Override
                     public BTreePersistentIndexedCache<K, V> create() {
                         return doCreateCache(cacheFile, parameters.getKeySerializer(), parameters.getValueSerializer());
                     }
@@ -399,14 +401,17 @@ public class DefaultCacheAccess implements CacheCoordinator {
             return cacheDisplayName;
         }
 
+        @Override
         public <T> T readFile(Factory<? extends T> action) throws LockTimeoutException {
             return getFileLock().readFile(action);
         }
 
+        @Override
         public void updateFile(Runnable action) throws LockTimeoutException {
             getFileLock().updateFile(action);
         }
 
+        @Override
         public void writeFile(Runnable action) throws LockTimeoutException {
             getFileLock().writeFile(action);
         }
@@ -488,7 +493,8 @@ public class DefaultCacheAccess implements CacheCoordinator {
         }
     }
 
-    private static class InvalidCacheReuseException extends GradleException {
+    @VisibleForTesting
+    static class InvalidCacheReuseException extends GradleException {
         InvalidCacheReuseException(String message) {
             super(message);
         }

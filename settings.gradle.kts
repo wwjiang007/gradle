@@ -1,3 +1,5 @@
+import org.gradle.api.internal.FeaturePreviews
+
 /*
  * Copyright 2010 the original author or authors.
  *
@@ -15,9 +17,11 @@
  */
 
 apply(from = "gradle/shared-with-buildSrc/build-cache-configuration.settings.gradle.kts")
+apply(from = "gradle/shared-with-buildSrc/mirrors.settings.gradle.kts")
 
-enableFeaturePreview("IMPROVED_POM_SUPPORT")
-
+include("instantExecution")
+include("instantExecutionReport")
+include("apiMetadata")
 include("distributionsDependencies")
 include("distributions")
 include("baseServices")
@@ -30,6 +34,7 @@ include("dependencyManagement")
 include("wrapper")
 include("cli")
 include("launcher")
+include("bootstrap")
 include("messaging")
 include("resources")
 include("resourcesHttp")
@@ -75,6 +80,7 @@ include("languageJvm")
 include("languageJava")
 include("languageGroovy")
 include("languageNative")
+include("toolingNative")
 include("languageScala")
 include("pluginUse")
 include("pluginDevelopment")
@@ -97,6 +103,24 @@ include("persistentCache")
 include("buildCache")
 include("coreApi")
 include("versionControl")
+include("fileCollections")
+include("files")
+include("hashing")
+include("snapshots")
+include("architectureTest")
+include("buildCachePackaging")
+include("execution")
+include("buildProfile")
+include("kotlinCompilerEmbeddable")
+include("kotlinDsl")
+include("kotlinDslProviderPlugins")
+include("kotlinDslPlugins")
+include("kotlinDslToolingModels")
+include("kotlinDslToolingBuilders")
+include("kotlinDslTestFixtures")
+include("kotlinDslIntegTests")
+include("workerProcesses")
+include("pineapple")
 
 val upperCaseLetters = "\\p{Upper}".toRegex()
 
@@ -105,63 +129,13 @@ fun String.toKebabCase() =
 
 rootProject.name = "gradle"
 
-// List of subprojects that have a Groovy DSL build script.
+// List of sub-projects that have a Groovy DSL build script.
 // The intent is for this list to diminish until it disappears.
-val groovyBuildScriptProjects = listOf(
+val groovyBuildScriptProjects = hashSetOf(
     "distributions",
-    "logging",
-    "process-services",
-    "core",
-    "wrapper",
-    "cli",
-    "launcher",
-    "resources",
-    "resources-http",
-    "resources-gcs",
-    "resources-s3",
-    "resources-sftp",
-    "plugins",
-    "scala",
-    "ide",
-    "ide-native",
-    "ide-play",
-    "osgi",
     "docs",
-    "integ-test",
-    "signing",
-    "ear",
-    "native",
-    "performance",
-    "build-scan-performance",
-    "javascript",
-    "reporting",
-    "diagnostics",
-    "publish",
-    "jacoco",
-    "build-init",
-    "platform-base",
-    "platform-native",
-    "platform-jvm",
-    "language-jvm",
-    "language-java",
-    "language-groovy",
-    "language-native",
-    "language-scala",
-    "plugin-use",
-    "model-core",
-    "model-groovy",
-    "build-cache-http",
-    "testing-base",
-    "testing-native",
-    "testing-jvm",
-    "testing-junit-platform",
-    "platform-play",
-    "test-kit",
-    "soak",
-    "smoke-test",
-    "persistent-cache",
-    "core-api",
-    "version-control")
+    "performance"
+)
 
 fun buildFileNameFor(projectDirName: String) =
     "$projectDirName${buildFileExtensionFor(projectDirName)}"
@@ -173,6 +147,29 @@ for (project in rootProject.children) {
     val projectDirName = project.name.toKebabCase()
     project.projectDir = file("subprojects/$projectDirName")
     project.buildFileName = buildFileNameFor(projectDirName)
-    assert(project.projectDir.isDirectory)
-    assert(project.buildFile.isFile)
+    require(project.projectDir.isDirectory) {
+        "Project directory ${project.projectDir} for project ${project.name} does not exist."
+    }
+    require(project.buildFile.isFile) {
+        "Build file ${project.buildFile} for project ${project.name} does not exist."
+    }
 }
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven { url = uri("https://repo.gradle.org/gradle/libs-releases") }
+    }
+}
+
+val ignoredFeatures = setOf(
+    // we don't want to publish Gradle metadata to public repositories until the format is stable.
+    FeaturePreviews.Feature.GRADLE_METADATA
+)
+
+FeaturePreviews.Feature.values().forEach { feature ->
+    if (feature.isActive && feature !in ignoredFeatures) {
+        enableFeaturePreview(feature.name)
+    }
+}
+

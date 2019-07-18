@@ -32,7 +32,6 @@ import org.gradle.api.internal.notations.ModuleIdentifierNotationConverter;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.specs.Specs;
 import org.gradle.internal.rules.DefaultRuleActionAdapter;
-import org.gradle.internal.rules.DefaultRuleActionValidator;
 import org.gradle.internal.rules.RuleAction;
 import org.gradle.internal.rules.RuleActionAdapter;
 import org.gradle.internal.rules.RuleActionValidator;
@@ -43,7 +42,7 @@ import org.gradle.internal.typeconversion.UnsupportedNotationException;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -56,18 +55,20 @@ public class DefaultComponentSelectionRules implements ComponentSelectionRulesIn
     private MutationValidator mutationValidator = MutationValidator.IGNORE;
     private Set<SpecRuleAction<? super ComponentSelection>> rules;
 
-    private final RuleActionAdapter ruleActionAdapter;
+    private final RuleActionAdapter allRuleActionAdapter;
+    private final RuleActionAdapter withModuleRuleActionAdapter;
     private final NotationParser<Object, ModuleIdentifier> moduleIdentifierNotationParser;
 
     public DefaultComponentSelectionRules(ImmutableModuleIdentifierFactory moduleIdentifierFactory) {
-        this(moduleIdentifierFactory, createAdapter());
+        this(moduleIdentifierFactory, createAdapter("all("), createAdapter("withModule(Object,"));
     }
 
-    protected DefaultComponentSelectionRules(ImmutableModuleIdentifierFactory moduleIdentifierFactory, RuleActionAdapter ruleActionAdapter) {
-        this.ruleActionAdapter = ruleActionAdapter;
+    protected DefaultComponentSelectionRules(ImmutableModuleIdentifierFactory moduleIdentifierFactory, RuleActionAdapter allRuleActionAdapter, RuleActionAdapter withModuleRuleActionAdapter) {
+        this.allRuleActionAdapter = allRuleActionAdapter;
+        this.withModuleRuleActionAdapter = withModuleRuleActionAdapter;
         this.moduleIdentifierNotationParser = NotationParserBuilder
             .toType(ModuleIdentifier.class)
-            .converter(new ModuleIdentifierNotationConverter(moduleIdentifierFactory))
+            .fromCharSequence(new ModuleIdentifierNotationConverter(moduleIdentifierFactory))
             .toComposite();
     }
 
@@ -78,43 +79,51 @@ public class DefaultComponentSelectionRules implements ComponentSelectionRulesIn
         this.mutationValidator = mutationValidator;
     }
 
-    private static RuleActionAdapter createAdapter() {
-        RuleActionValidator ruleActionValidator = new DefaultRuleActionValidator(VALID_INPUT_TYPES);
+    private static RuleActionAdapter createAdapter(String deprecationPrefix) {
+        RuleActionValidator ruleActionValidator = new ComponentSelectionRulesActionValidator(VALID_INPUT_TYPES, deprecationPrefix);
         return new DefaultRuleActionAdapter(ruleActionValidator, "ComponentSelectionRules");
     }
 
+    @Override
     public Collection<SpecRuleAction<? super ComponentSelection>> getRules() {
         return rules != null ? rules : Collections.<SpecRuleAction<? super ComponentSelection>>emptySet();
     }
 
+    @Override
     public ComponentSelectionRules all(Action<? super ComponentSelection> selectionAction) {
-        return addRule(createAllSpecRulesAction(ruleActionAdapter.createFromAction(selectionAction)));
+        return addRule(createAllSpecRulesAction(allRuleActionAdapter.createFromAction(selectionAction)));
     }
 
+    @Override
     public ComponentSelectionRules all(Closure<?> closure) {
-        return addRule(createAllSpecRulesAction(ruleActionAdapter.createFromClosure(ComponentSelection.class, closure)));
+        return addRule(createAllSpecRulesAction(allRuleActionAdapter.createFromClosure(ComponentSelection.class, closure)));
     }
 
+    @Override
     public ComponentSelectionRules all(Object ruleSource) {
-        return addRule(createAllSpecRulesAction(ruleActionAdapter.createFromRuleSource(ComponentSelection.class, ruleSource)));
+        return addRule(createAllSpecRulesAction(allRuleActionAdapter.createFromRuleSource(ComponentSelection.class, ruleSource)));
     }
 
+    @Override
     public ComponentSelectionRules withModule(Object id, Action<? super ComponentSelection> selectionAction) {
-        return addRule(createSpecRuleActionFromId(id, ruleActionAdapter.createFromAction(selectionAction)));
+        return addRule(createSpecRuleActionFromId(id, withModuleRuleActionAdapter.createFromAction(selectionAction)));
     }
 
+    @Override
     public ComponentSelectionRules withModule(Object id, Closure<?> closure) {
-        return addRule(createSpecRuleActionFromId(id, ruleActionAdapter.createFromClosure(ComponentSelection.class, closure)));
+        return addRule(createSpecRuleActionFromId(id, withModuleRuleActionAdapter.createFromClosure(ComponentSelection.class, closure)));
     }
 
+    @Override
     public ComponentSelectionRules withModule(Object id, Object ruleSource) {
-        return addRule(createSpecRuleActionFromId(id, ruleActionAdapter.createFromRuleSource(ComponentSelection.class, ruleSource)));
+        return addRule(createSpecRuleActionFromId(id, withModuleRuleActionAdapter.createFromRuleSource(ComponentSelection.class, ruleSource)));
     }
 
+    @Override
     public ComponentSelectionRules addRule(SpecRuleAction<? super ComponentSelection> specRuleAction) {
         mutationValidator.validateMutation(STRATEGY);
         if (rules == null) {
-            rules = new HashSet<SpecRuleAction<? super ComponentSelection>>();
+            rules = new LinkedHashSet<SpecRuleAction<? super ComponentSelection>>();
         }
         rules.add(specRuleAction);
         return this;
@@ -149,6 +158,7 @@ public class DefaultComponentSelectionRules implements ComponentSelectionRulesIn
             this.target = target;
         }
 
+        @Override
         public boolean isSatisfiedBy(ComponentSelection selection) {
             return selection.getCandidate().getGroup().equals(target.getGroup()) && selection.getCandidate().getModule().equals(target.getName());
         }

@@ -25,6 +25,8 @@ import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.testing.performance.generator.DependencyGraph
 import org.gradle.testing.performance.generator.MavenJarCreator
@@ -50,6 +52,9 @@ abstract class AbstractProjectGeneratorTask extends TemplateProjectGeneratorTask
     int filesPerPackage = 100
     @Input
     int numberOfExternalDependencies = 0
+
+    @Input
+    int numberOfScriptPlugins = 0
 
     @Nested
     final DependencyGraph dependencyGraph = new DependencyGraph()
@@ -82,6 +87,7 @@ abstract class AbstractProjectGeneratorTask extends TemplateProjectGeneratorTask
     }
 
     @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
     FileTree getTemplateDirectories() {
         def allTemplates = rootProjectTemplates + subProjectTemplates
         if (buildSrcTemplate) {
@@ -92,7 +98,7 @@ abstract class AbstractProjectGeneratorTask extends TemplateProjectGeneratorTask
         return templateDirectories
     }
 
-    int getTestSourceFiles() {
+    Integer getTestSourceFiles() {
         return testSourceFiles ?: sourceFiles
     }
 
@@ -137,6 +143,22 @@ abstract class AbstractProjectGeneratorTask extends TemplateProjectGeneratorTask
                 pickExternalDependencies(repo, subproject)
             }
             generateSubProject(subproject)
+        }
+
+        generateScriptPlugins()
+    }
+
+    void generateScriptPlugins() {
+        if(numberOfScriptPlugins > 0) {
+            def nesting = 5
+            def groupedScriptIds = ((1..numberOfScriptPlugins).groupBy { it % (int)(numberOfScriptPlugins / nesting) }.values)
+            def gradleFolder = new File(destDir, "gradle")
+            gradleFolder.mkdirs()
+            (1..numberOfScriptPlugins).forEach { scriptPluginId ->
+                def nestedScriptId = groupedScriptIds.find { it.contains(scriptPluginId) }?.find { it > scriptPluginId }
+                def  maybeApplyNestedScript = (nestedScriptId != null) ? "apply from: \'../gradle/script-plugin${nestedScriptId}.gradle'" : ""
+                new File(gradleFolder, "script-plugin${scriptPluginId}.gradle").text = maybeApplyNestedScript
+            }
         }
     }
 

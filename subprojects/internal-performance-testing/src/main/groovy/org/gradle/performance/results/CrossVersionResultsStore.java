@@ -70,16 +70,18 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
         }
     }
 
+    @Override
     public void report(final CrossVersionPerformanceResults results) {
         try {
             db.withConnection(new ConnectionAction<Void>() {
+                @Override
                 public Void execute(Connection connection) throws SQLException {
                     long testId;
                     PreparedStatement statement = null;
                     ResultSet keys = null;
 
                     try {
-                        statement = connection.prepareStatement("insert into testExecution(testId, startTime, endTime, targetVersion, testProject, tasks, args, gradleOpts, daemon, operatingSystem, jvm, vcsBranch, vcsCommit, channel, host, cleanTasks) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                        statement = connection.prepareStatement("insert into testExecution(testId, startTime, endTime, targetVersion, testProject, tasks, args, gradleOpts, daemon, operatingSystem, jvm, vcsBranch, vcsCommit, channel, host, cleanTasks, teamCityBuildId) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                         statement.setString(1, results.getTestId());
                         statement.setTimestamp(2, new Timestamp(results.getStartTime()));
                         statement.setTimestamp(3, new Timestamp(results.getEndTime()));
@@ -97,6 +99,7 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
                         statement.setString(14, results.getChannel());
                         statement.setString(15, results.getHost());
                         statement.setObject(16, toArray(results.getCleanTasks()));
+                        statement.setString(17, results.getTeamCityBuildId());
                         statement.execute();
                         keys = statement.getGeneratedKeys();
                         keys.next();
@@ -146,6 +149,7 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
     public List<String> getTestNames() {
         try {
             return db.withConnection(new ConnectionAction<List<String>>() {
+                @Override
                 public List<String> execute(Connection connection) throws SQLException {
                     List<String> testNames = new ArrayList<String>();
                     Statement statement = null;
@@ -180,9 +184,11 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
     public CrossVersionPerformanceTestHistory getTestResults(final String testName, final int mostRecentN, final int maxDaysOld, final String channel) {
         try {
             return db.withConnection(new ConnectionAction<CrossVersionPerformanceTestHistory>() {
+                @Override
                 public CrossVersionPerformanceTestHistory execute(Connection connection) throws SQLException {
                     Map<Long, CrossVersionPerformanceResults> results = Maps.newLinkedHashMap();
                     Set<String> allVersions = new TreeSet<String>(new Comparator<String>() {
+                        @Override
                         public int compare(String o1, String o2) {
                             return resolveGradleVersion(o1).compareTo(resolveGradleVersion(o2));
                         }
@@ -195,7 +201,7 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
                     ResultSet operations = null;
 
                     try {
-                        executionsForName = connection.prepareStatement("select top ? id, startTime, endTime, targetVersion, testProject, tasks, args, gradleOpts, daemon, operatingSystem, jvm, vcsBranch, vcsCommit, channel, host, cleanTasks from testExecution where testId = ? and startTime >= ? and channel = ? order by startTime desc");
+                        executionsForName = connection.prepareStatement("select top ? id, startTime, endTime, targetVersion, testProject, tasks, args, gradleOpts, daemon, operatingSystem, jvm, vcsBranch, vcsCommit, channel, host, cleanTasks, teamCityBuildId from testExecution where testId = ? and startTime >= ? and channel = ? order by startTime desc");
                         executionsForName.setFetchSize(mostRecentN);
                         executionsForName.setInt(1, mostRecentN);
                         executionsForName.setString(2, testName);
@@ -223,6 +229,8 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
                             performanceResults.setChannel(testExecutions.getString(14));
                             performanceResults.setHost(testExecutions.getString(15));
                             performanceResults.setCleanTasks(ResultsStoreHelper.toList(testExecutions.getObject(16)));
+                            performanceResults.setTeamCityBuildId(testExecutions.getString(17));
+
                             results.put(id, performanceResults);
                             allBranches.add(performanceResults.getVcsBranch());
                         }
@@ -282,6 +290,7 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
         return gradleVersion;
     }
 
+    @Override
     public void close() {
         db.close();
     }
@@ -318,6 +327,9 @@ public class CrossVersionResultsStore implements DataReporter<CrossVersionPerfor
                 }
                 if (!DataBaseSchemaUtil.columnExists(connection, "TESTEXECUTION", "HOST")) {
                     statement.execute("alter table testExecution add column if not exists host varchar");
+                }
+                if (!DataBaseSchemaUtil.columnExists(connection, "TESTEXECUTION", "TEAMCITYBUILDID")) {
+                    statement.execute("alter table testExecution add column if not exists teamCityBuildId varchar");
                 }
                 statement.execute("create index if not exists testExecution_testId on testExecution (testId)");
                 statement.execute("create index if not exists testExecution_executionTime on testExecution (startTime desc)");

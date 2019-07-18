@@ -19,6 +19,7 @@ package org.gradle.internal.action
 import org.gradle.api.Action
 import org.gradle.api.ActionConfiguration
 import org.gradle.internal.service.DefaultServiceRegistry
+import org.gradle.util.SnapshotTestUtil
 import org.gradle.util.TestUtil
 import spock.lang.Specification
 
@@ -44,8 +45,8 @@ class InstantiatingActionTest extends Specification {
                     void execute(ActionConfiguration actionConfiguration) {
                         actionConfiguration.params(123, "test string")
                     }
-                }, TestUtil.valueSnapshotter())),
-            TestUtil.instantiatorFactory().decorate(),
+                }, SnapshotTestUtil.valueSnapshotter())),
+            TestUtil.instantiatorFactory().decorateLenient(),
             shouldNotFail
         )
 
@@ -101,7 +102,7 @@ class InstantiatingActionTest extends Specification {
                     void execute(ActionConfiguration actionConfiguration) {
                         actionConfiguration.params(456)
                     }
-                }, TestUtil.valueSnapshotter())),
+                }, SnapshotTestUtil.valueSnapshotter())),
             TestUtil.instantiatorFactory().inject(registry),
             shouldNotFail
         )

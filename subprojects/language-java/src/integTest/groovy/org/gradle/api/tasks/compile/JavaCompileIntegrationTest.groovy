@@ -16,7 +16,7 @@
 
 package org.gradle.api.tasks.compile
 
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.AbstractPluginIntegrationTest
 import org.gradle.integtests.fixtures.AvailableJavaHomes
 import org.gradle.util.Requires
 import org.gradle.util.Resources
@@ -28,7 +28,7 @@ import spock.lang.Ignore
 import spock.lang.Issue
 import spock.lang.Unroll
 
-class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
+class JavaCompileIntegrationTest extends AbstractPluginIntegrationTest {
 
     @Rule
     Resources resources = new Resources()
@@ -57,7 +57,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
             }
             project(':b') {
                 dependencies {
-                    compile project(':a')
+                    implementation project(':a')
                 }
             }
 """
@@ -90,18 +90,18 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
         when:
         run "compile"
         then:
-        nonSkippedTasks.contains ":compile"
+        executedAndNotSkipped ":compile"
 
         when:
         run "compile"
         then:
-        skippedTasks.contains ":compile"
+        skipped ":compile"
 
         when:
         buildFile.text = buildScriptWithClasspath("lib2.jar", "lib1.jar")
         run "compile"
         then:
-        nonSkippedTasks.contains ":compile"
+        executedAndNotSkipped ":compile"
     }
 
     def "stays up-to-date after file renamed on classpath"() {
@@ -114,12 +114,12 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
         when:
         run "compile"
         then:
-        nonSkippedTasks.contains ":compile"
+        executedAndNotSkipped ":compile"
 
         when:
         run "compile"
         then:
-        skippedTasks.contains ":compile"
+        skipped ":compile"
 
         when:
         file("lib1.jar").renameTo(file("lib1-renamed.jar"))
@@ -127,7 +127,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
         run "compile"
         then:
-        skippedTasks.contains ":compile"
+        skipped ":compile"
     }
 
     def buildScriptWithClasspath(String... dependencies) {
@@ -175,7 +175,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
         when:
         succeeds "test"
         then:
-        nonSkippedTasks.contains ":test"
+        executedAndNotSkipped ":test"
         javaClassFile("com/example/Foo.class").assertIsFile()
 
         when:
@@ -201,7 +201,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
         succeeds "test"
         then:
-        nonSkippedTasks.contains ":test"
+        executedAndNotSkipped ":test"
         javaClassFile("com/example/Foo.class").assertIsFile()
     }
 
@@ -212,27 +212,27 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
         given:
         settingsFile << "include 'a', 'b'"
         buildFile << """
-        allprojects {
-            apply plugin: 'java'
-
-            repositories {
-               maven { url '$mavenRepo.uri' }
+            allprojects {
+                apply plugin: 'java'
+    
+                repositories {
+                   maven { url '$mavenRepo.uri' }
+                }
             }
-        }
-
-        task checkClasspath {
-            doLast {
-                def compileClasspath = project(':a').compileJava.classpath.files*.name
-                assert compileClasspath.contains('b.jar')
-                assert compileClasspath.contains('other-1.0.jar')
-                assert !compileClasspath.contains('shared-1.0.jar')
-            }
-        }
         """
 
         file('a/build.gradle') << '''
             dependencies {
                 implementation project(':b')
+            }
+            
+            task checkClasspath {
+                doLast {
+                    def compileClasspath = compileJava.classpath.files*.name
+                    assert compileClasspath.contains('b.jar')
+                    assert compileClasspath.contains('other-1.0.jar')
+                    assert !compileClasspath.contains('shared-1.0.jar')
+                }
             }
         '''
         file('b/build.gradle') << '''
@@ -258,7 +258,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
             dependencies {
                 implementation 'org.apache.commons:commons-lang3:3.4'
-                testCompile 'junit:junit:4.12' // not using testImplementation intentionally, that's not what we want to test
+                testImplementation 'junit:junit:4.12'
             }
         """
         file('src/main/java/Text.java') << '''import org.apache.commons.lang3.StringUtils;
@@ -407,7 +407,8 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
             
             task processDependency {
                 def lazyInputs = configurations.runtimeClasspath.incoming.artifactView { 
-                    attributes{ attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.${token})) }
+                    attributes{ attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME)) }
+                    attributes{ attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements, LibraryElements.${token})) }
                 }.files
                 inputs.files(lazyInputs)
                 doLast {
@@ -429,9 +430,9 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
         notExecuted ":b:$notExec"
 
         where:
-        scenario              | token                    | expectedDirName     | executed           | notExec
-        'class directory'     | 'JAVA_RUNTIME_CLASSES'   | 'classes/java/main' | 'compileJava'      | 'processResources'
-        'resources directory' | 'JAVA_RUNTIME_RESOURCES' | 'resources/main'    | 'processResources' | 'compileJava'
+        scenario              | token       | expectedDirName     | executed           | notExec
+        'class directory'     | 'CLASSES'   | 'classes/java/main' | 'compileJava'      | 'processResources'
+        'resources directory' | 'RESOURCES' | 'resources/main'    | 'processResources' | 'compileJava'
     }
 
     @Issue("gradle/gradle#1347")
@@ -443,7 +444,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
                 ${mavenCentralRepository()}
 
                 dependencies {
-                    ${dependencies.collect { "compile ${it}"}.join('\n') }
+                    ${dependencies.collect { "implementation ${it}"}.join('\n') }
                 }
             """
         }
@@ -516,7 +517,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
             apply plugin: 'java'
             
             dependencies {
-               compile files('foo.jar')
+               implementation files('foo.jar')
             }
         '''
         file('foo.jar') << 'this is clearly not a well formed jar file'
@@ -528,18 +529,17 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
         then:
         executedAndNotSkipped ':compileJava'
-        outputContains 'Could not read annotation processor declarations'
-
+        errorOutput.contains('error in opening zip file')
     }
 
     @Issue("gradle/gradle#1581")
-    @Requires(TestPrecondition.JDK8_OR_EARLIER) // Java 9 compiler throws error already: java.nio.file.InvalidPathException: Path: nul character not allowed
-    def "compile classpath snapshotting should warn when jar on classpath has non-utf8 characters in filenames"() {
+    @Requires(TestPrecondition.JDK8_OR_EARLIER)
+    def "compile classpath snapshotting on Java 8 and earlier should warn when jar on classpath has non-utf8 characters in filenames"() {
         buildFile << '''
             apply plugin: 'java'
             
             dependencies {
-               compile files('broken-utf8.jar')
+               implementation files('broken-utf8.jar')
             }
         '''
         // This file has a file name which is not UTF-8.
@@ -553,8 +553,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
         then:
         executedAndNotSkipped ':compileJava'
-        outputContains "Malformed jar 'broken-utf8.jar' found on classpath"
-
+        outputContains "Malformed archive 'broken-utf8.jar'"
     }
 
     @Issue("gradle/gradle#1358")
@@ -568,7 +567,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
             }
             
             dependencies {
-               compile files(fooJar.archivePath)
+               implementation files(fooJar.archivePath)
             }
             
             compileJava.dependsOn(fooJar)
@@ -584,7 +583,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
         then:
         executedAndNotSkipped ':fooJar', ':compileJava'
-        outputContains "Malformed jar 'foo.jar' found on classpath."
+        outputContains "Malformed archive 'foo.jar'"
     }
 
     @Issue("gradle/gradle#1358")
@@ -593,7 +592,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
             apply plugin: 'java'
             
             dependencies {
-               compile files('classes')
+               implementation files('classes')
             }
             
         '''
@@ -621,7 +620,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
             apply plugin: 'java'
             
             dependencies {
-               compile project(':b')
+               implementation project(':b')
             }
         '''
         file('src/main/java/Lambda.java') << 'public class Lambda extends λ {}'
@@ -775,7 +774,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
         then:
         noExceptionThrown()
-        outputContains("You specified both --module-source-path and a sourcepath. These options are mutually exclusive. Removing sourcepath.")
+        outputContains("You specified both --module-source-path and a sourcepath. These options are mutually exclusive. Ignoring sourcepath.")
         file("build/classes/java/main/example/module-info.class").exists()
         file("build/classes/java/main/example/io/example/Example.class").exists()
         file("build/classes/java/main/another/module-info.class").exists()
@@ -784,52 +783,58 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
         !file("build/classes/java/main/ignored/io/ignored/IgnoredExample.class").exists()
     }
 
-    def "sourcepath is merged from compilerArgs, but deprecation warning is emitted"() {
+    def "fails when sourcepath is set on compilerArgs"() {
         buildFile << '''
             apply plugin: 'java'
             
             compileJava {
-                options.compilerArgs = ['-sourcepath', files('sources1').asPath]
-                options.sourcepath = files('sources2')
-            }            
+                options.compilerArgs = ['-sourcepath', files('src/main/java').asPath]
+            }
         '''
         file('src/main/java/Square.java') << 'public class Square extends Rectangle {}'
-        file('sources2/Rectangle.java') << 'public class Rectangle extends Shape {}'
-        file('sources1/Shape.java') << 'public class Shape {}'
 
         when:
-        result = executer.expectDeprecationWarning().withTasks('compileJava').run()
+        fails 'compileJava'
 
         then:
-        file('build/classes/java/main/Square.class').exists()
-        file('build/classes/java/main/Rectangle.class').exists()
-        file('build/classes/java/main/Shape.class').exists()
-        outputContains("Specifying the source path in the CompilerOptions compilerArgs property has been deprecated")
+        failureHasCause("Cannot specify -sourcepath or --source-path via `CompileOptions.compilerArgs`. Use the `CompileOptions.sourcepath` property instead.")
     }
 
-    def "sourcepath is respected even when exclusively specified from compilerArgs, but deprecation warning is emitted"() {
+    def "fails when processorpath is set on compilerArgs"() {
         buildFile << '''
             apply plugin: 'java'
             
             compileJava {
-                options.compilerArgs = ['-sourcepath', files('sources1').asPath]
-            }            
+                options.compilerArgs = ['-processorpath', files('src/main/java').asPath]
+            }
         '''
         file('src/main/java/Square.java') << 'public class Square extends Rectangle {}'
-        file('sources1/Rectangle.java') << 'public class Rectangle extends Shape {}'
-        file('sources1/Shape.java') << 'public class Shape {}'
 
         when:
-        result = executer.expectDeprecationWarning().withTasks('compileJava').run()
+        fails 'compileJava'
 
         then:
-        file('build/classes/java/main/Square.class').exists()
-        file('build/classes/java/main/Rectangle.class').exists()
-        file('build/classes/java/main/Shape.class').exists()
-        outputContains("Specifying the source path in the CompilerOptions compilerArgs property has been deprecated")
+        failureHasCause("Cannot specify -processorpath or --processor-path via `CompileOptions.compilerArgs`. Use the `CompileOptions.annotationProcessorPath` property instead.")
     }
 
-    @Requires(adhoc = { AvailableJavaHomes.getJdk7() && AvailableJavaHomes.getJdk8() })
+    def "fails when a -J (compiler JVM) flag is set on compilerArgs"() {
+        buildFile << '''
+            apply plugin: 'java'
+
+            compileJava {
+                options.compilerArgs = ['-J-Xdiag']
+            }
+        '''
+        file('src/main/java/Square.java') << 'public class Square extends Rectangle {}'
+
+        when:
+        fails 'compileJava'
+
+        then:
+        failureHasCause("Cannot specify -J flags via `CompileOptions.compilerArgs`. Use the `CompileOptions.forkOptions.jvmArgs` property instead.")
+    }
+
+    @Requires(adhoc = { AvailableJavaHomes.getJdk7() && AvailableJavaHomes.getJdk8() && TestPrecondition.NOT_JDK_IBM.fulfilled && TestPrecondition.FIX_TO_WORK_ON_JAVA9.fulfilled })
     def "bootclasspath can be set"() {
         def jdk7 = AvailableJavaHomes.getJdk7()
         def jdk7bootClasspath = TextUtil.escapeString(jdk7.jre.homeDir.absolutePath) + "/lib/rt.jar"
@@ -844,6 +849,7 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
                 } else if (project.hasProperty("java8")) {
                     options.bootstrapClasspath = files("$jdk8bootClasspath")
                 } 
+                options.fork = true
             }
         """
         file('src/main/java/Main.java') << """
@@ -859,39 +865,13 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
         """
 
         expect:
-        executer.withJavaHome jdk8.javaHome
         succeeds "clean", "compileJava"
 
-        executer.withJavaHome jdk8.javaHome
         executer.withStacktraceDisabled()
         fails "-Pjava7", "clean", "compileJava"
         failure.assertHasErrorOutput "Main.java:8: error: cannot find symbol"
 
-        executer.withJavaHome jdk8.javaHome
         succeeds "-Pjava8", "clean", "compileJava"
-
-        executer.withJavaHome jdk7.javaHome
-        succeeds "-Pjava8", "clean", "compileJava"
-    }
-
-    @Requires([TestPrecondition.JDK8_OR_EARLIER, TestPrecondition.JDK_ORACLE])
-    def "CompileOptions.bootclasspath is deprecated"() {
-        def jre = AvailableJavaHomes.getBestJre()
-        def bootClasspath = TextUtil.escapeString(jre.absolutePath) + "/lib/rt.jar"
-        buildFile << """
-            apply plugin: 'java'
-            
-            compileJava {
-                options.bootClasspath = "$bootClasspath"
-            }
-        """
-        file('src/main/java/Main.java') << "public class Main {}"
-
-        expect:
-        executer.withFullDeprecationStackTraceDisabled()
-        executer.expectDeprecationWarning()
-        succeeds "compileJava"
-        output.contains "The CompileOptions.bootClasspath property has been deprecated. This is scheduled to be removed in Gradle 5.0. Please use the CompileOptions.bootstrapClasspath property instead."
     }
 
     def "deletes empty packages dirs"() {
@@ -916,5 +896,68 @@ class JavaCompileIntegrationTest extends AbstractIntegrationSpec {
 
         then:
         ! file("build/classes/java/main/com/foo").exists()
+    }
+
+    @Requires(TestPrecondition.JDK8_OR_LATER)
+    def "can configure custom header output"() {
+        given:
+        buildFile << """
+            apply plugin: 'java'
+            compileJava.options.headerOutputDirectory = file("build/headers/java/main")
+        """
+        file('src/main/java/Foo.java') << """
+            public class Foo {
+                public native void foo();
+            }
+        """
+        when:
+        succeeds "compileJava"
+
+        then:
+        file("build/headers/java/main/Foo.h").exists()
+    }
+
+    @Requires(TestPrecondition.JDK8_OR_LATER)
+    def "deletes stale header files"() {
+        given:
+        buildFile << """
+            apply plugin: 'java'
+            compileJava.options.headerOutputDirectory = file("build/headers/java/main")
+        """
+        def header = file('src/main/java/Foo.java') << """
+            public class Foo {
+                public native void foo();
+            }
+        """
+        succeeds "compileJava"
+
+        when:
+        header.delete()
+        succeeds "compileJava"
+
+        then:
+        !file("build/headers/java/main/Foo.h").exists()
+    }
+
+    def "emits deprecation warning for effectiveAnnotationProcessorPath property"() {
+        buildScript("""
+            apply plugin: 'java'
+                        
+            ${jcenterRepository()}
+
+            task printAnnotationProcessors {
+                doLast {
+                    println compileJava.effectiveAnnotationProcessorPath
+                }
+            }
+        """.stripIndent())
+
+        when:
+        executer.expectDeprecationWarning()
+        succeeds 'printAnnotationProcessors'
+
+        then:
+        outputContains('The JavaCompile.effectiveAnnotationProcessorPath property has been deprecated.')
+        outputContains('Please use the JavaCompile.options.annotationProcessorPath property instead.')
     }
 }

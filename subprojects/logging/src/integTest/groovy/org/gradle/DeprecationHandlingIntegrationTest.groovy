@@ -20,6 +20,7 @@ import org.gradle.api.JavaVersion
 import org.gradle.api.logging.configuration.WarningMode
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.internal.featurelifecycle.LoggingDeprecatedFeatureHandler
+import org.gradle.util.GradleVersion
 import spock.lang.Unroll
 
 class DeprecationHandlingIntegrationTest extends AbstractIntegrationSpec {
@@ -64,6 +65,9 @@ class DeprecationHandlingIntegrationTest extends AbstractIntegrationSpec {
                 }
             }
         """.stripIndent()
+        file('buildSrc/src/main/resources/META-INF/gradle-plugins/org.acme.deprecated.properties') << """
+            implementation-class=DeprecatedPlugin
+        """.stripIndent()
     }
 
     @Unroll
@@ -90,13 +94,12 @@ class DeprecationHandlingIntegrationTest extends AbstractIntegrationSpec {
             executer.expectDeprecationWarnings(warningsCountInConsole)
         }
         executer.withWarningMode(warnings)
-        run('deprecated', 'broken')
+        warnings == WarningMode.Fail ? fails('deprecated', 'broken') : succeeds('deprecated', 'broken')
 
         then:
         output.contains('build.gradle:2)') == warningsCountInConsole > 0
         output.contains('build.gradle:4)') == warningsCountInConsole > 0
         output.contains('build.gradle:9)') == warningsCountInConsole > 0
-        output.contains('(Native Method)') == (fullStacktraceEnabled && warningsCountInConsole > 0)
 
         and:
         output.contains(PLUGIN_DEPRECATION_MESSAGE) == warningsCountInConsole > 0
@@ -109,8 +112,20 @@ class DeprecationHandlingIntegrationTest extends AbstractIntegrationSpec {
         output.contains("Use '--warning-mode all' to show the individual deprecation warnings.") == (warningsCountInSummary > 0)
         output.contains(LoggingDeprecatedFeatureHandler.WARNING_LOGGING_DOCS_MESSAGE) == (warningsCountInSummary > 0)
 
+        and: "system stack frames are filtered"
+        !output.contains('jdk.internal.')
+        !output.contains('sun.')
+        !output.contains('org.codehaus.groovy.')
+        !output.contains('org.gradle.internal.metaobject.')
+        !output.contains('org.gradle.kotlin.dsl.execution.')
+
         and:
         assertFullStacktraceResult(fullStacktraceEnabled, warningsCountInConsole)
+
+        and:
+        if (warnings == WarningMode.Fail) {
+            failure.assertHasDescription("Deprecated Gradle features were used in this build, making it incompatible with Gradle ${GradleVersion.current().nextMajor.version}")
+        }
 
         where:
         scenario                                        | warnings            | warningsCountInConsole | warningsCountInSummary | fullStacktraceEnabled
@@ -120,20 +135,31 @@ class DeprecationHandlingIntegrationTest extends AbstractIntegrationSpec {
         'with stacktrace and --warning-mode=no'         | WarningMode.None    | 0                      | 0                      | true
         'without stacktrace and --warning-mode=summary' | WarningMode.Summary | 0                      | 4                      | false
         'with stacktrace and --warning-mode=summary'    | WarningMode.Summary | 0                      | 4                      | true
+        'without stacktrace and --warning-mode=fail'    | WarningMode.Fail    | 4                      | 0                      | false
+        'with stacktrace and --warning-mode=fail'       | WarningMode.Fail    | 4                      | 0                      | true
     }
 
-    def incrementWarningCountIfJava7(int warningCount) {
-        return JavaVersion.current().isJava7() ? warningCount + 1 : warningCount
-    }
+    def 'build error and deprecation failure combined'() {
+        given:
+        buildFile << """
+            apply plugin: DeprecatedPlugin // line 2
+            
+            task broken() {
+                doLast {
+                    throw new IllegalStateException("Can't do that")
+                }
+            }
+        """.stripIndent()
 
-    boolean assertFullStacktraceResult(boolean fullStacktraceEnabled, int warningsCountInConsole) {
-        if (warningsCountInConsole == 0) {
-            output.count('\tat') == 0 && output.count(RUN_WITH_STACKTRACE) == 0
-        } else if (fullStacktraceEnabled) {
-            output.count('\tat') > 3 && output.count(RUN_WITH_STACKTRACE) == 0
-        } else {
-            output.count('\tat') == 3 && output.count(RUN_WITH_STACKTRACE) == 3
-        }
+        when:
+        executer.expectDeprecationWarnings(1)
+        executer.withWarningMode(WarningMode.Fail)
+
+        then:
+        fails('broken')
+        output.contains('build.gradle:2)')
+        failure.assertHasCause("Can't do that")
+        failure.assertHasDescription('Deprecated Gradle features were used in this build')
     }
 
     def 'DeprecatedPlugin from init script - without full stacktrace.'() {
@@ -192,4 +218,54 @@ class DeprecationHandlingIntegrationTest extends AbstractIntegrationSpec {
         'without full stacktrace' | false
         'with full stacktrace'    | true
     }
+
+    @Unroll
+    def 'DeprecatedPlugin from applied kotlin script - #scenario'() {
+        given:
+        file("project.gradle.kts") << """
+           apply(plugin = "org.acme.deprecated") // line 1
+        """.stripIndent()
+
+        buildFile << """
+            allprojects {
+                apply from: 'project.gradle.kts' // line 3
+            }
+        """.stripIndent()
+
+        when:
+        if (!withFullStacktrace) {
+            executer.withFullDeprecationStackTraceDisabled()
+        }
+        executer.expectDeprecationWarning()
+        run()
+
+        then:
+        output.contains('build.gradle:3)')
+        output.contains('build.gradle:2)') == withFullStacktrace
+        output.contains('Project_gradle.<init>') == withFullStacktrace
+        output.count(PLUGIN_DEPRECATION_MESSAGE) == 1
+
+        withFullStacktrace ? (output.count('\tat') > 1) : (output.count('\tat') == 1)
+        withFullStacktrace == !output.contains(RUN_WITH_STACKTRACE)
+
+        where:
+        scenario                  | withFullStacktrace
+        'without full stacktrace' | false
+        'with full stacktrace'    | true
+    }
+
+    def incrementWarningCountIfJava7(int warningCount) {
+        return JavaVersion.current().isJava7() ? warningCount + 1 : warningCount
+    }
+
+    boolean assertFullStacktraceResult(boolean fullStacktraceEnabled, int warningsCountInConsole) {
+        if (warningsCountInConsole == 0) {
+            output.count('\tat') == 0 && output.count(RUN_WITH_STACKTRACE) == 0
+        } else if (fullStacktraceEnabled) {
+            output.count('\tat') > 3 && output.count(RUN_WITH_STACKTRACE) == 0
+        } else {
+            output.count('\tat') == 3 && output.count(RUN_WITH_STACKTRACE) == 3
+        }
+    }
+
 }

@@ -18,14 +18,16 @@ package org.gradle.integtests.fixtures.executer;
 
 import org.gradle.integtests.fixtures.logging.GroupedOutputFixture;
 
-import java.util.List;
-import java.util.Set;
-
 public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     private final ExecutionResult delegate;
 
     public ErrorsOnStdoutScrapingExecutionResult(ExecutionResult delegate) {
         this.delegate = delegate;
+    }
+
+    @Override
+    public ExecutionResult getIgnoreBuildSrc() {
+        return new ErrorsOnStdoutScrapingExecutionResult(delegate.getIgnoreBuildSrc());
     }
 
     @Override
@@ -36,6 +38,16 @@ public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     @Override
     public String getNormalizedOutput() {
         return delegate.getNormalizedOutput();
+    }
+
+    @Override
+    public String getFormattedOutput() {
+        return delegate.getFormattedOutput();
+    }
+
+    @Override
+    public String getPlainTextOutput() {
+        return delegate.getPlainTextOutput();
     }
 
     @Override
@@ -57,18 +69,6 @@ public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     @Override
     public boolean hasErrorOutput(String expectedOutput) {
         return getOutput().contains(expectedOutput);
-    }
-
-    @Override
-    public ExecutionResult assertHasRawErrorOutput(String expectedOutput) {
-        delegate.assertRawOutputContains(expectedOutput);
-        return this;
-    }
-
-    @Override
-    public ExecutionResult assertRawOutputContains(String expectedOutput) {
-        delegate.assertRawOutputContains(expectedOutput);
-        return this;
     }
 
     @Override
@@ -102,11 +102,6 @@ public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     }
 
     @Override
-    public List<String> getExecutedTasks() {
-        return delegate.getExecutedTasks();
-    }
-
-    @Override
     public ExecutionResult assertTasksExecutedInOrder(Object... taskPaths) {
         delegate.assertTasksExecutedInOrder(taskPaths);
         return this;
@@ -115,6 +110,12 @@ public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     @Override
     public ExecutionResult assertTasksExecuted(Object... taskPaths) {
         delegate.assertTasksExecuted(taskPaths);
+        return this;
+    }
+
+    @Override
+    public ExecutionResult assertTasksExecutedAndNotSkipped(Object... taskPaths) {
+        delegate.assertTasksExecutedAndNotSkipped(taskPaths);
         return this;
     }
 
@@ -134,11 +135,6 @@ public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     public ExecutionResult assertTaskOrder(Object... taskPaths) {
         delegate.assertTaskOrder(taskPaths);
         return this;
-    }
-
-    @Override
-    public Set<String> getSkippedTasks() {
-        return delegate.getSkippedTasks();
     }
 
     @Override

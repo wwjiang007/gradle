@@ -18,9 +18,11 @@ package org.gradle.internal.locking;
 
 import com.google.common.collect.ImmutableList;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.GraphValidationException;
-import org.gradle.internal.text.TreeFormatter;
+import org.gradle.internal.logging.text.TreeFormatter;
 
 import java.util.List;
+
+import static java.util.Collections.emptyList;
 
 public class LockOutOfDateException extends GraphValidationException {
 
@@ -35,6 +37,11 @@ public class LockOutOfDateException extends GraphValidationException {
         }
         treeFormatter.endChildren();
         return new LockOutOfDateException(treeFormatter.toString(), ImmutableList.copyOf(errors));
+    }
+
+    public LockOutOfDateException(String message) {
+        super(message);
+        this.errors = emptyList();
     }
 
     private LockOutOfDateException(String message, List<String> errors) {

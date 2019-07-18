@@ -16,8 +16,7 @@
 
 package org.gradle.play.integtest.samples
 
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.RepoScriptBlockUtil
+import org.gradle.integtests.fixtures.AbstractSampleIntegrationTest
 import org.gradle.integtests.fixtures.Sample
 import org.gradle.integtests.fixtures.executer.GradleHandle
 import org.gradle.play.integtest.fixtures.RunningPlayApp
@@ -30,7 +29,7 @@ import static org.gradle.integtests.fixtures.UrlValidator.*
 import static org.gradle.play.integtest.fixtures.PlayMultiVersionRunApplicationIntegrationTest.*
 
 @Requires(TestPrecondition.JDK8_OR_LATER)
-abstract class AbstractPlaySampleIntegrationTest extends AbstractIntegrationSpec {
+abstract class AbstractPlaySampleIntegrationTest extends AbstractSampleIntegrationTest {
     File initScript
     RunningPlayApp runningPlayApp = new RunningPlayApp(testDirectory)
 
@@ -44,7 +43,8 @@ abstract class AbstractPlaySampleIntegrationTest extends AbstractIntegrationSpec
     }
 
     def setup() {
-        executer.usingInitScript(RepoScriptBlockUtil.createMirrorInitScript())
+        executer.noDeprecationChecks()
+        executer.withPluginRepositoryMirror()
         initScript = file("initFile") << """
             gradle.allprojects {
                 tasks.withType(PlayRun) {
@@ -66,6 +66,7 @@ abstract class AbstractPlaySampleIntegrationTest extends AbstractIntegrationSpec
         succeeds "assemble"
 
         when:
+        executer.noDeprecationChecks()
         sample playSample
         executer.usingInitScript(initScript).withStdinPipe().withForceInteractive(true)
         GradleHandle gradleHandle = executer.withTasks(":runPlayBinary").start()
@@ -78,6 +79,7 @@ abstract class AbstractPlaySampleIntegrationTest extends AbstractIntegrationSpec
         checkContent()
 
         when:
+        executer.noDeprecationChecks()
         gradleHandle.cancelWithEOT().waitForFinish()
 
         then: "play server is stopped too"

@@ -18,7 +18,6 @@ package org.gradle.internal.serialize.kryo;
 
 import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
-import com.google.common.collect.Maps;
 import org.gradle.internal.serialize.AbstractDecoder;
 import org.gradle.internal.serialize.Decoder;
 
@@ -26,16 +25,16 @@ import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
 
 /**
  * Note that this decoder uses buffering, so will attempt to read beyond the end of the encoded data. This means you should use this type only when this decoder will be used to decode the entire
  * stream.
  */
 public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implements Decoder, Closeable {
+    public static final int INITIAL_CAPACITY = 32;
     private final Input input;
     private final InputStream inputStream;
-    private Map<Integer, String> strings;
+    private String[] strings;
     private long extraSkipped;
 
     public StringDeduplicatingKryoBackedDecoder(InputStream inputStream) {
@@ -78,6 +77,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         throw e;
     }
 
+    @Override
     public byte readByte() throws EOFException {
         try {
             return input.readByte();
@@ -86,6 +86,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         }
     }
 
+    @Override
     public void readBytes(byte[] buffer, int offset, int count) throws EOFException {
         try {
             input.readBytes(buffer, offset, count);
@@ -94,6 +95,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         }
     }
 
+    @Override
     public long readLong() throws EOFException {
         try {
             return input.readLong();
@@ -102,6 +104,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         }
     }
 
+    @Override
     public long readSmallLong() throws EOFException, IOException {
         try {
             return input.readLong(true);
@@ -110,6 +113,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         }
     }
 
+    @Override
     public int readInt() throws EOFException {
         try {
             return input.readInt();
@@ -118,6 +122,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         }
     }
 
+    @Override
     public int readSmallInt() throws EOFException {
         try {
             return input.readInt(true);
@@ -126,6 +131,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         }
     }
 
+    @Override
     public boolean readBoolean() throws EOFException {
         try {
             return input.readBoolean();
@@ -134,24 +140,32 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         }
     }
 
+    @Override
     public String readString() throws EOFException {
         return readNullableString();
     }
 
+    @Override
     public String readNullableString() throws EOFException {
         try {
-            byte b = readByte();
-            if (b == 0) {
+            int idx = readInt();
+            if (idx == -1) {
                 return null;
             }
             if (strings == null) {
-                strings = Maps.newHashMap();
+                strings = new String[INITIAL_CAPACITY];
             }
-            int idx = readSmallInt();
-            String string = strings.get(idx);
+            String string = null;
+            if (idx >= strings.length) {
+                String[] grow = new String[strings.length * 3 / 2];
+                System.arraycopy(strings, 0, grow, 0, strings.length);
+                strings = grow;
+            } else {
+                string = strings[idx];
+            }
             if (string == null) {
                 string = input.readString();
-                strings.put(idx, string);
+                strings[idx] = string;
             }
             return string;
         } catch (KryoException e) {
@@ -166,6 +180,7 @@ public class StringDeduplicatingKryoBackedDecoder extends AbstractDecoder implem
         return input.total() + extraSkipped;
     }
 
+    @Override
     public void close() throws IOException {
         strings = null;
         input.close();

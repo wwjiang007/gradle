@@ -18,14 +18,13 @@ package org.gradle.integtests.samples
 
 import org.gradle.integtests.fixtures.AbstractIntegrationTest
 import org.gradle.integtests.fixtures.DefaultTestExecutionResult
-import org.gradle.integtests.fixtures.RepoScriptBlockUtil
 import org.gradle.integtests.fixtures.Sample
 import org.gradle.test.fixtures.file.TestFile
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-import static org.hamcrest.Matchers.containsString
+import static org.hamcrest.CoreMatchers.containsString
 
 class SamplesMixedJavaAndGroovyIntegrationTest extends AbstractIntegrationTest {
 
@@ -33,7 +32,7 @@ class SamplesMixedJavaAndGroovyIntegrationTest extends AbstractIntegrationTest {
 
     @Before
     void setup() {
-        executer.usingInitScript(RepoScriptBlockUtil.createMirrorInitScript())
+        executer.withRepositoryMirrors()
     }
 
     @Test

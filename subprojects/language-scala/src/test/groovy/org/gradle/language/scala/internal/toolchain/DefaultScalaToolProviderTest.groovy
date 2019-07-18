@@ -16,14 +16,20 @@
 
 package org.gradle.language.scala.internal.toolchain
 
-import org.gradle.api.internal.file.FileResolver
-import org.gradle.workers.internal.WorkerDaemonFactory
+import org.gradle.api.internal.ClassPathRegistry
+import org.gradle.initialization.ClassLoaderRegistry
 import org.gradle.language.base.internal.compile.CompileSpec
+import org.gradle.process.internal.JavaForkOptionsFactory
+import org.gradle.workers.internal.ActionExecutionSpecFactory
+import org.gradle.workers.internal.WorkerDaemonFactory
 import spock.lang.Specification
 
 class DefaultScalaToolProviderTest extends Specification {
-    FileResolver fileResolver = Mock()
+    JavaForkOptionsFactory forkOptionsFactory = Mock()
+    ClassPathRegistry classPathRegistry = Mock()
+    ClassLoaderRegistry classLoaderRegistry = Mock()
     WorkerDaemonFactory workerDaemonFactory = Mock()
+    ActionExecutionSpecFactory actionExecutionSpecFactory = Mock()
     Set<File> scalacClasspath = Mock()
     Set<File> zincClasspath = Mock()
     File gradleUserHome = Mock()
@@ -31,7 +37,7 @@ class DefaultScalaToolProviderTest extends Specification {
 
     def "newCompiler provides decent error for unsupported CompileSpec"() {
         setup:
-        DefaultScalaToolProvider scalaToolProvider = new DefaultScalaToolProvider(gradleUserHome, rootProjectDir, workerDaemonFactory, fileResolver, scalacClasspath, zincClasspath)
+        DefaultScalaToolProvider scalaToolProvider = new DefaultScalaToolProvider(gradleUserHome, rootProjectDir, workerDaemonFactory, forkOptionsFactory, classPathRegistry, scalacClasspath, zincClasspath, classLoaderRegistry, actionExecutionSpecFactory)
 
         when:
         scalaToolProvider.newCompiler(UnknownCompileSpec.class)

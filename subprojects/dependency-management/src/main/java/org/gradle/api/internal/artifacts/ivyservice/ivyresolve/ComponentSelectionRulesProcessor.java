@@ -36,13 +36,14 @@ public class ComponentSelectionRulesProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(ComponentSelectionRulesProcessor.class);
 
     private final Spec<SpecRuleAction<? super ComponentSelection>> withNoInputs = new Spec<SpecRuleAction<? super ComponentSelection>>() {
+        @Override
         public boolean isSatisfiedBy(SpecRuleAction<? super ComponentSelection> element) {
             return element.getAction().getInputTypes().isEmpty();
         }
     };
     private final Spec<SpecRuleAction<? super ComponentSelection>> withInputs = Specs.negate(withNoInputs);
 
-    public void apply(ComponentSelectionInternal selection, Collection<SpecRuleAction<? super ComponentSelection>> specRuleActions, MetadataProvider metadataProvider) {
+    void apply(ComponentSelectionInternal selection, Collection<SpecRuleAction<? super ComponentSelection>> specRuleActions, MetadataProvider metadataProvider) {
         if (processRules(specRuleActions, withNoInputs, selection, metadataProvider)) {
             processRules(specRuleActions, withInputs, selection, metadataProvider);
         }

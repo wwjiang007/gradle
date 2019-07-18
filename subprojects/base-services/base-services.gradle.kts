@@ -6,59 +6,50 @@
  */
 
 import org.gradle.gradlebuild.unittestandcompile.ModuleType
-import java.util.concurrent.Callable
 
 plugins {
     `java-library`
-    id("gradlebuild.classycle")
+    gradlebuild.classycle
 }
 
-java {
-    gradlebuildJava {
-        moduleType = ModuleType.REQUIRES_JAVA_9_COMPILER
-    }
+gradlebuildJava {
+    moduleType = ModuleType.WORKER
 }
 
 dependencies {
-    api(project(":distributionsDependencies"))
-
-    api(library("guava"))
+    api(project(":hashing"))
     api(library("jsr305"))
-    api(library("fastutil"))
 
     implementation(library("slf4j_api"))
+    implementation(library("guava"))
     implementation(library("commons_lang"))
     implementation(library("commons_io"))
-    implementation(library("jcip"))
+    implementation(library("asm"))
 
-    jmh(library("bouncycastle_provider")) {
+    jmhImplementation(library("bouncycastle_provider")) {
         version {
             prefer(libraryVersion("bouncycastle_provider"))
         }
     }
-}
 
-testFixtures {
-    from(":core")
+    integTestImplementation(project(":logging"))
+    
+    testFixturesImplementation(library("guava"))
+    testImplementation(testFixtures(project(":core")))
+    testRuntimeOnly(library("xerces"))
+    
+    integTestRuntimeOnly(project(":runtimeApiInfo"))
 }
 
 jmh {
-    withGroovyBuilder {
-        setProperty("include", listOf("HashingAlgorithmsBenchmark"))
-    }
+    include = listOf("HashingAlgorithmsBenchmark")
 }
 
 val buildReceiptPackage: String by rootProject.extra
 
-
-
 val buildReceiptResource = tasks.register<Copy>("buildReceiptResource") {
     from(Callable { tasks.getByPath(":createBuildReceipt").outputs.files })
-    destinationDir = file("${gradlebuildJava.generatedTestResourcesDir}/$buildReceiptPackage")
+    destinationDir = file("${gradlebuildJava.generatedResourcesDir}/$buildReceiptPackage")
 }
 
-java.sourceSets {
-    "main" {
-        output.dir(mapOf("builtBy" to buildReceiptResource), gradlebuildJava.generatedTestResourcesDir)
-    }
-}
+sourceSets.main { output.dir(gradlebuildJava.generatedResourcesDir, "builtBy" to buildReceiptResource) }

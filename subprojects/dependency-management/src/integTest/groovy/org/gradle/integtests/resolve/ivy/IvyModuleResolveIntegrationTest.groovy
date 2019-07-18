@@ -322,7 +322,7 @@ task retrieve(type: Sync) {
         given:
         settingsFile << "rootProject.name = 'test'"
 
-        def resolve = new ResolveTestFixture(buildFile)
+        def resolve = new ResolveTestFixture(buildFile, "compile")
         buildFile << """
     group 'org.test'
     version '1.0'
@@ -362,7 +362,8 @@ task retrieve(type: Sync) {
             root(":", "org.test:test:1.0") {
                 module("ivy.configuration:projectA:1.2:a") {
                     module("ivy.configuration:projectB:1.5") {
-                        variant('a+c', ['org.gradle.status': 'integration']) // b, parent are redundant
+                        variant('a', ['org.gradle.status': 'integration']) // b, parent are redundant
+                        variant('c', ['org.gradle.status': 'integration']) // b, parent are redundant
                     }
                 }
             }

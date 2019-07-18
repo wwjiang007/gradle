@@ -16,8 +16,9 @@
 
 package org.gradle.integtests
 
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.AbstractPluginIntegrationTest
 import org.gradle.integtests.fixtures.DirectoryBuildCacheFixture
+import org.gradle.integtests.fixtures.KotlinDslTestUtil
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.gradle.test.fixtures.file.TestFile
@@ -27,7 +28,7 @@ import spock.lang.IgnoreIf
 import static org.gradle.util.TestPrecondition.KOTLIN_SCRIPT
 
 @Requires([KOTLIN_SCRIPT])
-class CachedKotlinTaskExecutionIntegrationTest extends AbstractIntegrationSpec implements DirectoryBuildCacheFixture {
+class CachedKotlinTaskExecutionIntegrationTest extends AbstractPluginIntegrationTest implements DirectoryBuildCacheFixture {
 
     @Override
     protected String getDefaultBuildFileName() {
@@ -37,15 +38,6 @@ class CachedKotlinTaskExecutionIntegrationTest extends AbstractIntegrationSpec i
     def setup() {
         settingsFile << "rootProject.buildFileName = '$defaultBuildFileName'"
 
-        // TODO:kotlin-dsl
-        // In order to facilitate the upgrade to the latest version of the
-        // Kotlin DSL, which ships with Kotlin 1.2.60-eap-44,
-        // the presence of settings.gradle.kts causes
-        // the kotlin-dev repository to be added to settings.buildscript.repositories,
-        // settings.pluginManagement.repositories and to every project.repositories
-        // and project.buildscript.repositories.
-        // This behaviour is temporary and will be removed once the Kotlin DSL
-        // upgrades to the next GA release of Kotlin.
         file("buildSrc/settings.gradle.kts") << """
             buildCache {
                 local(DirectoryBuildCache::class.java) {
@@ -71,7 +63,7 @@ class CachedKotlinTaskExecutionIntegrationTest extends AbstractIntegrationSpec i
         when:
         withBuildCache().run "customTask"
         then:
-        skippedTasks.empty
+        result.assertTaskNotSkipped(":customTask")
 
         when:
         file("buildSrc/build").deleteDir()
@@ -80,12 +72,12 @@ class CachedKotlinTaskExecutionIntegrationTest extends AbstractIntegrationSpec i
 
         withBuildCache().run "customTask"
         then:
-        skippedTasks.contains ":customTask"
+        result.groupedOutput.task(":customTask").outcome == "FROM-CACHE"
     }
 
     @IgnoreIf({GradleContextualExecuter.parallel})
     @LeaksFileHandles
-    def "changing custom Kotlin task implementation in buildSrc doesn't invalidate built-in task"() {
+    def "changing custom Kotlin task implementation in buildSrc invalidates cached result"() {
         withKotlinBuildSrc()
         def taskSourceFile = file("buildSrc/src/main/kotlin/CustomTask.kt")
         taskSourceFile << customKotlinTask()
@@ -99,7 +91,7 @@ class CachedKotlinTaskExecutionIntegrationTest extends AbstractIntegrationSpec i
         when:
         withBuildCache().run "customTask"
         then:
-        skippedTasks.empty
+        result.assertTaskNotSkipped(":customTask")
         file("build/output.txt").text == "input"
 
         when:
@@ -108,14 +100,12 @@ class CachedKotlinTaskExecutionIntegrationTest extends AbstractIntegrationSpec i
         cleanBuildDir()
         withBuildCache().run "customTask"
         then:
-        nonSkippedTasks.contains ":customTask"
+        result.assertTaskNotSkipped(":customTask")
         file("build/output.txt").text == "input modified"
     }
 
     def withKotlinBuildSrc() {
-        file("buildSrc/build.gradle.kts") << """
-            plugins { `kotlin-dsl` }
-        """
+        file("buildSrc/build.gradle.kts") << KotlinDslTestUtil.kotlinDslBuildSrcScript
     }
 
     private static String customKotlinTask(String suffix = "") {

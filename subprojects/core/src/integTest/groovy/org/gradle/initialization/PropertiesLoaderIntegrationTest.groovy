@@ -141,4 +141,55 @@ task printSystemProp {
         then:
         succeeds ':help'
     }
+
+    def "Gradle properties can be derived from environment variables"() {
+        given:
+        buildFile << """
+            task printProperty() {
+                doLast {
+                    println "myProp=\${project.ext.myProp}"
+                }
+            }
+        """
+
+        when:
+        executer.withEnvironmentVars(ORG_GRADLE_PROJECT_myProp: 'fromEnv')
+
+        then:
+        succeeds 'printProperty'
+
+        and:
+        outputContains("myProp=fromEnv")
+
+        when:
+        executer.withEnvironmentVars(ORG_GRADLE_PROJECT_myProp: 'fromEnv2')
+
+        then:
+        succeeds 'printProperty'
+
+        and:
+        outputContains("myProp=fromEnv2")
+    }
+
+    def "properties can be distributed as part of a custom Gradle installation"() {
+        given:
+        requireIsolatedGradleDistribution()
+
+        when:
+        distribution.gradleHomeDir.file('gradle.properties') << 'systemProp.mySystemProp=properties file'
+        buildFile << """
+            task printSystemProp {
+                doLast {
+                    println "mySystemProp=\${System.getProperty('mySystemProp')}"
+                }
+            }
+        """
+        succeeds ':printSystemProp'
+
+        then:
+        outputContains('mySystemProp=properties file')
+
+        cleanup:
+        executer.withArguments("--stop", "--info").run()
+    }
 }

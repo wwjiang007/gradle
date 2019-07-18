@@ -30,8 +30,8 @@ import org.gradle.cache.internal.SingleDepthFilesFinder;
 import org.gradle.cache.internal.UnusedVersionsCacheCleanup;
 import org.gradle.cache.internal.UsedGradleVersions;
 import org.gradle.internal.Factory;
+import org.gradle.internal.file.FileAccessTimeJournal;
 import org.gradle.internal.resource.cached.ExternalResourceFileStore;
-import org.gradle.internal.resource.local.FileAccessTimeJournal;
 import org.gradle.internal.serialize.Serializer;
 
 import javax.annotation.Nullable;
@@ -97,7 +97,7 @@ public class DefaultArtifactCacheLockingManager implements ArtifactCacheLockingM
     @Override
     public <K, V> PersistentIndexedCache<K, V> createCache(String cacheName, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         String cacheFileInMetaDataStore = CacheLayout.META_DATA.getKey() + "/" + cacheName;
-        final PersistentIndexedCache<K, V> persistentCache = cache.createCache(new PersistentIndexedCacheParameters<K, V>(cacheFileInMetaDataStore, keySerializer, valueSerializer));
+        final PersistentIndexedCache<K, V> persistentCache = cache.createCache(PersistentIndexedCacheParameters.of(cacheFileInMetaDataStore, keySerializer, valueSerializer));
         return new CacheLockingPersistentCache<K, V>(persistentCache);
     }
 

@@ -16,20 +16,21 @@
 
 package org.gradle.api.internal.project.taskfactory;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.NonNullApi;
 import org.gradle.api.Task;
+import org.gradle.api.Transformer;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.incremental.IncrementalTaskInputs;
+import org.gradle.cache.internal.CrossBuildInMemoryCache;
+import org.gradle.cache.internal.CrossBuildInMemoryCacheFactory;
+import org.gradle.internal.reflect.Instantiator;
+import org.gradle.work.InputChanges;
 
-import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -37,22 +38,21 @@ import java.util.Map;
 
 @NonNullApi
 public class DefaultTaskClassInfoStore implements TaskClassInfoStore {
+    private final CrossBuildInMemoryCache<Class<?>, TaskClassInfo> classInfos;
+    private final Transformer<TaskClassInfo, Class<?>> taskClassInfoFactory = new Transformer<TaskClassInfo, Class<?>>() {
+        @Override
+        public TaskClassInfo transform(Class<?> aClass) {
+            return createTaskClassInfo(aClass.asSubclass(Task.class));
+        }
+    };
 
-    private final LoadingCache<Class<? extends Task>, TaskClassInfo> classInfos = CacheBuilder.newBuilder()
-        .weakKeys()
-        .build(new CacheLoader<Class<? extends Task>, TaskClassInfo>() {
-            @Override
-            public TaskClassInfo load(@Nonnull Class<? extends Task> type) throws Exception {
-                return createTaskClassInfo(type);
-            }
-        });
-
-    public DefaultTaskClassInfoStore() {
+    public DefaultTaskClassInfoStore(CrossBuildInMemoryCacheFactory cacheFactory) {
+        this.classInfos = cacheFactory.newClassCache();
     }
 
     @Override
     public TaskClassInfo getTaskClassInfo(Class<? extends Task> type) {
-        return classInfos.getUnchecked(type);
+        return classInfos.get(type, taskClassInfoFactory);
     }
 
     private TaskClassInfo createTaskClassInfo(Class<? extends Task> type) {
@@ -66,9 +66,9 @@ public class DefaultTaskClassInfoStore implements TaskClassInfoStore {
                 if (taskActionFactory == null) {
                     continue;
                 }
-                if (taskActionFactory instanceof IncrementalTaskActionFactory) {
+                if (taskActionFactory instanceof AbstractIncrementalTaskActionFactory) {
                     if (incremental) {
-                        throw new GradleException(String.format("Cannot have multiple @TaskAction methods accepting an %s parameter.", IncrementalTaskInputs.class.getSimpleName()));
+                        throw new GradleException(String.format("Cannot have multiple @TaskAction methods accepting an %s or %s parameter.", InputChanges.class.getSimpleName(), IncrementalTaskInputs.class.getSimpleName()));
                     }
                     incremental = true;
                 }
@@ -76,7 +76,7 @@ public class DefaultTaskClassInfoStore implements TaskClassInfoStore {
             }
         }
 
-        return new TaskClassInfo(incremental, taskActionFactoriesBuilder.build(), cacheable);
+        return new TaskClassInfo(taskActionFactoriesBuilder.build(), cacheable);
     }
 
     @Nullable
@@ -98,12 +98,16 @@ public class DefaultTaskClassInfoStore implements TaskClassInfoStore {
 
         TaskActionFactory taskActionFactory;
         if (parameterTypes.length == 1) {
-            if (!parameterTypes[0].equals(IncrementalTaskInputs.class)) {
+            Class<?> parameterType = parameterTypes[0];
+            if (parameterType.equals(IncrementalTaskInputs.class)) {
+                taskActionFactory = new IncrementalTaskInputsTaskActionFactory(taskType, method);
+            } else if (parameterType.equals(InputChanges.class)) {
+                taskActionFactory = new IncrementalInputsTaskActionFactory(taskType, method);
+            } else {
                 throw new GradleException(String.format(
                     "Cannot use @TaskAction annotation on method %s.%s() because %s is not a valid parameter to an action method.",
-                    declaringClass.getSimpleName(), method.getName(), parameterTypes[0]));
+                    declaringClass.getSimpleName(), method.getName(), parameterType));
             }
-            taskActionFactory = new IncrementalTaskActionFactory(taskType, method);
         } else {
             taskActionFactory = new StandardTaskActionFactory(taskType, method);
         }
@@ -130,23 +134,47 @@ public class DefaultTaskClassInfoStore implements TaskClassInfoStore {
         }
 
         @Override
-        public Action<? super Task> create() {
+        public Action<? super Task> create(Instantiator instantiator) {
             return new StandardTaskAction(taskType, method);
         }
     }
 
-    private static class IncrementalTaskActionFactory implements TaskActionFactory {
+    private static class IncrementalInputsTaskActionFactory extends AbstractIncrementalTaskActionFactory {
+        public IncrementalInputsTaskActionFactory(Class<? extends Task> taskType, Method method) {
+            super(taskType, method);
+        }
+
+        @Override
+        protected Action<? super Task> doCreate(Instantiator instantiator, Class<? extends Task> taskType, Method method) {
+            return new IncrementalInputsTaskAction(taskType, method);
+        }
+    }
+
+    private static class IncrementalTaskInputsTaskActionFactory extends AbstractIncrementalTaskActionFactory {
+        public IncrementalTaskInputsTaskActionFactory(Class<? extends Task> taskType, Method method) {
+            super(taskType, method);
+        }
+
+        @Override
+        protected Action<? super Task> doCreate(Instantiator instantiator, Class<? extends Task> taskType, Method method) {
+            return new IncrementalTaskInputsTaskAction(instantiator, taskType, method);
+        }
+    }
+
+    private static abstract class AbstractIncrementalTaskActionFactory implements TaskActionFactory {
         private final Class<? extends Task> taskType;
         private final Method method;
 
-        public IncrementalTaskActionFactory(Class<? extends Task> taskType, Method method) {
+        public AbstractIncrementalTaskActionFactory(Class<? extends Task> taskType, Method method) {
             this.taskType = taskType;
             this.method = method;
         }
 
+        protected abstract Action<? super Task> doCreate(Instantiator instantiator, Class<? extends Task> taskType, Method method);
+
         @Override
-        public Action<? super Task> create() {
-            return new IncrementalTaskAction(taskType, method);
+        public Action<? super Task> create(Instantiator instantiator) {
+            return doCreate(instantiator, taskType, method);
         }
     }
 }

@@ -57,7 +57,149 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                module("org:foo:1.0")
+                edge("org:foo:{strictly 1.0}", "org:foo:1.0")
+            }
+        }
+    }
+
+    @Issue("gradle/gradle#4186")
+    def "should choose highest when multiple prefer versions disagree"() {
+        repository {
+            'org:foo' {
+                '1.0.0'()
+                '1.1.0'()
+                '1.2.0'()
+                '2.0.0'()
+            }
+        }
+
+        buildFile << """
+            dependencies {
+                constraints {
+                    conf('org:foo') {
+                        version { prefer '1.1.0' }
+                    }
+                    conf('org:foo') {
+                        version { prefer '1.0.0' }
+                    }
+                }
+                conf 'org:foo:[1.0.0,2.0.0)'
+            }
+        """
+
+        when:
+        repositoryInteractions {
+            'org:foo' {
+                expectVersionListing()
+                '1.1.0' {
+                    expectGetMetadata()
+                    expectGetArtifact()
+                }
+                '1.2.0' {
+                    expectGetMetadata()
+                }
+            }
+        }
+        run ':checkDeps'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                constraint("org:foo:{prefer 1.0.0}", "org:foo:1.1.0")
+                constraint("org:foo:{prefer 1.1.0}", "org:foo:1.1.0")
+                edge("org:foo:[1.0.0,2.0.0)", "org:foo:1.1.0") {
+                    byConstraint()
+                    byReason("didn't match version 2.0.0")
+                }
+            }
+        }
+    }
+
+    def "can combine required and preferred version in single dependency definition"() {
+        repository {
+            'org:foo' {
+                '1.0.0'()
+                '1.1.0'()
+                '1.2.0'()
+                '2.0.0'()
+            }
+        }
+
+        buildFile << """
+            dependencies {
+                conf('org:foo:0.9')
+                conf('org:foo:[1.0.0,2.0.0)') {
+                    version {
+                        prefer '1.1.0'
+                    }
+                }
+            }
+        """
+
+        when:
+        repositoryInteractions {
+            'org:foo' {
+                expectVersionListing()
+                '1.1.0' {
+                    expectGetMetadata()
+                    expectGetArtifact()
+                }
+                '1.2.0' {
+                    expectGetMetadata()
+                }
+            }
+        }
+        run ':checkDeps'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                edge("org:foo:{require [1.0.0,2.0.0); prefer 1.1.0}", "org:foo:1.1.0")
+                edge("org:foo:0.9", "org:foo:1.1.0").byConflictResolution("between versions 0.9 and 1.1.0")
+            }
+        }
+    }
+
+    def "can combine strict and preferred version in single dependency definition"() {
+        repository {
+            'org:foo' {
+                '1.0.0'()
+                '1.1.0'()
+                '1.2.0'()
+                '2.0.0'()
+            }
+        }
+
+        buildFile << """
+            dependencies {
+                conf('org:foo') {
+                    version {
+                        strictly '[1.0.0,2.0.0)'
+                        prefer '1.1.0'
+                    }
+                }
+            }
+        """
+
+        when:
+        repositoryInteractions {
+            'org:foo' {
+                expectVersionListing()
+                '1.1.0' {
+                    expectGetMetadata()
+                    expectGetArtifact()
+                }
+                '1.2.0' {
+                    expectGetMetadata()
+                }
+            }
+        }
+        run ':checkDeps'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                edge("org:foo:{strictly [1.0.0,2.0.0); prefer 1.1.0}", "org:foo:1.1.0")
             }
         }
     }
@@ -103,8 +245,8 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
 
         then:
         failure.assertHasCause("""Cannot find a version of 'org:foo' that satisfies the version constraints: 
-   Dependency path ':test:unspecified' --> 'org:foo' prefers '1.0', rejects '(1.0,)'
-   Dependency path ':test:unspecified' --> 'org:bar:1.0' --> 'org:foo' prefers '1.1'""")
+   Dependency path ':test:unspecified' --> 'org:foo:{strictly 1.0}'
+   Dependency path ':test:unspecified' --> 'org:bar:1.0' --> 'org:foo:1.1'""")
 
     }
 
@@ -144,7 +286,7 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                edge "org:foo:1.0", "org:foo:1.0"
+                edge "org:foo:{strictly 1.0}", "org:foo:1.0"
                 edge("org:bar:1.0", "org:bar:1.0") {
                     edge "org:foo:1.0", "org:foo:1.0"
                 }
@@ -191,7 +333,7 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                edge "org:foo:1.1", "org:foo:1.1"
+                edge "org:foo:{strictly 1.1}", "org:foo:1.1"
                 edge("org:bar:1.0", "org:bar:1.0") {
                     edge("org:foo:1.0", "org:foo:1.1").byConflictResolution("between versions 1.1 and 1.0")
                 }
@@ -254,7 +396,7 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
 
         resolve.expectGraph {
             root(":", ":test:") {
-                edge("org:foo:$directDependencyVersion", "org:foo:1.2")
+                edge("org:foo:{strictly $directDependencyVersion}", "org:foo:1.2")
                 edge("org:bar:1.0", "org:bar:1.0") {
                     edge("org:foo:$transitiveDependencyVersion", "org:foo:1.2")
                 }
@@ -311,8 +453,8 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
 
         then:
         failure.assertHasCause("""Cannot find a version of 'org:foo' that satisfies the version constraints: 
-   Dependency path ':test:unspecified' --> 'org:foo' prefers '17'
-   Dependency path ':test:unspecified' --> 'test:other:unspecified' --> 'org:foo' prefers '15', rejects '(15,)'""")
+   Dependency path ':test:unspecified' --> 'org:foo:17'
+   Dependency path ':test:unspecified' --> 'test:other:unspecified' --> 'org:foo:{strictly 15}'""")
 
     }
 
@@ -364,8 +506,8 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
 
         then:
         failure.assertHasCause("""Cannot find a version of 'org:foo' that satisfies the version constraints: 
-   Dependency path ':test:unspecified' --> 'org:foo' prefers '17', rejects '(17,)'
-   Dependency path ':test:unspecified' --> 'test:other:unspecified' --> 'org:foo' prefers '15', rejects '(15,)'""")
+   Dependency path ':test:unspecified' --> 'org:foo:{strictly 17}'
+   Dependency path ':test:unspecified' --> 'test:other:unspecified' --> 'org:foo:{strictly 15}'""")
 
     }
 
@@ -420,12 +562,46 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
 
         then:
         failure.assertHasCause("""Cannot find a version of 'org:foo' that satisfies the version constraints: 
-   Dependency path ':test:unspecified' --> 'org:foo' prefers '[15,16]', rejects '(16,)'
-   Dependency path ':test:unspecified' --> 'test:other:unspecified' --> 'org:foo' prefers '[17,18]', rejects '(18,)'""")
+   Dependency path ':test:unspecified' --> 'org:foo:{strictly [15,16]}'
+   Dependency path ':test:unspecified' --> 'test:other:unspecified' --> 'org:foo:{strictly [17,18]}'""")
 
     }
 
-    void "should pass if strict version ranges overlap"() {
+    def "should fail and include path to unresolvable strict version range"() {
+        given:
+        repository {
+            'org:foo:15'()
+        }
+
+        buildFile << """
+            dependencies {
+                conf 'org:foo:15'
+                conf('org:foo') {
+                    version {
+                        strictly '[0,1]'
+                    }
+                }
+            }
+        """
+
+        when:
+        repositoryInteractions {
+            'org:foo' {
+                expectVersionListing()
+                '15' {
+                    expectGetMetadata()
+                }
+            }
+        }
+        fails ':checkDeps'
+
+        then:
+        failure.assertHasCause("""Cannot find a version of 'org:foo' that satisfies the version constraints: 
+   Dependency path ':test:unspecified' --> 'org:foo:15'
+   Dependency path ':test:unspecified' --> 'org:foo:{strictly [0,1]}'""")
+    }
+
+    void    "should pass if strict version ranges overlap"() {
         given:
         repository {
             'org:foo' {
@@ -478,11 +654,11 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                edge("org:foo:[1.0,1.2]", "org:foo:1.2")
+                edge("org:foo:{strictly [1.0,1.2]}", "org:foo:1.2")
                 project(':other', 'test:other:') {
                     configuration = 'conf'
                     noArtifacts()
-                    edge("org:foo:[1.1,1.3]", "org:foo:1.2")
+                    edge("org:foo:{strictly [1.1,1.3]}", "org:foo:1.2")
                 }
             }
         }
@@ -517,7 +693,7 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                module("org:foo:1.0")
+                edge("org:foo:{require 1.0; reject 1.1}", "org:foo:1.0")
             }
         }
     }
@@ -567,7 +743,7 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                edge("org:foo:$notation", "org:foo:1.0").byReason("rejected version 1.1")
+                edge("org:foo:{require $notation; reject 1.1}", "org:foo:1.0").byReason("rejected version 1.1")
             }
         }
 
@@ -620,8 +796,8 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
 
         then:
         failure.assertHasCause("""Cannot find a version of 'org:foo' that satisfies the version constraints: 
-   Dependency path ':test:unspecified' --> 'org:foo' prefers '1.0', rejects '1.1'
-   Dependency path ':test:unspecified' --> 'org:bar:1.0' --> 'org:foo' prefers '1.1'""")
+   Dependency path ':test:unspecified' --> 'org:foo:{require 1.0; reject 1.1}'
+   Dependency path ':test:unspecified' --> 'org:bar:1.0' --> 'org:foo:1.1'""")
     }
 
     def "can reject a version range"() {
@@ -656,7 +832,7 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                edge("org:foo:[1.0,)", "org:foo:1.1").byReason("rejected versions 1.5, 1.4, 1.3, 1.2")
+                edge("org:foo:{require [1.0,); reject [1.2, 1.5]}", "org:foo:1.1").byReason("rejected versions 1.5, 1.4, 1.3, 1.2")
             }
         }
     }
@@ -689,7 +865,7 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                module("org:foo:1.0")
+                edge("org:foo:{require 1.0; reject 1.1 & 1.2}", "org:foo:1.0")
             }
         }
     }
@@ -707,11 +883,12 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
             }
         }
 
+        def rejectString = rejects.collect({"'${it}'"}).join(', ')
         buildFile << """
             dependencies {
                 conf('org:foo:$notation') {
                    version {
-                      reject $rejects
+                      reject $rejectString
                    }
                 }
             }           
@@ -739,26 +916,26 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
         resolve.expectGraph {
             root(":", ":test:") {
                 String rejectedVersions = (selected+1..5).collect { "1.${it}" }.reverse().join(", ")
-                edge("org:foo:$notation", "org:foo:1.$selected").byReason("rejected versions ${rejectedVersions}")
+                edge("org:foo:{require $notation; reject ${rejects.join(' & ')}}", "org:foo:1.$selected").byReason("rejected versions ${rejectedVersions}")
             }
         }
 
         where:
         notation         | rejects                      | selected | requiresMetadata
-        '1+'             | "'1.4', '1.5'"               | 3        | false
-        '1.+'            | "'1.4', '1.5'"               | 3        | false
-        '[1.0,)'         | "'1.4', '1.5'"               | 3        | false
-        'latest.release' | "'1.4', '1.5'"               | 3        | true
+        '1+'             | ['1.4', '1.5']               | 3        | false
+        '1.+'            | ['1.4', '1.5']               | 3        | false
+        '[1.0,)'         | ['1.4', '1.5']               | 3        | false
+        'latest.release' | ['1.4', '1.5']               | 3        | true
 
-        '1+'             | "'[1.2,)', '1.5'"            | 1        | false
-        '1.+'            | "'[1.2,)', '1.5'"            | 1        | false
-        '[1.0,)'         | "'[1.2,)', '1.5'"            | 1        | false
-        'latest.release' | "'[1.2,)', '1.5'"            | 1        | true
+        '1+'             | ['[1.2,)', '1.5']            | 1        | false
+        '1.+'            | ['[1.2,)', '1.5']            | 1        | false
+        '[1.0,)'         | ['[1.2,)', '1.5']            | 1        | false
+        'latest.release' | ['[1.2,)', '1.5']            | 1        | true
 
-        '1+'             | "'1.5', '[1.1, 1.3]', '1.4'" | 0        | false
-        '1.+'            | "'1.5', '[1.1, 1.3]', '1.4'" | 0        | false
-        '[1.0,)'         | "'1.5', '[1.1, 1.3]', '1.4'" | 0        | false
-        'latest.release' | "'1.5', '[1.1, 1.3]', '1.4'" | 0        | true
+        '1+'             | ['1.5', '[1.1, 1.3]', '1.4'] | 0        | false
+        '1.+'            | ['1.5', '[1.1, 1.3]', '1.4'] | 0        | false
+        '[1.0,)'         | ['1.5', '[1.1, 1.3]', '1.4'] | 0        | false
+        'latest.release' | ['1.5', '[1.1, 1.3]', '1.4'] | 0        | true
     }
 
     def "adding rejectAll on a dependency is pointless and make it fail"() {
@@ -835,9 +1012,9 @@ class RichVersionConstraintsIntegrationTest extends AbstractModuleDependencyReso
 
         then:
         failure.assertHasCause("""Cannot find a version of 'org:bar' that satisfies the version constraints: 
-   Dependency path ':test:unspecified' --> 'org:bar' prefers '1'
-   Constraint path ':test:unspecified' --> 'org:bar' prefers '1', rejects '(1,)'
-   Dependency path ':test:unspecified' --> 'org:foo:2' --> 'org:bar' prefers '2'""")
+   Dependency path ':test:unspecified' --> 'org:bar:1'
+   Constraint path ':test:unspecified' --> 'org:bar:{strictly 1}'
+   Dependency path ':test:unspecified' --> 'org:foo:2' --> 'org:bar:2'""")
     }
 
 }

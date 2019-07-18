@@ -15,6 +15,7 @@
  */
 
 package org.gradle.buildinit.plugins
+
 import org.gradle.buildinit.plugins.fixtures.WrapperTestFixture
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.DefaultTestExecutionResult
@@ -27,6 +28,7 @@ import org.gradle.test.fixtures.server.http.PomHttpArtifact
 import org.gradle.util.Requires
 import org.gradle.util.SetSystemProperties
 import org.gradle.util.TestPrecondition
+import org.gradle.util.TextUtil
 import org.junit.Rule
 import spock.lang.Issue
 
@@ -49,6 +51,10 @@ class MavenConversionIntegrationTest extends AbstractIntegrationSpec {
          * */
         m2.generateUserSettingsFile(m2.mavenRepo())
         using m2
+        executer.withRepositoryMirrors()
+        executer.beforeExecute {
+            executer.ignoreMissingSettingsFile()
+        }
     }
 
     def "multiModule"() {
@@ -59,6 +65,9 @@ class MavenConversionIntegrationTest extends AbstractIntegrationSpec {
         gradleFilesGenerated()
         file("build.gradle").text.contains("options.encoding = 'UTF-8'")
         !file("webinar-war/build.gradle").text.contains("'options.encoding'")
+        assertContainsPublishingConfig(file("build.gradle"), "    ", ["sourcesJar"])
+        file("webinar-impl/build.gradle").text.contains("publishing.publications.maven.artifact(testsJar)")
+        file("webinar-impl/build.gradle").text.contains("publishing.publications.maven.artifact(javadocJar)")
 
         when:
         run 'clean', 'build'
@@ -134,19 +143,37 @@ Root project 'webinar-parent'
 
     def "singleModule"() {
         when:
-        executer.withArgument("-d")
         run 'init'
 
         then:
         gradleFilesGenerated()
+        file("settings.gradle").text.contains("rootProject.name = 'util'")
+        assertContainsPublishingConfig(file("build.gradle"))
 
         when:
-        //TODO this build should fail because the TestNG test is failing
-        //however the plugin does not generate testNG for single module project atm (bug)
-        //def failure = runAndFail('clean', 'build')  //assert if fails for the right reason
-        run 'clean', 'build'
+        fails 'clean', 'build'
+
         then:
         file("build/libs/util-2.5.jar").exists()
+        failure.assertHasDescription("Execution failed for task ':test'.")
+        failure.assertHasCause("There were failing tests.")
+    }
+
+    private void assertContainsPublishingConfig(TestFile buildScript, String indent = "", List<String> additionalArchiveTasks = []) {
+        def text = buildScript.text
+        assert text.contains("id 'maven-publish'") || text.contains("apply plugin: 'maven-publish'")
+        def configLines = ["from(components.java)"]
+        configLines += additionalArchiveTasks.collect { "artifact($it)" }
+        def publishingBlock = TextUtil.toPlatformLineSeparators(TextUtil.indent("""
+            publishing {
+                publications {
+                    maven(MavenPublication) {
+${TextUtil.indent(configLines.join("\n"), "                        ")}
+                    }
+                }
+            }
+        """.stripIndent().trim(), indent))
+        assert text.contains(publishingBlock)
     }
 
     def "singleModule with explicit project dir"() {
@@ -161,27 +188,75 @@ Root project 'webinar-parent'
         gradleFilesGenerated()
 
         when:
-        //TODO this build should fail because the TestNG test is failing
-        //however the plugin does not generate testNG for single module project atm (bug)
-        //def failure = runAndFail('clean', 'build')  //assert if fails for the right reason
-        run 'clean', 'build'
+        fails 'clean', 'build'
+
         then:
         file("build/libs/util-2.5.jar").exists()
+        failure.assertHasDescription("Execution failed for task ':test'.")
+        failure.assertHasCause("There were failing tests.")
     }
 
-    def "testjar"() {
-        when:
+    def 'sourcesJar'() {
+        when: 'build is initialized'
         run 'init'
 
-        then:
-        gradleFilesGenerated()
+        then: 'sourcesJar task configuration is generated'
+        buildFile.text.contains(TextUtil.toPlatformLineSeparators('''
+            task sourcesJar(type: Jar) {
+                classifier = 'sources'
+                from(sourceSets.main.allJava)
+            }
+        '''.stripIndent().trim()))
+        assertContainsPublishingConfig(buildFile, '', ['sourcesJar'])
 
-        when:
-        run 'clean', 'build'
+        when: 'the generated task is executed'
+        run 'clean', 'build', 'sourcesJar'
 
-        then:
-        file("build/libs/testjar-2.5.jar").exists()
-        file("build/libs/testjar-2.5-tests.jar").exists()
+        then: 'the sources jar is generated'
+        file('build/libs/util-2.5.jar').exists()
+        file('build/libs/util-2.5-sources.jar').exists()
+    }
+
+    def 'testsJar'() {
+        when: 'build is initialized'
+        run 'init'
+
+        then: 'testsJar task configuration is generated'
+        buildFile.text.contains(TextUtil.toPlatformLineSeparators('''
+            task testsJar(type: Jar) {
+                classifier = 'tests'
+                from(sourceSets.test.output)
+            }
+        '''.stripIndent().trim()))
+        assertContainsPublishingConfig(buildFile, '', ['testsJar'])
+
+        when: 'the generated task is executed'
+        run 'clean', 'build', 'testJar'
+
+        then: 'the tests jar is generated'
+        file('build/libs/util-2.5.jar').exists()
+        file('build/libs/util-2.5-tests.jar').exists()
+    }
+
+    def 'javadocJar'() {
+        when: 'build is initialized'
+        run 'init'
+
+        then: 'javadocJar task configuration is generated'
+        buildFile.text.contains(TextUtil.toPlatformLineSeparators('''
+            task javadocJar(type: Jar) {
+                classifier = 'javadoc'
+                from(javadoc.destinationDir)
+            }
+        '''.stripIndent().trim()))
+        assertContainsPublishingConfig(buildFile, '', ['javadocJar'])
+
+        when: 'the generated task is executed'
+        run 'clean', 'build', 'javadocJar'
+
+        then: 'the javadoc jar is generated'
+        file('build/libs/util-2.5.jar').exists()
+        file('build/libs/util-2.5-javadoc.jar').exists()
     }
 
     def "enforcerplugin"() {
@@ -192,11 +267,12 @@ Root project 'webinar-parent'
         gradleFilesGenerated()
 
         and:
-        buildFile.text.contains("""configurations.all {
-it.exclude group: 'org.apache.maven'
-it.exclude group: 'org.apache.maven', module: 'badArtifact'
-it.exclude group: '*', module: 'badArtifact'
-}""")
+        buildFile.text.contains(TextUtil.toPlatformLineSeparators("""configurations.all {
+    exclude(group: 'org.apache.maven')
+    exclude(group: 'org.apache.maven', module: 'badArtifact')
+    exclude(group: '*', module: 'badArtifact')
+    exclude(group: 'broken')
+}"""))
         when:
         run 'clean', 'build'
 
@@ -215,6 +291,7 @@ it.exclude group: '*', module: 'badArtifact'
         run 'clean', 'build'
 
         then:
+        file("build.gradle").text.contains("compileOnly 'junit:junit:4.10'")
         file("build/libs/myThing-0.0.1-SNAPSHOT.jar").exists()
     }
 
@@ -340,7 +417,7 @@ Root project 'webinar-parent'
         fails 'init', '--dsl', 'kotlin'
 
         then:
-        failure.assertHasCause("The requested DSL 'kotlin' is not supported in 'pom' setup type")
+        failure.assertHasCause("The requested DSL 'kotlin' is not supported for 'pom' build type")
     }
 
     void gradleFilesGenerated(TestFile parentFolder = file(".")) {

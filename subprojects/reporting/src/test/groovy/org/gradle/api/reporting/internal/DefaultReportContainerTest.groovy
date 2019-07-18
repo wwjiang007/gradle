@@ -20,29 +20,28 @@ package org.gradle.api.reporting.internal
 
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Project
-import org.gradle.api.internal.AsmBackedClassGenerator
-import org.gradle.api.internal.ClassGeneratorBackedInstantiator
-import org.gradle.api.internal.file.TestFiles
+import org.gradle.api.internal.CollectionCallbackActionDecorator
+import org.gradle.api.reflect.ObjectInstantiationException
 import org.gradle.api.reporting.Report
 import org.gradle.api.reporting.ReportContainer
-import org.gradle.internal.reflect.DirectInstantiator
+import org.gradle.internal.Factories
 import org.gradle.internal.reflect.Instantiator
-import org.gradle.api.reflect.ObjectInstantiationException
 import org.gradle.testfixtures.ProjectBuilder
+import org.gradle.util.TestUtil
 import spock.lang.Specification
 
 class DefaultReportContainerTest extends Specification {
 
-    static Instantiator instantiator = new ClassGeneratorBackedInstantiator(new AsmBackedClassGenerator(), DirectInstantiator.INSTANCE)
+    static Instantiator instantiator = TestUtil.instantiatorFactory().decorateLenient()
     static Project project = ProjectBuilder.builder().build()
 
     static class TestReportContainer extends DefaultReportContainer {
         TestReportContainer(Closure c) {
-            super(Report, DefaultReportContainerTest.instantiator)
+            super(Report, DefaultReportContainerTest.instantiator, CollectionCallbackActionDecorator.NOOP)
 
             c.delegate = new Object() {
                 Report createReport(String name) {
-                    add(SimpleReport, name, name, Report.OutputType.FILE, TestFiles.pathToFileResolver(), DefaultReportContainerTest.project)
+                    add(SimpleReport, name, Factories.constant(name), Report.OutputType.FILE, DefaultReportContainerTest.project)
                 }
             }
 
@@ -58,7 +57,7 @@ class DefaultReportContainerTest extends Specification {
         }
     }
 
-    def container
+    DefaultReportContainer container
 
     def setup() {
         container = createContainer {
@@ -78,7 +77,7 @@ class DefaultReportContainerTest extends Specification {
 
     def "container is immutable"() {
         when:
-        container.add(new SimpleReport("d", "d", Report.OutputType.FILE, TestFiles.pathToFileResolver(), project))
+        container.add(new SimpleReport("d", Factories.constant("d"), Report.OutputType.FILE, project))
 
         then:
         thrown(ReportContainer.ImmutableViolationException)

@@ -18,7 +18,7 @@ package org.gradle.api.internal.artifacts.repositories.metadata;
 import org.gradle.api.artifacts.ModuleIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ComponentResolvers;
-import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.parser.ModuleMetadataParser;
+import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.parser.GradleModuleMetadataParser;
 import org.gradle.api.internal.artifacts.repositories.resolver.ExternalResourceArtifactResolver;
 import org.gradle.api.internal.artifacts.repositories.resolver.ResourcePattern;
 import org.gradle.api.internal.artifacts.repositories.resolver.VersionLister;
@@ -40,13 +40,15 @@ import java.util.List;
  * Because of this, we will generate an empty instance (either a Ivy or Maven) based on the repository type.
  */
 public class DefaultGradleModuleMetadataSource extends AbstractMetadataSource<MutableModuleComponentResolveMetadata> {
-    private final ModuleMetadataParser metadataParser;
+    private final GradleModuleMetadataParser metadataParser;
+    private final GradleModuleMetadataCompatibilityConverter metadataCompatibilityConverter;
     private final MutableModuleMetadataFactory<? extends MutableModuleComponentResolveMetadata> mutableModuleMetadataFactory;
     private final boolean listVersions;
 
     @Inject
-    public DefaultGradleModuleMetadataSource(ModuleMetadataParser metadataParser, MutableModuleMetadataFactory<? extends MutableModuleComponentResolveMetadata> mutableModuleMetadataFactory, boolean listVersions) {
+    public DefaultGradleModuleMetadataSource(GradleModuleMetadataParser metadataParser, MutableModuleMetadataFactory<? extends MutableModuleComponentResolveMetadata> mutableModuleMetadataFactory, boolean listVersions) {
         this.metadataParser = metadataParser;
+        this.metadataCompatibilityConverter = new GradleModuleMetadataCompatibilityConverter(metadataParser.getAttributesFactory(), metadataParser.getInstantiator());
         this.mutableModuleMetadataFactory = mutableModuleMetadataFactory;
         this.listVersions = listVersions;
     }
@@ -58,6 +60,7 @@ public class DefaultGradleModuleMetadataSource extends AbstractMetadataSource<Mu
         if (gradleMetadataArtifact != null) {
             MutableModuleComponentResolveMetadata metaDataFromResource = mutableModuleMetadataFactory.create(moduleComponentIdentifier);
             metadataParser.parse(gradleMetadataArtifact, metaDataFromResource);
+            metadataCompatibilityConverter.process(metaDataFromResource);
             return metaDataFromResource;
         }
         return null;

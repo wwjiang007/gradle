@@ -16,7 +16,6 @@
 package org.gradle.integtests.samples
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.RepoScriptBlockUtil
 import org.gradle.integtests.fixtures.Sample
 import org.junit.Rule
 
@@ -29,7 +28,8 @@ class SamplesJavaApiAndImplIntegrationTest extends AbstractIntegrationSpec {
     static impl = "-impl"
 
     def setup() {
-        executer.usingInitScript(RepoScriptBlockUtil.createMirrorInitScript())
+        executer.noDeprecationChecks() // this an example that uses the legacy publishing plugin (uploadArchives)
+        executer.withRepositoryMirrors()
     }
 
     def "test classpath contains impl and api classes"() {
@@ -40,9 +40,9 @@ class SamplesJavaApiAndImplIntegrationTest extends AbstractIntegrationSpec {
         run "test"
 
         then:
-        ":test" in executedTasks
-        ":compileApiJava" in executedTasks
-        ":compileImplJava" in executedTasks
+        executed(":test")
+        executed(":compileApiJava")
+        executed(":compileImplJava")
     }
 
     def "poms contain the right dependencies"() {

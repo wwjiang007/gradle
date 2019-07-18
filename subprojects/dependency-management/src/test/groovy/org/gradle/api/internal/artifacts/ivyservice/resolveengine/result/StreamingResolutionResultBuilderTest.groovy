@@ -27,20 +27,32 @@ import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.Dependen
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.DependencyGraphNode
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.DependencyGraphSelector
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.RootGraphNode
-import org.gradle.api.internal.model.NamedObjectInstantiator
+import org.gradle.api.internal.attributes.AttributeDesugaring
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.external.model.DefaultModuleComponentSelector
+import org.gradle.internal.component.local.model.RootConfigurationMetadata
 import org.gradle.internal.resolve.ModuleVersionResolveException
+import org.gradle.util.AttributeTestUtil
 import org.gradle.util.TestUtil
 import spock.lang.Specification
 
+import static java.util.Collections.emptySet
+import static org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasons.CONFLICT_RESOLUTION
+import static org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasons.of
+import static org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasons.requested
+import static org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasons.root
 import static org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ResolutionResultPrinter.printGraph
-import static org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.VersionSelectionReasons.*
 
 class StreamingResolutionResultBuilderTest extends Specification {
 
     final ImmutableModuleIdentifierFactory moduleIdentifierFactory = new DefaultImmutableModuleIdentifierFactory()
-    StreamingResolutionResultBuilder builder = new StreamingResolutionResultBuilder(new DummyBinaryStore(), new DummyStore(), moduleIdentifierFactory, new DesugaredAttributeContainerSerializer(TestUtil.attributesFactory(), NamedObjectInstantiator.INSTANCE))
+    StreamingResolutionResultBuilder builder = new StreamingResolutionResultBuilder(
+        new DummyBinaryStore(),
+        new DummyStore(),
+        moduleIdentifierFactory,
+        new DesugaredAttributeContainerSerializer(AttributeTestUtil.attributesFactory(), TestUtil.objectInstantiator()),
+        new AttributeDesugaring(AttributeTestUtil.attributesFactory())
+    )
 
     def "result can be read multiple times"() {
         def rootNode = rootNode(1, "org", "root", "1.0")
@@ -49,7 +61,7 @@ class StreamingResolutionResultBuilderTest extends Specification {
         builder.finish(rootNode)
 
         when:
-        def result = builder.complete()
+        def result = builder.complete(emptySet())
 
         then:
         with(result) {
@@ -64,7 +76,7 @@ class StreamingResolutionResultBuilderTest extends Specification {
         def root = rootNode(1, "org", "root", "1.0")
         def selector1 = selector(1, "org", "dep1", "2.0")
         def selector2 = selector(2, "org", "dep2", "3.0")
-        def dep1 = node(2, "org", "dep1", "2.0", of([CONFLICT_RESOLUTION]))
+        def dep1 = node(2, "org", "dep1", "2.0", of(CONFLICT_RESOLUTION))
         root.outgoingEdges >> [
                 dep(selector1, 2),
                 dep(selector2, new RuntimeException("Boo!"))
@@ -81,7 +93,7 @@ class StreamingResolutionResultBuilderTest extends Specification {
         builder.finish(root)
 
         when:
-        def result = builder.complete()
+        def result = builder.complete(emptySet())
 
         then:
         printGraph(result.root) == """org:root:1.0
@@ -100,7 +112,7 @@ class StreamingResolutionResultBuilderTest extends Specification {
         builder.visitNode(root)
         builder.visitNode(node(1, "org", "root", "1.0", requested())) //it's fine
 
-        builder.visitNode(node(2, "org", "dep1", "2.0", of([CONFLICT_RESOLUTION])))
+        builder.visitNode(node(2, "org", "dep1", "2.0", of(CONFLICT_RESOLUTION)))
         builder.visitNode(node(2, "org", "dep1", "2.0", requested())) //will be ignored
 
         builder.visitSelector(selector)
@@ -110,7 +122,7 @@ class StreamingResolutionResultBuilderTest extends Specification {
         builder.finish(root)
 
         when:
-        def result = builder.complete()
+        def result = builder.complete(emptySet())
 
         then:
         printGraph(result.root) == """org:root:1.0
@@ -150,7 +162,7 @@ class StreamingResolutionResultBuilderTest extends Specification {
         builder.finish(root)
 
         when:
-        def result = builder.complete()
+        def result = builder.complete(emptySet())
 
         then:
         printGraph(result.root) == """org:root:1.0
@@ -189,7 +201,7 @@ class StreamingResolutionResultBuilderTest extends Specification {
         builder.finish(root)
 
         when:
-        def result = builder.complete()
+        def result = builder.complete(emptySet())
 
         then:
         printGraph(result.root) == """org:root:1.0
@@ -237,6 +249,9 @@ class StreamingResolutionResultBuilderTest extends Specification {
 
         def node = Stub(RootGraphNode)
         _ * node.owner >> component
+        _ * node.getMetadata() >> Mock(RootConfigurationMetadata) {
+            getAttributes() >> AttributeTestUtil.attributes(["org.foo": "v1", "org.bar": 2, "org.baz": true])
+        }
         return node
     }
 

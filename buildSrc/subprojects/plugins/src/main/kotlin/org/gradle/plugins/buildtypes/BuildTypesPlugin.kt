@@ -10,10 +10,14 @@ import org.gradle.kotlin.dsl.*
 class BuildTypesPlugin : Plugin<Project> {
 
     override fun apply(project: Project): Unit = project.run {
-        val buildTypes = container(BuildType::class.java)
+        val buildTypes = container(BuildType::class)
         extensions.add("buildTypes", buildTypes)
         buildTypes.all {
             register(this)
+            val activeBuildTypes = buildTypes.filter { it.active }
+            require(activeBuildTypes.size <= 1) {
+                "Only one build type can be active. Active build types: ${activeBuildTypes.joinToString(", ") { it.name }}"
+            }
         }
     }
 
@@ -31,16 +35,19 @@ class BuildTypesPlugin : Plugin<Project> {
         }
 
         val invokedTaskNames = gradle.startParameter.taskNames
-        buildType.findUsedTaskNameAndIndexIn(invokedTaskNames)?.let { (usedName, index) ->
+        val usedTaskNames = buildType.findUsedTaskNamesWithIndexIn(invokedTaskNames).reversed()
+        usedTaskNames.forEach { (_, usedName) ->
             require(usedName.isNotEmpty())
-            if (!isTaskHelpInvocation(invokedTaskNames, index)) {
-                buildType.active = true
-                buildType.onProjectProperties = { properties: ProjectProperties ->
-                    properties.forEach { (name, value) ->
-                        project.setOrCreateProperty(name, value)
-                    }
+            buildType.active = true
+            buildType.onProjectProperties = { properties: ProjectProperties ->
+                properties.forEach { (name, value) ->
+                    project.setOrCreateProperty(name, value)
                 }
-                afterEvaluate {
+            }
+        }
+        if (usedTaskNames.isNotEmpty()) {
+            afterEvaluate {
+                usedTaskNames.forEach { (index, usedName) ->
                     invokedTaskNames.removeAt(index)
 
                     val subproject = usedName.substringBeforeLast(":", "")
@@ -53,16 +60,12 @@ class BuildTypesPlugin : Plugin<Project> {
     }
 
     private
-    fun BuildType.findUsedTaskNameAndIndexIn(taskNames: List<String>): Pair<String, Int>? {
+    fun BuildType.findUsedTaskNamesWithIndexIn(taskNames: List<String>): List<IndexedValue<String>> {
         val candidates = arrayOf(name, abbreviation)
         val nameSuffix = ":$name"
         val abbreviationSuffix = ":$abbreviation"
-        return taskNames.indexOfFirst {
-            it in candidates || it.endsWith(nameSuffix) || it.endsWith(abbreviationSuffix)
-        }.takeIf {
-            it >= 0
-        }?.let {
-            taskNames[it] to it
+        return taskNames.withIndex().filter { (index, taskName) ->
+            (taskName in candidates || taskName.endsWith(nameSuffix) || taskName.endsWith(abbreviationSuffix)) && !isTaskHelpInvocation(taskNames, index)
         }
     }
 
@@ -110,7 +113,7 @@ fun Project.insertBuildTypeTasksInto(
     }
 
     if (taskList.isEmpty()) {
-        taskList.add("help") //do not trigger the default tasks
+        taskList.add("help") // do not trigger the default tasks
     }
 }
 

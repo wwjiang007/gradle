@@ -21,7 +21,7 @@ import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.PreconditionVerifier
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
-import org.hamcrest.Matchers
+import org.hamcrest.CoreMatchers
 import org.junit.Assert
 import org.junit.Rule
 import org.junit.Test
@@ -30,7 +30,7 @@ class CopyErrorIntegrationTest extends AbstractIntegrationTest {
     @Rule public PreconditionVerifier verifier = new PreconditionVerifier()
 
     @Test
-    public void givesReasonableErrorMessageWhenPathCannotBeConverted() {
+    void givesReasonableErrorMessageWhenPathCannotBeConverted() {
         file('src/thing.txt').createFile()
 
         testFile('build.gradle') << '''
@@ -55,7 +55,7 @@ The following types/formats are supported:
 
     @Test
     @Requires(TestPrecondition.SYMLINKS)
-    public void reportsSymLinkWhichPointsToNothing() {
+    void reportsSymLinkWhichPointsToNothing() {
         TestFile link = testFile('src/file')
         link.createLink(testFile('missing'))
 
@@ -68,15 +68,16 @@ The following types/formats are supported:
                 from 'src'
                 into 'dest'
             }
-'''
+        '''
 
         ExecutionFailure failure = inTestDirectory().withTasks('copy').runWithFailure()
-        failure.assertHasDescription("Could not list contents of '${link}'.")
+        failure.assertHasDescription("Execution failed for task ':copy'.")
+        failure.assertHasCause("Couldn't follow symbolic link '${link}'.")
     }
 
     @Test
     @Requires(TestPrecondition.FILE_PERMISSIONS)
-    public void reportsUnreadableSourceDir() {
+    void reportsUnreadableSourceDir() {
         TestFile dir = testFile('src').createDir()
         def oldPermissions = dir.permissions
         dir.permissions = '-w-r--r--'
@@ -95,9 +96,10 @@ The following types/formats are supported:
     '''
 
             ExecutionFailure failure = inTestDirectory().withTasks('copy').runWithFailure()
-            failure.assertThatDescription(Matchers.anyOf(
-                Matchers.startsWith("Could not list contents of directory '${dir}' as it is not readable."),
-                Matchers.startsWith("Could not read path '${dir}'.")
+            failure.assertHasDescription("Execution failed for task ':copy'.")
+            failure.assertThatCause(CoreMatchers.anyOf(
+                CoreMatchers.startsWith("Could not list contents of directory '${dir}' as it is not readable."),
+                CoreMatchers.startsWith("Could not read path '${dir}'.")
             ))
         } finally {
             dir.permissions = oldPermissions

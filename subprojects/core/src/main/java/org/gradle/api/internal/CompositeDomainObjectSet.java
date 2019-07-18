@@ -15,12 +15,12 @@
  */
 package org.gradle.api.internal;
 
-import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import org.gradle.api.Action;
 import org.gradle.api.DomainObjectCollection;
 import org.gradle.api.internal.collections.ElementSource;
+import org.gradle.api.internal.provider.CollectionProviderInternal;
 import org.gradle.api.internal.provider.ProviderInternal;
 import org.gradle.api.specs.Spec;
 import org.gradle.internal.Actions;
@@ -40,24 +40,32 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
 
     private final Spec<T> uniqueSpec = new ItemIsUniqueInCompositeSpec();
     private final Spec<T> notInSpec = new ItemNotInCompositeSpec();
+
     private final DefaultDomainObjectSet<T> backingSet;
+    private final CollectionCallbackActionDecorator callbackActionDecorator;
 
     public static <T> CompositeDomainObjectSet<T> create(Class<T> type, DomainObjectCollection<? extends T>... collections) {
-        //noinspection unchecked
-        DefaultDomainObjectSet<T> backingSet = new DefaultDomainObjectSet<T>(type, new DomainObjectCompositeCollection<T>());
-        CompositeDomainObjectSet<T> out = new CompositeDomainObjectSet<T>(backingSet);
+        return create(type, CollectionCallbackActionDecorator.NOOP, collections);
+    }
+
+    @SafeVarargs
+    public static <T> CompositeDomainObjectSet<T> create(Class<T> type, CollectionCallbackActionDecorator callbackActionDecorator, DomainObjectCollection<? extends T>... collections) {
+        DefaultDomainObjectSet<T> backingSet = new DefaultDomainObjectSet<T>(type, new DomainObjectCompositeCollection<T>(), callbackActionDecorator);
+        CompositeDomainObjectSet<T> out = new CompositeDomainObjectSet<T>(backingSet, callbackActionDecorator);
         for (DomainObjectCollection<? extends T> c : collections) {
             out.addCollection(c);
         }
         return out;
     }
 
-    CompositeDomainObjectSet(DefaultDomainObjectSet<T> backingSet) {
+    private CompositeDomainObjectSet(DefaultDomainObjectSet<T> backingSet, CollectionCallbackActionDecorator callbackActionDecorator) {
         super(backingSet);
-        this.backingSet = backingSet; //TODO SF try avoiding keeping this state here
+        this.backingSet = backingSet;
+        this.callbackActionDecorator = callbackActionDecorator;
     }
 
     public class ItemIsUniqueInCompositeSpec implements Spec<T> {
+        @Override
         public boolean isSatisfiedBy(T element) {
             int matches = 0;
             for (DomainObjectCollection<? extends T> collection : getStore().store) {
@@ -73,6 +81,7 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
     }
 
     public class ItemNotInCompositeSpec implements Spec<T> {
+        @Override
         public boolean isSatisfiedBy(T element) {
             return !getStore().contains(element);
         }
@@ -83,10 +92,12 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
         return (DomainObjectCompositeCollection) this.backingSet.getStore();
     }
 
+    @Override
     public Action<? super T> whenObjectAdded(Action<? super T> action) {
         return super.whenObjectAdded(Actions.filter(action, uniqueSpec));
     }
 
+    @Override
     public Action<? super T> whenObjectRemoved(Action<? super T> action) {
         return super.whenObjectRemoved(Actions.filter(action, notInSpec));
     }
@@ -94,7 +105,7 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
     public void addCollection(DomainObjectCollection<? extends T> collection) {
         if (!getStore().containsCollection(collection)) {
             getStore().addComposited(collection);
-            collection.all(new Action<T>() {
+            collection.all(new InternalAction<T>() {
                 @Override
                 public void execute(T t) {
                     backingSet.getEventRegister().fireObjectAdded(t);
@@ -122,6 +133,7 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
         return getStore().iterator();
     }
 
+    @Override
     @SuppressWarnings("unchecked")
     /**
      * This method is expensive. Avoid calling it if possible. If all you need is a rough
@@ -136,12 +148,12 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
         return getStore().estimatedSize();
     }
 
+    @Override
     public void all(Action<? super T> action) {
         //calling overloaded method with extra behavior:
         whenObjectAdded(action);
-
         for (T t : this) {
-            action.execute(t);
+            callbackActionDecorator.decorate(action).execute(t);
         }
     }
 
@@ -199,7 +211,7 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
         @SuppressWarnings("unchecked")
         public Iterator<T> iterator() {
             if (store.isEmpty()) {
-                return Iterators.emptyIterator();
+                return Collections.emptyIterator();
             }
             if (store.size() == 1) {
                 return (Iterator<T>) store.get(0).iterator();
@@ -209,6 +221,11 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
 
         @Override
         public boolean add(T t) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public boolean addRealized(T element) {
             throw new UnsupportedOperationException();
         }
 
@@ -272,18 +289,38 @@ public class CompositeDomainObjectSet<T> extends DelegatingDomainObjectSet<T> im
         }
 
         @Override
-        public void addPending(ProviderInternal<? extends T> provider) {
+        public boolean addPending(ProviderInternal<? extends T> provider) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void removePending(ProviderInternal<? extends T> provider) {
+        public boolean removePending(ProviderInternal<? extends T> provider) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void onRealize(Action<ProviderInternal<? extends T>> action) {
+        public boolean addPendingCollection(CollectionProviderInternal<T, ? extends Iterable<T>> provider) {
+            throw new UnsupportedOperationException();
+        }
 
+        @Override
+        public boolean removePendingCollection(CollectionProviderInternal<T, ? extends Iterable<T>> provider) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void onRealize(Action<T> action) {
+
+        }
+
+        @Override
+        public void realizeExternal(ProviderInternal<? extends T> provider) {
+
+        }
+
+        @Override
+        public MutationGuard getMutationGuard() {
+            return MutationGuards.identity();
         }
     }
 }

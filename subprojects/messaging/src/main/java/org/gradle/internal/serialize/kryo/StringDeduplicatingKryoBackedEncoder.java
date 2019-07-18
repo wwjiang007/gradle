@@ -39,34 +39,42 @@ public class StringDeduplicatingKryoBackedEncoder extends AbstractEncoder implem
         output = new Output(outputStream, bufferSize);
     }
 
+    @Override
     public void writeByte(byte value) {
         output.writeByte(value);
     }
 
+    @Override
     public void writeBytes(byte[] bytes, int offset, int count) {
         output.writeBytes(bytes, offset, count);
     }
 
+    @Override
     public void writeLong(long value) {
         output.writeLong(value);
     }
 
+    @Override
     public void writeSmallLong(long value) {
         output.writeLong(value, true);
     }
 
+    @Override
     public void writeInt(int value) {
         output.writeInt(value);
     }
 
+    @Override
     public void writeSmallInt(int value) {
         output.writeInt(value, true);
     }
 
+    @Override
     public void writeBoolean(boolean value) {
         output.writeBoolean(value);
     }
 
+    @Override
     public void writeString(CharSequence value) {
         if (value == null) {
             throw new IllegalArgumentException("Cannot encode a null string.");
@@ -74,39 +82,41 @@ public class StringDeduplicatingKryoBackedEncoder extends AbstractEncoder implem
         writeNullableString(value);
     }
 
+    @Override
     public void writeNullableString(@Nullable CharSequence value) {
         if (value == null) {
-            output.writeByte((byte) 0);
+            output.writeInt(-1);
             return;
         } else {
             if (strings == null) {
-                strings = Maps.newHashMap();
+                strings = Maps.newHashMapWithExpectedSize(1024);
             }
-            output.writeByte((byte) 1);
         }
-        String string = value.toString();
-        Integer index = strings.get(string);
+        String key = value.toString();
+        Integer index = strings.get(key);
         if (index == null) {
             index = strings.size();
-            strings.put(string, index);
-            output.writeInt(index, true);
-            output.writeString(string);
+            output.writeInt(index);
+            strings.put(key, index);
+            output.writeString(key);
         } else {
-            output.writeInt(index, true);
+            output.writeInt(index);
         }
     }
 
     /**
      * Returns the total number of bytes written by this encoder, some of which may still be buffered.
      */
-    public int getWritePosition() {
+    public long getWritePosition() {
         return output.total();
     }
 
+    @Override
     public void flush() {
         output.flush();
     }
 
+    @Override
     public void close() {
         output.close();
     }
@@ -114,4 +124,5 @@ public class StringDeduplicatingKryoBackedEncoder extends AbstractEncoder implem
     public void done() {
         strings = null;
     }
+
 }

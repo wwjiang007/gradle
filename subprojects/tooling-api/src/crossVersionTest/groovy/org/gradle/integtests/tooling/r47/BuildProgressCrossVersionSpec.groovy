@@ -19,23 +19,37 @@ package org.gradle.integtests.tooling.r47
 import org.gradle.integtests.tooling.fixture.ProgressEvents
 import org.gradle.integtests.tooling.fixture.TargetGradleVersion
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
-import org.gradle.integtests.tooling.fixture.ToolingApiVersion
 import org.gradle.test.fixtures.maven.MavenFileRepository
 import org.gradle.test.fixtures.server.http.MavenHttpRepository
 import org.gradle.test.fixtures.server.http.RepositoryHttpServer
 import org.gradle.tooling.ProjectConnection
-import org.junit.Rule
+import org.gradle.util.GradleVersion
 
-@ToolingApiVersion(">=2.5")
 @TargetGradleVersion(">=4.7")
 class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
 
-    @Rule
-    public final RepositoryHttpServer server = new RepositoryHttpServer(temporaryFolder, targetDist.version.version)
+    public RepositoryHttpServer server
+
+    def setup() {
+        server = new RepositoryHttpServer(temporaryFolder, targetDist.version.version)
+        server.before()
+    }
+
+    def cleanup() {
+        server.after()
+    }
 
     def "generates download events during maven publish"() {
         given:
         toolingApi.requireIsolatedUserHome()
+
+        int metadataDownloads = 1
+        int metadataChecksumDownloads = 0
+        // Older versions of Gradle use maven-aether for maven-publish, and perform additional downloads
+        if (targetVersion.compareTo(GradleVersion.version("5.6")) < 0) {
+            metadataDownloads = 2
+            metadataChecksumDownloads = 2
+        }
 
         def module = mavenHttpRepo.module('group', 'publish', '1')
 
@@ -45,10 +59,12 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         // module will be published a second time via 'maven-publish'
         module.artifact.expectPublish()
         module.pom.expectPublish()
-        module.rootMetaData.expectGet()
-        module.rootMetaData.sha1.expectGet()
-        module.rootMetaData.expectGet()
-        module.rootMetaData.sha1.expectGet()
+        metadataDownloads.times {
+            module.rootMetaData.expectGet()
+        }
+        metadataChecksumDownloads.times {
+            module.rootMetaData.sha1.expectGet()
+        }
         module.rootMetaData.expectPublish()
 
         settingsFile << 'rootProject.name = "publish"'
@@ -81,8 +97,8 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
 
         then:
         def publishTask = events.operation('Task :publishMavenPublicationToMavenRepository')
-        publishTask.descendants { it.descriptor.displayName == "Download ${module.rootMetaData.uri}" }.size() == 2
-        publishTask.descendants { it.descriptor.displayName == "Download ${module.rootMetaData.sha1.uri}" }.size() == 2
+        publishTask.descendants { it.descriptor.displayName == "Download ${module.rootMetaData.uri}" }.size() == metadataDownloads
+        publishTask.descendants { it.descriptor.displayName == "Download ${module.rootMetaData.sha1.uri}" }.size() == metadataChecksumDownloads
     }
 
     MavenHttpRepository getMavenHttpRepo() {

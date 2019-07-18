@@ -17,8 +17,6 @@
 package org.gradle.test.fixtures.file;
 
 import groovy.lang.Closure;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.lang.StringUtils;
 import org.gradle.api.GradleException;
 import org.gradle.test.fixtures.ConcurrentTestUtil;
 import org.junit.rules.TestRule;
@@ -46,21 +44,12 @@ abstract class AbstractTestDirectoryProvider implements TestRule, TestDirectoryP
     private boolean cleanup = true;
     private boolean suppressCleanupErrors = false;
 
-    private String determinePrefix() {
-        StackTraceElement[] stackTrace = new RuntimeException().getStackTrace();
-        for (StackTraceElement element : stackTrace) {
-            if (element.getClassName().endsWith("Test") || element.getClassName().endsWith("Spec")) {
-                return StringUtils.substringAfterLast(element.getClassName(), ".") + "/unknown-test";
-            }
-        }
-        return "unknown-test-class";
-    }
-
     @Override
     public void suppressCleanup() {
         cleanup = false;
     }
 
+    @Override
     public void suppressCleanupErrors() {
         suppressCleanupErrors = true;
     }
@@ -74,12 +63,13 @@ abstract class AbstractTestDirectoryProvider implements TestRule, TestDirectoryP
             ConcurrentTestUtil.poll(new Closure(null, null) {
                 @SuppressWarnings("UnusedDeclaration")
                 void doCall() throws IOException {
-                    FileUtils.forceDelete(dir);
+                    dir.forceDeleteDir();
                 }
             });
         }
     }
 
+    @Override
     public Statement apply(final Statement base, Description description) {
         init(description.getMethodName(), description.getTestClass().getSimpleName());
 
@@ -146,6 +136,7 @@ abstract class AbstractTestDirectoryProvider implements TestRule, TestDirectoryP
         }
     }
 
+    @Override
     public TestFile getTestDirectory() {
         if (dir == null) {
            dir = createUniqueTestDirectory();
@@ -171,7 +162,7 @@ abstract class AbstractTestDirectoryProvider implements TestRule, TestDirectoryP
         if (prefix == null) {
             // This can happen if this is used in a constructor or a @Before method. It also happens when using
             // @RunWith(SomeRunner) when the runner does not support rules.
-            prefix = determinePrefix();
+            prefix = "unknown-test-class";
         }
         return prefix;
     }

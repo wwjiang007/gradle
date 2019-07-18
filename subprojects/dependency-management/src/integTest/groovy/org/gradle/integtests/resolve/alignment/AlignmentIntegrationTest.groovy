@@ -19,11 +19,10 @@ package org.gradle.integtests.resolve.alignment
 import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
 import org.gradle.integtests.fixtures.RequiredFeature
 import org.gradle.integtests.fixtures.RequiredFeatures
-import org.gradle.integtests.fixtures.publish.RemoteRepositorySpec
-import org.gradle.integtests.resolve.AbstractModuleDependencyResolveTest
+import spock.lang.Issue
 
-class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
-    
+class AlignmentIntegrationTest extends AbstractAlignmentSpec {
+
     def "should align leaves to the same version"() {
         repository {
             path 'xml -> core'
@@ -108,7 +107,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
                     module('org:core:1.1')
                 }
                 module("outside:module:1.0") {
-                    edge('org:core:1.0', 'org:core:1.1').byConflictResolution("between versions 1.0 and 1.1")
+                    edge('org:core:1.0', 'org:core:1.1').byConflictResolution("between versions 1.1 and 1.0")
                 }
             }
         }
@@ -125,7 +124,9 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
         given:
         buildFile << """
             dependencies {
-                conf 'org:xml:1.0'
+                conf('org:xml:1.0') {
+                    transitive = false
+                }
                 conf 'org:json:1.0'
                 conf 'org:core:1.1'
             }
@@ -146,7 +147,6 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
             root(":", ":test:") {
                 edge("org:xml:1.0", "org:xml:1.1") {
                     byConstraint("belongs to platform org:platform:1.1")
-                    module('org:core:1.1')
                 }
                 edge("org:json:1.0", "org:json:1.1") {
                     byConstraint("belongs to platform org:platform:1.1")
@@ -187,7 +187,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
             root(":", ":test:") {
                 module("org:xml:1.0") {
                     edge('org:core:1.0', 'org:core:1.1')
-                        .byConflictResolution("between versions 1.0 and 1.1")
+                        .byConflictResolution("between versions 1.1 and 1.0")
                         .byConstraint("belongs to platform org:platform:1.1")
                 }
                 module("org:json:1.1") {
@@ -292,7 +292,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
 
     /**
      * This test is a variant of the previous one where there's an additional catch: one
-     * of the modules (annotations) is supposely inexistent in 2.7.9 (say, it appeared in 2.9.x)
+     * of the modules (annotations) is supposedly nonexistent in 2.7.9 (say, it appeared in 2.9.x)
      */
     def "can align heterogeneous versions with new modules appearing in later releases"() {
         repository {
@@ -394,7 +394,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
             class DeclarePlatform implements ComponentMetadataRule {
                 void execute(ComponentMetadataContext ctx) {
                     ctx.details.with {
-                        belongsTo("org:platform:\${id.version}")
+                        belongsTo("org:platform:\${id.version}", false)
                     }
                 }
             }
@@ -498,7 +498,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
             path 'org3:bar:1.0 -> org4:b:1.1 -> org4:a:1.1'
         }
 
-        buildFile << """
+        buildFile << """          
             dependencies {
                 conf 'org:xml:1.0'
                 conf 'org2:foo:1.0'
@@ -529,7 +529,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
                 }
                 module('org2:foo:1.0') {
                     edge('org4:a:1.0', 'org4:a:1.1') {
-                        byConflictResolution("between versions 1.0 and 1.1")
+                        byConflictResolution("between versions 1.1 and 1.0")
                     }
                 }
                 module('org3:bar:1.0') {
@@ -586,8 +586,6 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
             'org:json:1.1' {
                 expectResolve()
             }
-            'org:platform:1.0'(VIRTUAL_PLATFORM)
-            'org:platform:1.1'(VIRTUAL_PLATFORM)
         }
         run ':checkDeps'
 
@@ -598,7 +596,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
                     byConstraint("belongs to platform org:platform:1.1")
                     // byReason("version 1.1 is buggy") // TODO CC: uncomment when we collect rejection from component selection rule
                     edge('org:core:1.0', 'org:core:1.1') {
-                        byConflictResolution("between versions 1.0 and 1.1")
+                        byConflictResolution("between versions 1.1 and 1.0")
                     }
                 }
                 module("org:json:1.1") {
@@ -715,7 +713,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
                 byPublishedPlatform('org.springframework', 'spring-platform', '1.0')
             }
 
-            // Spring core intentionnaly doesn't belong to the Spring platform.
+            // Spring core intentionally doesn't belong to the Spring platform.
             module('core') group('org.springframework') tries('1.0') alignsTo('1.1')
         }
         run ':checkDeps'
@@ -733,7 +731,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
                     module("org.apache.groovy:core:2.5")
                 }
                 edge("org.springframework:core:1.0", "org.springframework:core:1.1") {
-                    byConflictResolution("between versions 1.0 and 1.1")
+                    byConflictResolution("between versions 1.1 and 1.0")
                 }
             }
         }
@@ -777,7 +775,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
         """
 
         and:
-        'a rule which declares that Groovy belongs to the Groovy and the Spring platforms'()
+        'a rule which declares that Groovy belongs to the Groovy and the Spring platforms'(true)
 
         when:
         expectAlignment {
@@ -797,7 +795,7 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
                 byPublishedPlatform('org.springframework', 'spring-platform', '1.0')
             }
 
-            // Spring core intentionnaly doesn't belong to the Spring platform.
+            // Spring core intentionally doesn't belong to the Spring platform.
             module('core') group('org.springframework') tries('1.0') alignsTo('1.1')
         }
         run ':checkDeps'
@@ -815,250 +813,334 @@ class AlignmentIntegrationTest extends AbstractModuleDependencyResolveTest {
                     module("org.apache.groovy:core:2.5")
                 }
                 edge("org.springframework:core:1.0", "org.springframework:core:1.1") {
-                    byConflictResolution("between versions 1.0 and 1.1")
+                    byConflictResolution("between versions 1.1 and 1.0")
                 }
             }
         }
     }
 
-    private void "a rule which infers module set from group and version"() {
+    @RequiredFeatures([
+        // We only need to test one flavor
+        @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true"),
+        @RequiredFeature(feature = GradleMetadataResolveRunner.REPOSITORY_TYPE, value = "maven")
+    ])
+    def "virtual platform missing modules are cached across builds"() {
+        // Disable daemon, so that the second run executes with the file cache
+        // and therefore make sure that we read the "missing" status from disk
+        executer.withArgument('--no-daemon')
+
+        repository {
+            path 'xml -> core'
+            path 'json -> core'
+            path 'xml:1.1 -> core:1.1'
+            path 'json:1.1 -> core:1.1'
+        }
+
+        given:
         buildFile << """
             dependencies {
-                components.all(InferModuleSetFromGroupAndVersion)
+                conf 'org:xml:1.0'
+                conf 'org:json:1.1'
+            }
+        """
+        and:
+        "a rule which infers module set from group and version"()
+
+        when:
+        expectAlignment {
+            module('core') tries('1.0') alignsTo('1.1') byVirtualPlatform()
+            module('xml') tries('1.0') alignsTo('1.1') byVirtualPlatform()
+            module('json') alignsTo('1.1') byVirtualPlatform()
+        }
+        run ':checkDeps'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                edge("org:xml:1.0", "org:xml:1.1") {
+                    byConstraint("belongs to platform org:platform:1.1")
+                    module('org:core:1.1')
+                }
+                module("org:json:1.1") {
+                    module('org:core:1.1')
+                }
+            }
+        }
+
+        when:
+        resetExpectations()
+        run ':checkDeps'
+
+        then: "no network requests are issued"
+        resolve.expectGraph {
+            root(":", ":test:") {
+                edge("org:xml:1.0", "org:xml:1.1") {
+                    byConstraint("belongs to platform org:platform:1.1")
+                    module('org:core:1.1')
+                }
+                module("org:json:1.1") {
+                    module('org:core:1.1')
+                }
+            }
+        }
+    }
+
+    @RequiredFeatures([
+        // We only need to test one flavor
+        @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true"),
+        @RequiredFeature(feature = GradleMetadataResolveRunner.REPOSITORY_TYPE, value = "maven")
+    ])
+    def "published platform can be found in a different repository"() {
+        // Disable daemon, so that the second run executes with the file cache
+        // and therefore make sure that we read the "missing" status from disk
+        executer.withArgument('--no-daemon')
+
+        // An empty repository, that will only return misses
+        def emptyRepo = mavenHttpRepo("nothing")
+
+        repository {
+            path 'databind:2.7.9 -> core:2.7.9'
+            path 'databind:2.7.9 -> annotations:2.7.9'
+            path 'databind:2.9.4 -> core:2.9.4'
+            path 'databind:2.9.4 -> annotations:2.9.0' // intentional!
+            path 'kt:2.9.4.1 -> databind:2.9.4'
+            'org:annotations:2.9.0'()
+            'org:annotations:2.9.4'()
+
+            // define "real" platforms, as published modules.
+            // The platforms are supposed to declare _in extenso_ what modules
+            // they include, by constraints
+            'org:platform' {
+                '2.7.9' {
+                    constraint("org:databind:2.7.9")
+                    constraint("org:core:2.7.9")
+                    constraint("org:annotations:2.7.9")
+                }
+                '2.9.0' {
+                    constraint("org:databind:2.9.0")
+                    constraint("org:core:2.9.0")
+                    constraint("org:annotations:2.9.0")
+                }
+                '2.9.4' {
+                    constraint("org:databind:2.9.4")
+                    constraint("org:core:2.9.4")
+                    constraint("org:annotations:2.9.0")
+                }
+                '2.9.4.1' {
+                    // versions here are intentionally lower
+                    constraint("org:databind:2.9.4")
+                    constraint("org:core:2.9.4")
+                    constraint("org:annotations:2.9.4")
+                }
+            }
+        }
+
+        given:
+        buildFile << """
+            repositories {
+                def repo = maven { url "$emptyRepo.uri" }
+                remove(repo)
+                addFirst(repo)
             }
             
-            class InferModuleSetFromGroupAndVersion implements ComponentMetadataRule {
+            dependencies {
+                conf 'org:core:2.9.4'
+                conf 'org:databind:2.7.9'
+                conf 'org:kt:2.9.4.1'
+                
+                components.all(DeclarePlatform)
+            }
+            
+            class DeclarePlatform implements ComponentMetadataRule {
                 void execute(ComponentMetadataContext ctx) {
                     ctx.details.with {
-                        belongsTo("\${id.group}:platform:\${id.version}")
+                        belongsTo("org:platform:\${id.version}", false)
                     }
                 }
             }
         """
+
+
+        when:
+        [['core', 'databind', 'kt', 'annotations', 'platform'], ['2.7.9', '2.9.0', '2.9.4', '2.9.4.1']].combinations { module, version ->
+            emptyRepo.module('org', module, version).missing()
+        }
+
+        expectAlignment {
+            module('core') alignsTo('2.9.4') byPublishedPlatform()
+            module('databind') tries('2.7.9') alignsTo('2.9.4') byPublishedPlatform()
+            module('annotations') tries('2.7.9', '2.9.0') alignsTo('2.9.4') byPublishedPlatform()
+            module('kt') alignsTo('2.9.4.1') byPublishedPlatform()
+
+            doesNotGetPlatform("org", "platform", "2.9.0") // because of conflict resolution
+        }
+        run ':checkDeps'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                module('org:core:2.9.4')
+                edge('org:databind:2.7.9', 'org:databind:2.9.4')
+                module('org:kt:2.9.4.1') {
+                    module('org:databind:2.9.4') {
+                        module('org:core:2.9.4')
+                        edge('org:annotations:2.9.0', 'org:annotations:2.9.4')
+                    }
+                }
+            }
+        }
+
+        when:
+        resetExpectations()
+        emptyRepo.server.resetExpectations()
+        run ':checkDeps'
+
+        then: "no more network requests should be issued"
+        resolve.expectGraph {
+            root(":", ":test:") {
+                module('org:core:2.9.4')
+                edge('org:databind:2.7.9', 'org:databind:2.9.4')
+                module('org:kt:2.9.4.1') {
+                    module('org:databind:2.9.4') {
+                        module('org:core:2.9.4')
+                        edge('org:annotations:2.9.0', 'org:annotations:2.9.4')
+                    }
+                }
+            }
+        }
+
     }
 
-    private void "align the 'org' group only"() {
+    @RequiredFeatures([
+        @RequiredFeature(feature = GradleMetadataResolveRunner.REPOSITORY_TYPE, value = "maven")
+    ])
+    def "virtual platform constraints shouldn't be transitive"() {
+        repository {
+            "org:member1:1.1" {
+                dependsOn(group: "other", artifact:"transitive", version:"1.0")
+            }
+            "org:member2:1.1" {
+                dependsOn(group:'org', artifact:'member1', version:'1.1', exclusions: [[module: 'transitive']])
+            }
+            "other:transitive:1.0"()
+        }
+
+        given:
         buildFile << """
             dependencies {
-                components.all(AlignOrgGroup)
-            }
-            
-            class AlignOrgGroup implements ComponentMetadataRule {
-                void execute(ComponentMetadataContext ctx) {
-                    ctx.details.with {
-                        if ('org' == id.group) {
-                           belongsTo("\${id.group}:platform:\${id.version}")
-                        }
-                    }
-                }
+                conf 'org:member2:1.1'
             }
         """
+        and:
+        "align the 'org' group only"()
+
+        when:
+        expectAlignment {
+            module('member1') alignsTo('1.1') byVirtualPlatform()
+            module('member2') alignsTo('1.1') byVirtualPlatform()
+        }
+        run ':checkDeps'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                module("org:member2:1.1") {
+                    module("org:member1:1.1")
+                }
+            }
+        }
+
     }
 
-    private void "align the 'org' group to 2 different virtual platforms"() {
-        buildFile << """
+    @Issue("gradle/gradle#7916")
+    def "shouldn't fail when a referenced component is a virtual platform"() {
+        repository {
+            'org:foo:1.0'()
+            'org:foo:1.1'()
+        }
+
+        given:
+        buildFile << '''
             dependencies {
-                components.all(AlignOrgGroupTo2Platforms)
-            }
+              constraints {
+                  conf platform("org:platform:1.1")
+              }
             
-            class AlignOrgGroupTo2Platforms implements ComponentMetadataRule {
-                void execute(ComponentMetadataContext ctx) {
-                    ctx.details.with {
-                        if ('org' == id.group) {
-                           belongsTo("\${id.group}:platform:\${id.version}")
-                           belongsTo("\${id.group}:platform2:\${id.version}")
-                        }
-                    }
+              conf 'org:foo:1.0'
+            }
+        '''
+
+        and:
+        "align the 'org' group only"()
+
+        when:
+        expectAlignment {
+            module('foo') tries('1.0') alignsTo('1.1') byVirtualPlatform()
+        }
+        run ':checkDeps', 'dependencyInsight', '--configuration', 'conf', '--dependency', 'foo'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                edge("org:foo:1.0", "org:foo:1.1") {
+                    byConstraint("belongs to platform org:platform:1.1")
                 }
             }
-        """
+            virtualConfiguration("org:platform:1.1")
+        }
     }
 
-    private 'a rule which declares that Groovy belongs to the Groovy and the Spring platforms'() {
-        buildFile << """
+    @RequiredFeatures([
+        // We only need to test one flavor
+        @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true"),
+        @RequiredFeature(feature = GradleMetadataResolveRunner.REPOSITORY_TYPE, value = "maven")
+    ])
+    def "should manage to realign through two conflicts"() {
+        repository {
+            path 'start:start:1.0 -> foo:1.0'
+
+            path 'foo:1.0 -> bar:1.0'
+            path 'foo:1.1 -> bar:1.1'
+
+            'org:bar:1.0'()
+            'org:bar:1.1'()
+        }
+
+        given:
+        buildFile << '''
             dependencies {
-                components.all(GroovyRule)
-            }
+              constraints {
+                  conf platform("org:platform:1.1")
+              }
             
-            class GroovyRule implements ComponentMetadataRule {
-                void execute(ComponentMetadataContext ctx) {
-                    ctx.details.with {
-                        if ('org.apache.groovy' == id.group) {
-                           belongsTo("org.apache.groovy:platform:\${id.version}")
-                           belongsTo("org.springframework:spring-platform:1.0")
+              conf 'start:start:1.0'
+            }
+        '''
+
+        and:
+        "align the 'org' group only"()
+
+        when:
+        expectAlignment {
+            module('start') group('start') alignsTo('1.0')
+            module('foo') tries('1.0') alignsTo('1.1') byVirtualPlatform()
+            module('bar') tries('1.0') alignsTo('1.1') byVirtualPlatform()
+        }
+        run ':checkDeps', 'dependencyInsight', '--configuration', 'conf', '--dependency', 'bar'
+
+        then:
+        resolve.expectGraph {
+            root(":", ":test:") {
+                module("start:start:1.0") {
+                    edge("org:foo:1.0", "org:foo:1.1") {
+                        byConstraint("belongs to platform org:platform:1.1")
+                        module("org:bar:1.1") {
+                            byConstraint("belongs to platform org:platform:1.1")
                         }
                     }
                 }
             }
-        """
-    }
-
-    final static Closure<Void> VIRTUAL_PLATFORM = {
-        expectGetMetadataMissing()
-        if (!GradleMetadataResolveRunner.experimentalResolveBehaviorEnabled) {
-            expectHeadArtifactMissing()
-        }
-    }
-
-    void expectAlignment(@DelegatesTo(value = AlignmentSpec, strategy = Closure.DELEGATE_FIRST) Closure<?> spec) {
-        def align = new AlignmentSpec()
-        spec.delegate = align
-        spec.resolveStrategy = Closure.DELEGATE_FIRST
-        spec()
-        repositoryInteractions {
-            align.applyTo(repoSpec)
-        }
-    }
-
-    static class AlignmentSpec {
-        final List<ModuleAlignmentSpec> specs = []
-        final Set<String> skipsPlatformMetadata = []
-
-        ModuleAlignmentSpec module(String name, @DelegatesTo(value=ModuleAlignmentSpec, strategy = Closure.DELEGATE_FIRST) Closure<?> config = null) {
-            def spec = new ModuleAlignmentSpec(name: name)
-            if (config) {
-                config.delegate = spec
-                config.resolveStrategy = Closure.DELEGATE_FIRST
-                config()
-            }
-            specs << spec
-            spec
-        }
-
-        void doesNotGetPlatform(String group = 'org', String name = 'platform', String version = '1.0') {
-            skipsPlatformMetadata << "$group:$name:$version"
-        }
-
-        void applyTo(RemoteRepositorySpec spec) {
-            Set<String> virtualPlatforms = [] as Set
-            Set<String> publishedPlatforms = [] as Set
-            Set<String> resolvesToVirtual = [] as Set
-
-            specs.each {
-                it.applyTo(spec)
-                if (it.virtualPlatforms) {
-                    it.seenVersions.each { v ->
-                        it.virtualPlatforms.each { vp ->
-                            virtualPlatforms << "${vp}:$v"
-                        }
-                    }
-                    it.virtualPlatforms.each { vp ->
-                        resolvesToVirtual << "${vp}:$it.alignsTo"
-                    }
-                }
-                if (it.publishedPlatforms) {
-                    def exactPlatforms = it.publishedPlatforms.findAll { it.count(':') == 2 }
-                    def inferredPlatforms = it.publishedPlatforms - exactPlatforms
-                    // for published platforms, we know there's no artifacts, so it's actually easier
-                    it.seenVersions.each { v ->
-                        inferredPlatforms.each { pp ->
-                            publishedPlatforms << "${pp}:$v"
-                        }
-                    }
-                    inferredPlatforms.each { pp ->
-                        publishedPlatforms << "${pp}:$it.alignsTo"
-                    }
-                    exactPlatforms.each { pp ->
-                        publishedPlatforms << pp
-                    }
-                }
-            }
-            virtualPlatforms.remove(resolvesToVirtual)
-            virtualPlatforms.removeAll(skipsPlatformMetadata)
-            resolvesToVirtual.removeAll(skipsPlatformMetadata)
-            publishedPlatforms.removeAll(skipsPlatformMetadata)
-            virtualPlatforms.each { p ->
-                spec."$p"(VIRTUAL_PLATFORM)
-            }
-            publishedPlatforms.each { p ->
-                spec."$p" {
-                    expectGetMetadata()
-                }
-            }
-            resolvesToVirtual.each {
-                spec."$it"(VIRTUAL_PLATFORM)
-            }
-        }
-
-    }
-
-    static class ModuleAlignmentSpec {
-        String group = 'org'
-        String name
-        List<String> seenVersions = []
-        List<String> misses = []
-        String alignsTo
-        List<String> virtualPlatforms = []
-        List<String> publishedPlatforms = []
-
-        ModuleAlignmentSpec group(String group) {
-            this.group = group
-            this
-        }
-
-        ModuleAlignmentSpec name(String name) {
-            this.name = name
-            this
-        }
-
-        ModuleAlignmentSpec tries(String... versions) {
-            Collections.addAll(seenVersions, versions)
-            this
-        }
-
-        ModuleAlignmentSpec misses(String... versions) {
-            Collections.addAll(misses, versions)
-            this
-        }
-
-        ModuleAlignmentSpec alignsTo(String version) {
-            this.alignsTo = version
-            this
-        }
-
-        ModuleAlignmentSpec byVirtualPlatform(String group = 'org', String name = 'platform') {
-            virtualPlatforms << "${group}:${name}"
-            this
-        }
-
-        ModuleAlignmentSpec byPublishedPlatform(String group = 'org', String name = 'platform', String version = null) {
-            if (version) {
-                publishedPlatforms << "${group}:${name}:${version}"
-            } else {
-                publishedPlatforms << "${group}:${name}"
-            }
-            this
-        }
-
-
-        void applyTo(RemoteRepositorySpec spec) {
-            def moduleName = name
-            def alignedTo = alignsTo
-            def otherVersions = seenVersions
-            otherVersions.remove(alignedTo)
-            def missedVersions = misses
-            spec.group(group) {
-                module(moduleName) {
-                    if (alignedTo) {
-                        version(alignedTo) {
-                            expectResolve()
-                        }
-                    }
-                    otherVersions.each {
-                        version(it) {
-                            expectGetMetadata()
-                        }
-                    }
-                    missedVersions.each {
-                        version(it) {
-                            expectGetMetadataMissing()
-                            if (!GradleMetadataResolveRunner.experimentalResolveBehaviorEnabled) {
-                                expectHeadArtifactMissing()
-                            }
-                        }
-                    }
-                }
-            }
+            virtualConfiguration("org:platform:1.1")
         }
     }
 }

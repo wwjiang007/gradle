@@ -16,37 +16,71 @@
 
 package org.gradle.api.internal.artifacts.transform
 
+import com.google.common.collect.ImmutableList
 import com.google.common.collect.Maps
+import org.gradle.api.artifacts.component.ComponentArtifactIdentifier
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ResolvableArtifact
+import org.gradle.internal.Try
+import org.gradle.internal.operations.BuildOperation
 import org.gradle.internal.operations.BuildOperationQueue
-import org.gradle.testing.internal.util.Specification
+import spock.lang.Specification
+import spock.lang.Unroll
 
 class TransformingAsyncArtifactListenerTest extends Specification {
-    def transformer = Mock(ArtifactTransformer)
+    def transformation = Mock(Transformation)
+    CacheableInvocation<TransformationSubject> invocation = Mock(CacheableInvocation)
     def operationQueue = Mock(BuildOperationQueue)
-    def listener  = new TransformingAsyncArtifactListener(transformer, null, operationQueue, Maps.newHashMap(), Maps.newHashMap())
+    def transformationNodeRegistry = Mock(TransformationNodeRegistry)
+    def listener  = new TransformingAsyncArtifactListener(transformation, null, operationQueue, Maps.newHashMap(), Maps.newHashMap(), Mock(ExecutionGraphDependenciesResolver), transformationNodeRegistry)
+    def file = new File("foo")
+    def artifactFile = new File("foo-artifact")
+    def artifactId = Stub(ComponentArtifactIdentifier)
+    def artifact = Stub(ResolvableArtifact) {
+        getId() >> artifactId
+        getFile() >> artifactFile
+    }
+    def node = Mock(TransformationNode)
 
-    def "runs transforms in parallel if no cached result is available"() {
-        given:
-        transformer.hasCachedResult(_) >> false
-
+    @Unroll
+    def "adds expensive #type transformations to the build operation queue"() {
         when:
-        listener.artifactAvailable(Stub(ResolvableArtifact))
-        listener.fileAvailable(new File("foo"))
+        listener."${type}Available"(this."${type}")
 
         then:
-        2 * operationQueue.add(_)
+        if (type == 'artifact') {
+            1 * transformationNodeRegistry.getIfExecuted(artifactId, transformation) >> Optional.empty()
+        }
+        1 * transformation.createInvocation(_, _, _) >> invocation
+        1 * invocation.getCachedResult() >> Optional.empty()
+        1 * operationQueue.add(_ as BuildOperation)
+
+        where:
+        type << ['file', 'artifact']
     }
 
-    def "runs transforms immediately if the result is already cached"() {
-        given:
-        transformer.hasCachedResult(_) >> true
-
+    @Unroll
+    def "runs cheap #type transformations immediately when not scheduled"() {
         when:
-        listener.artifactAvailable(Stub(ResolvableArtifact))
-        listener.fileAvailable(new File("foo"))
+        listener."${type}Available"(this."${type}")
 
         then:
-        2 * transformer.transform(_)
+        if (type == 'artifact') {
+            1 * transformationNodeRegistry.getIfExecuted(artifactId, transformation) >> Optional.empty()
+        }
+        1 * transformation.createInvocation({ it.files == [this."${type == 'file' ? 'file' : 'artifactFile'}"] }, _ as ExecutionGraphDependenciesResolver, _) >> invocation
+        1 * invocation.getCachedResult() >> Optional.of(Try.successful(TransformationSubject.initial(file)))
+
+        where:
+        type << ['file', 'artifact']
+    }
+
+    def "re-uses scheduled artifact transformation result"() {
+        when:
+        listener.artifactAvailable(artifact)
+
+        then:
+        1 * transformationNodeRegistry.getIfExecuted(artifactId, transformation) >> Optional.of(node)
+        1 * node.getTransformedSubject() >> Try.successful(TransformationSubject.initial(artifact.id, artifact.file).createSubjectFromResult(ImmutableList.of()))
+        0 * transformation.createInvocation(_, _ as ExecutionGraphDependenciesResolver, _)
     }
 }

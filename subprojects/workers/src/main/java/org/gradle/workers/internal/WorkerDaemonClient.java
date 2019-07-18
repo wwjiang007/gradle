@@ -22,18 +22,23 @@ import org.gradle.internal.operations.BuildOperationRef;
 import org.gradle.process.internal.health.memory.JvmMemoryStatus;
 import org.gradle.process.internal.worker.WorkerProcess;
 
-class WorkerDaemonClient implements Worker, Stoppable {
+class WorkerDaemonClient implements BuildOperationAwareWorker, Stoppable {
+    public static final String DISABLE_EXPIRATION_PROPERTY_KEY = "org.gradle.workers.internal.disable-daemons-expiration";
     private final DaemonForkOptions forkOptions;
-    private final WorkerDaemonProcess<ActionExecutionSpec> workerDaemonProcess;
+    private final WorkerDaemonProcess workerDaemonProcess;
     private final WorkerProcess workerProcess;
     private final LogLevel logLevel;
+    private final ActionExecutionSpecFactory actionExecutionSpecFactory;
     private int uses;
+    private boolean failed;
+    private boolean cannotBeExpired = Boolean.getBoolean(DISABLE_EXPIRATION_PROPERTY_KEY);
 
-    public WorkerDaemonClient(DaemonForkOptions forkOptions, WorkerDaemonProcess<ActionExecutionSpec> workerDaemonProcess, WorkerProcess workerProcess, LogLevel logLevel) {
+    public WorkerDaemonClient(DaemonForkOptions forkOptions, WorkerDaemonProcess workerDaemonProcess, WorkerProcess workerProcess, LogLevel logLevel, ActionExecutionSpecFactory actionExecutionSpecFactory) {
         this.forkOptions = forkOptions;
         this.workerDaemonProcess = workerDaemonProcess;
         this.workerProcess = workerProcess;
         this.logLevel = logLevel;
+        this.actionExecutionSpecFactory = actionExecutionSpecFactory;
     }
 
     @Override
@@ -44,7 +49,7 @@ class WorkerDaemonClient implements Worker, Stoppable {
     @Override
     public DefaultWorkResult execute(ActionExecutionSpec spec) {
         uses++;
-        return workerDaemonProcess.execute(spec);
+        return workerDaemonProcess.execute(actionExecutionSpecFactory.newTransportableSpec(spec));
     }
 
     public boolean isCompatibleWith(DaemonForkOptions required) {
@@ -74,5 +79,33 @@ class WorkerDaemonClient implements Worker, Stoppable {
 
     public LogLevel getLogLevel() {
         return logLevel;
+    }
+
+    public boolean isProcess(WorkerProcess workerProcess) {
+        return this.workerProcess.equals(workerProcess);
+    }
+
+    public boolean isFailed() {
+        return failed;
+    }
+
+    public void setFailed(boolean failed) {
+        this.failed = failed;
+    }
+
+    public boolean isNotExpirable() {
+        return cannotBeExpired;
+    }
+
+    @Override
+    public String toString() {
+        return "WorkerDaemonClient{" +
+                " log level=" + logLevel +
+                ", use count=" + uses +
+                ", has failed=" + failed +
+                ", can be expired=" + !cannotBeExpired +
+                ", workerProcess=" + workerProcess +
+                ", forkOptions=" + forkOptions +
+                '}';
     }
 }

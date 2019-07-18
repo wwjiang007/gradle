@@ -17,13 +17,13 @@
 package org.gradle.api.tasks;
 
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.file.DeleteSpec;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.internal.file.FileResolver;
 import org.gradle.api.internal.file.delete.Deleter;
 import org.gradle.internal.nativeintegration.filesystem.FileSystem;
+import org.gradle.internal.time.Clock;
 
 import javax.inject.Inject;
 import java.util.LinkedHashSet;
@@ -59,9 +59,20 @@ public class Delete extends ConventionTask implements DeleteSpec {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * Injected Clock.
+     *
+     * @since 5.3
+     */
+    @Inject
+    protected Clock getClock() {
+        // Decoration takes care of the implementation
+        throw new UnsupportedOperationException();
+    }
+
     @TaskAction
     protected void clean() {
-        Deleter deleter = new Deleter(getFileResolver(), getFileSystem());
+        Deleter deleter = new Deleter(getFileResolver(), getFileSystem(), getClock());
         final boolean innerFollowSymLinks = followSymlinks;
         final Object[] paths = delete.toArray();
         setDidWork(deleter.delete(new Action<DeleteSpec>(){
@@ -117,7 +128,6 @@ public class Delete extends ConventionTask implements DeleteSpec {
      *
      * @return true if symlinks will be followed.
      */
-    @Incubating
     @Input
     public boolean isFollowSymlinks() {
         return followSymlinks;
@@ -128,7 +138,7 @@ public class Delete extends ConventionTask implements DeleteSpec {
      *
      * @param followSymlinks if symlinks should be followed.
      */
-    @Incubating
+    @Override
     public void setFollowSymlinks(boolean followSymlinks) {
         this.followSymlinks = followSymlinks;
     }
@@ -138,6 +148,7 @@ public class Delete extends ConventionTask implements DeleteSpec {
      *
      * @param targets Any type of object accepted by {@link org.gradle.api.Project#files(Object...)}
      */
+    @Override
     public Delete delete(Object... targets) {
         for (Object target : targets) {
             this.delete.add(target);

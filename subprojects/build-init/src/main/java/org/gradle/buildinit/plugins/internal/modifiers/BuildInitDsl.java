@@ -16,12 +16,14 @@
 package org.gradle.buildinit.plugins.internal.modifiers;
 
 import com.google.common.collect.ImmutableList;
+import org.apache.commons.lang.StringUtils;
 import org.gradle.api.GradleException;
+import org.gradle.internal.logging.text.TreeFormatter;
 
 import javax.annotation.Nullable;
 import java.util.List;
 
-public enum BuildInitDsl {
+public enum BuildInitDsl implements WithIdentifier {
 
     GROOVY(".gradle"),
     KOTLIN(".gradle.kts");
@@ -41,7 +43,14 @@ public enum BuildInitDsl {
                 return language;
             }
         }
-        throw new GradleException("The requested build script DSL '" + name + "' is not supported.");
+        TreeFormatter formatter = new TreeFormatter();
+        formatter.node("The requested build script DSL '" + name + "' is not supported. Supported DSLs");
+        formatter.startChildren();
+        for (BuildInitDsl dsl : values()) {
+            formatter.node("'" + dsl.getId() + "'");
+        }
+        formatter.endChildren();
+        throw new GradleException(formatter.toString());
     }
 
     public static List<String> listSupported() {
@@ -52,8 +61,9 @@ public enum BuildInitDsl {
         return supported.build();
     }
 
+    @Override
     public String getId() {
-        return name().toLowerCase();
+        return Names.idFor(this);
     }
 
     public String fileNameFor(String fileNameWithoutExtension) {
@@ -62,6 +72,6 @@ public enum BuildInitDsl {
 
     @Override
     public String toString() {
-        return getId();
+        return StringUtils.capitalize(name().toLowerCase());
     }
 }

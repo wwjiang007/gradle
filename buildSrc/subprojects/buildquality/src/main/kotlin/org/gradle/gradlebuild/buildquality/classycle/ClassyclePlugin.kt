@@ -35,11 +35,11 @@ open class ClassyclePlugin : Plugin<Project> {
     override fun apply(project: Project): Unit = project.run {
         val extension = extensions.create<ClassycleExtension>(classycleBaseName, project)
         configurations.create(classycleBaseName)
-        dependencies.add(classycleBaseName, "classycle:classycle:1.4@jar")
+        dependencies.add(classycleBaseName, "classycle:classycle:1.4.2@jar")
         val classycle = tasks.register("classycle")
         java.sourceSets.all {
             val taskName = getTaskName("classycle", null)
-            val sourceSetTask = project.tasks.register(
+            val sourceSetTask = tasks.register(
                 taskName,
                 Classycle::class.java,
                 output.classesDirs,
@@ -48,9 +48,9 @@ open class ClassyclePlugin : Plugin<Project> {
                 reporting.file("classycle"),
                 extension.reportResourcesZip
             )
-            classycle.configure { dependsOn(sourceSetTask) }
-            tasks.named("check").configure { dependsOn(sourceSetTask) }
-        tasks.named("codeQuality").configure { dependsOn(sourceSetTask) }
+            classycle { dependsOn(sourceSetTask) }
+            tasks.named("check") { dependsOn(sourceSetTask) }
+            tasks.named("codeQuality") { dependsOn(sourceSetTask) }
         }
     }
 }

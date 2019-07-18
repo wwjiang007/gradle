@@ -21,16 +21,14 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.SortedSetMultimap;
 import com.google.common.collect.TreeMultimap;
 import org.apache.commons.io.FileUtils;
-import org.gradle.api.Action;
-import org.gradle.api.Describable;
-import org.gradle.api.logging.Logger;
-import org.gradle.api.logging.Logging;
 import org.gradle.api.specs.Spec;
 import org.gradle.cache.CleanupProgressMonitor;
 import org.gradle.internal.time.Time;
 import org.gradle.internal.time.Timer;
 import org.gradle.util.GFileUtils;
 import org.gradle.util.GradleVersion;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import java.io.File;
@@ -40,10 +38,10 @@ import java.util.concurrent.TimeUnit;
 
 import static org.gradle.api.internal.changedetection.state.CrossBuildFileHashCache.FILE_HASHES_CACHE_KEY;
 
-public class VersionSpecificCacheCleanupAction implements Action<CleanupProgressMonitor>, Describable {
+public class VersionSpecificCacheCleanupAction implements DirectoryCleanupAction {
 
     @VisibleForTesting static final String MARKER_FILE_PATH = FILE_HASHES_CACHE_KEY + "/" + FILE_HASHES_CACHE_KEY + ".lock";
-    private static final Logger LOGGER = Logging.getLogger(VersionSpecificCacheCleanupAction.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(VersionSpecificCacheCleanupAction.class);
     private static final long CLEANUP_INTERVAL_IN_HOURS = 24;
 
     private final VersionSpecificCacheDirectoryScanner versionSpecificCacheDirectoryScanner;
@@ -68,12 +66,15 @@ public class VersionSpecificCacheCleanupAction implements Action<CleanupProgress
         return "Deleting unused version-specific caches in " + versionSpecificCacheDirectoryScanner.getBaseDir();
     }
 
-    public void execute(@Nonnull CleanupProgressMonitor progressMonitor) {
+    @Override
+    public boolean execute(@Nonnull CleanupProgressMonitor progressMonitor) {
         if (requiresCleanup()) {
             Timer timer = Time.startTimer();
             performCleanup(progressMonitor);
             LOGGER.debug("Processed version-specific caches at {} for cleanup in {}", versionSpecificCacheDirectoryScanner.getBaseDir(), timer.getElapsed());
+            return true;
         }
+        return false;
     }
 
     private boolean requiresCleanup() {

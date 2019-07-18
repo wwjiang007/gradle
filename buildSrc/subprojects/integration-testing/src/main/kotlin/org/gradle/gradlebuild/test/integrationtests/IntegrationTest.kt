@@ -16,7 +16,13 @@
 
 package org.gradle.gradlebuild.test.integrationtests
 
+import org.gradle.api.file.FileCollection
 import org.gradle.api.tasks.CacheableTask
+import org.gradle.api.tasks.Nested
+import org.gradle.gradlebuild.BuildEnvironment
+import java.util.Timer
+import java.util.concurrent.TimeUnit
+import kotlin.concurrent.timerTask
 
 
 /**
@@ -25,4 +31,51 @@ import org.gradle.api.tasks.CacheableTask
  * been using the term 'integration test'.
  */
 @CacheableTask
-open class IntegrationTest : DistributionTest()
+open class IntegrationTest : DistributionTest() {
+
+    @get:Nested
+    val distributionSamples: GradleDistributionSamples = GradleDistributionSamples(project, gradleInstallationForTest.gradleHomeDir)
+
+    override fun executeTests() {
+        printStacktracesAfterTimeout { super.executeTests() }
+    }
+
+    private
+    fun printStacktracesAfterTimeout(work: () -> Unit) = if (BuildEnvironment.isCiServer) {
+        val timer = Timer(true).apply {
+            schedule(timerTask {
+                project.javaexec {
+                    classpath = this@IntegrationTest.classpath
+                    main = "org.gradle.integtests.fixtures.timeout.JavaProcessStackTracesMonitor"
+                }
+            }, determineTimeoutMillis())
+        }
+        try {
+            work()
+        } finally {
+            timer.cancel()
+        }
+    } else {
+        work()
+    }
+
+    private
+    fun determineTimeoutMillis() =
+        when (systemProperties["org.gradle.integtest.executer"]) {
+            "embedded" -> TimeUnit.MINUTES.toMillis(30)
+            else -> TimeUnit.MINUTES.toMillis(165) // 2h45m
+        }
+
+    override fun setClasspath(classpath: FileCollection) {
+        /*
+         * The 'kotlin-daemon-client.jar' repackages 'native-platform' with all its binaries.
+         * Here we make sure it is placed at the end of the test classpath so that we do not accidentally
+         * pick parts of 'native-platform' from the 'kotlin-daemon-client.jar' when instantiating
+         * a Gradle runner.
+         */
+        val reorderedClasspath = classpath.filter { file ->
+            !file.name.startsWith("kotlin-daemon-client")
+        }.plus(classpath.filter { it.name.startsWith("kotlin-daemon-client") })
+        super.setClasspath(reorderedClasspath)
+    }
+}

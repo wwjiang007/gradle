@@ -35,7 +35,7 @@ import org.gradle.model.Path;
 import org.gradle.model.RuleSource;
 import org.gradle.play.PlayApplicationBinarySpec;
 import org.gradle.play.internal.PlayApplicationBinarySpecInternal;
-import org.gradle.play.internal.toolchain.PlayToolProvider;
+import org.gradle.util.SingleMessageLogger;
 
 import java.io.File;
 
@@ -44,19 +44,21 @@ import java.io.File;
  */
 @SuppressWarnings("UnusedDeclaration")
 @Incubating
+@Deprecated
 public class PlayTestPlugin extends RuleSource {
     @Mutate
     void createTestTasks(ModelMap<Task> tasks, @Path("binaries") ModelMap<PlayApplicationBinarySpecInternal> playBinaries, final PlayPluginConfigurations configurations,
                          final FileResolver fileResolver, final ProjectIdentifier projectIdentifier, @Path("buildDir") final File buildDir) {
+        SingleMessageLogger.nagUserOfPluginReplacedWithExternalOne("Play Test", "org.gradle.playframework-test");
         for (final PlayApplicationBinarySpecInternal binary : playBinaries) {
-            final PlayToolProvider playToolProvider = binary.getToolChain().select(binary.getTargetPlatform());
-            final FileCollection testCompileClasspath = getTestCompileClasspath(binary, playToolProvider, configurations);
+            final FileCollection testCompileClasspath = getTestCompileClasspath(binary, configurations);
 
             final String testCompileTaskName = binary.getTasks().taskName("compile", "tests");
             final File testSourceDir = fileResolver.resolve("test");
             final FileCollection testSources = ImmutableFileCollection.of(testSourceDir).getAsFileTree().matching(new PatternSet().include("**/*.scala", "**/*.java"));
             final File testClassesDir = new File(buildDir, binary.getProjectScopedName() + "/testClasses");
             tasks.create(testCompileTaskName, PlatformScalaCompile.class, new Action<PlatformScalaCompile>() {
+                @Override
                 public void execute(PlatformScalaCompile scalaCompile) {
                     scalaCompile.setDescription("Compiles the scala and java test sources for the " + binary.getDisplayName() + ".");
 
@@ -71,13 +73,15 @@ public class PlayTestPlugin extends RuleSource {
                     scalaCompile.setTargetCompatibility(targetCompatibility);
 
                     IncrementalCompileOptions incrementalOptions = scalaCompile.getScalaCompileOptions().getIncrementalOptions();
-                    incrementalOptions.setAnalysisFile(new File(buildDir, "tmp/scala/compilerAnalysis/" + testCompileTaskName + ".analysis"));
+                    incrementalOptions.getAnalysisFile().set(new File(buildDir, "tmp/scala/compilerAnalysis/" + testCompileTaskName + ".analysis"));
+
                 }
             });
 
             final String testTaskName = binary.getTasks().taskName("test");
             final File binaryBuildDir = new File(buildDir, binary.getProjectScopedName());
             tasks.create(testTaskName, Test.class, new Action<Test>() {
+                @Override
                 public void execute(Test test) {
                     test.setDescription("Runs " + WordUtils.uncapitalize(binary.getDisplayName() + "."));
 
@@ -95,7 +99,7 @@ public class PlayTestPlugin extends RuleSource {
         }
     }
 
-    private FileCollection getTestCompileClasspath(PlayApplicationBinarySpec binary, PlayToolProvider playToolProvider, PlayPluginConfigurations configurations) {
+    private FileCollection getTestCompileClasspath(PlayApplicationBinarySpec binary, PlayPluginConfigurations configurations) {
         return ImmutableFileCollection.of(binary.getJarFile()).plus(configurations.getPlayTest().getAllArtifacts());
     }
 

@@ -19,6 +19,7 @@ package org.gradle.api.internal.tasks.testing.detection;
 import org.gradle.api.file.EmptyFileVisitor;
 import org.gradle.api.file.FileTree;
 import org.gradle.api.file.FileVisitDetails;
+import org.gradle.api.internal.file.RelativeFile;
 import org.gradle.api.internal.tasks.testing.DefaultTestClassRunInfo;
 import org.gradle.api.internal.tasks.testing.TestClassProcessor;
 import org.gradle.api.internal.tasks.testing.TestClassRunInfo;
@@ -54,14 +55,16 @@ public class DefaultTestClassScanner implements Runnable {
     private void detectionScan() {
         testFrameworkDetector.startDetection(testClassProcessor);
         candidateClassFiles.visit(new ClassFileVisitor() {
+            @Override
             public void visitClassFile(FileVisitDetails fileDetails) {
-                testFrameworkDetector.processTestClass(fileDetails.getFile());
+                testFrameworkDetector.processTestClass(new RelativeFile(fileDetails.getFile(), fileDetails.getRelativePath()));
             }
         });
     }
 
     private void filenameScan() {
         candidateClassFiles.visit(new ClassFileVisitor() {
+            @Override
             public void visitClassFile(FileVisitDetails fileDetails) {
                 TestClassRunInfo testClass = new DefaultTestClassRunInfo(getClassName(fileDetails));
                 testClassProcessor.processTestClass(testClass);

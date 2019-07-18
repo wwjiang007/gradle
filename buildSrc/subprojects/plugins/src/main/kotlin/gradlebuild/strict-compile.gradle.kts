@@ -17,12 +17,11 @@ package gradlebuild
 
 import org.gradle.plugins.strictcompile.StrictCompileExtension
 
-//TODO:kotlin-dsl - revert to reified syntax after nightly upgrade
-val strictCompile = extensions.create("strictCompile", StrictCompileExtension::class.java)
+val strictCompile = extensions.create<StrictCompileExtension>("strictCompile")
 
 afterEvaluate {
 
-    val strictCompilerArgs = listOf("-Werror", "-Xlint:all", "-Xlint:-options", "-Xlint:-serial")
+    val strictCompilerArgs = listOf("-Werror", "-Xlint:all", "-Xlint:-options", "-Xlint:-serial", "-Xlint:-classfile")
 
     val ignoreDeprecationsArg = "-Xlint:-deprecation"
 

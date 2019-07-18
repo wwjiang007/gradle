@@ -97,7 +97,6 @@ public interface ResolutionStrategy {
      *
      * @since 3.2
      */
-    @Incubating
     void preferProjectModules();
 
     /**
@@ -172,7 +171,7 @@ public interface ResolutionStrategy {
      * Example:
      * <pre class='autoTested'>
      * configurations {
-     *   compile.resolutionStrategy {
+     *   compileClasspath.resolutionStrategy {
      *     eachDependency { DependencyResolveDetails details -&gt;
      *       //specifying a fixed version for all libraries with 'org.gradle' group
      *       if (details.requested.group == 'org.gradle') {
@@ -195,7 +194,6 @@ public interface ResolutionStrategy {
      * @return this
      * @since 1.4
      */
-    @Incubating
     ResolutionStrategy eachDependency(Action<? super DependencyResolveDetails> rule);
 
     /**
@@ -250,7 +248,6 @@ public interface ResolutionStrategy {
      * @return the version selection rules
      * @since 2.2
      */
-    @Incubating
     ComponentSelectionRules getComponentSelection();
 
     /**
@@ -260,7 +257,6 @@ public interface ResolutionStrategy {
      * @return this ResolutionStrategy instance
      * @since 2.2
      */
-    @Incubating
     ResolutionStrategy componentSelection(Action<? super ComponentSelectionRules> action);
 
     /**
@@ -268,7 +264,6 @@ public interface ResolutionStrategy {
      *
      * @since 2.5
      */
-    @Incubating
     DependencySubstitutions getDependencySubstitution();
 
     /**
@@ -293,15 +288,14 @@ public interface ResolutionStrategy {
      * @see DependencySubstitutions
      * @since 2.5
      */
-    @Incubating
     ResolutionStrategy dependencySubstitution(Action<? super DependencySubstitutions> action);
 
     /**
      * Specifies the ordering for resolved artifacts. Options are:
      * <ul>
      * <li>{@link SortOrder#DEFAULT} : Don't specify the sort order. Gradle will provide artifacts in the default order.</li>
-     * <li>{@link SortOrder#CONSUMER_FIRST} : Artifacts for a consuming component should appear <em>before</em> artifacts for it's dependencies.</li>
-     * <li>{@link SortOrder#DEPENDENCY_FIRST} : Artifacts for a consuming component should appear <em>after</em> artifacts for it's dependencies.</li>
+     * <li>{@link SortOrder#CONSUMER_FIRST} : Artifacts for a consuming component should appear <em>before</em> artifacts for its dependencies.</li>
+     * <li>{@link SortOrder#DEPENDENCY_FIRST} : Artifacts for a consuming component should appear <em>after</em> artifacts for its dependencies.</li>
      * </ul>
      * A best attempt will be made to sort artifacts according the supplied {@link SortOrder}, but no guarantees will be made in the presence of dependency cycles.
      *
@@ -310,8 +304,27 @@ public interface ResolutionStrategy {
      *
      * @since 3.5
      */
-    @Incubating
     void sortArtifacts(SortOrder sortOrder);
+
+    /**
+     * Configures the capabilities resolution strategy.
+     *
+     * @param action the configuration action.
+     *
+     * @return this resolution strategy
+     *
+     * @since 5.6
+     */
+    @Incubating
+    ResolutionStrategy capabilitiesResolution(Action<? super CapabilitiesResolution> action);
+
+    /**
+     * Returns the capabilities resolution strategy.
+     *
+     * @since 5.6
+     */
+    @Incubating
+    CapabilitiesResolution getCapabilitiesResolution();
 
     /**
      * Defines the sort order for components and artifacts produced by the configuration.
@@ -319,7 +332,6 @@ public interface ResolutionStrategy {
      * @see #sortArtifacts(SortOrder)
      * @since 3.5
      */
-    @Incubating
     enum SortOrder {
         DEFAULT, CONSUMER_FIRST, DEPENDENCY_FIRST
     }

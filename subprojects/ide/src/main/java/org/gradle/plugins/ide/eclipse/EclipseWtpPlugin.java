@@ -78,8 +78,8 @@ public class EclipseWtpPlugin extends IdePlugin {
         getLifecycleTask().configure(withDescription("Generates Eclipse wtp configuration files."));
         getCleanTask().configure(withDescription("Cleans Eclipse wtp configuration files."));
 
-        project.getTasks().named(EclipsePlugin.ECLIPSE_TASK_NAME).configure(dependsOn(getLifecycleTask()));
-        project.getTasks().named(cleanName(EclipsePlugin.ECLIPSE_TASK_NAME)).configure(dependsOn(getCleanTask()));
+        project.getTasks().named(EclipsePlugin.ECLIPSE_TASK_NAME, dependsOn(getLifecycleTask()));
+        project.getTasks().named(cleanName(EclipsePlugin.ECLIPSE_TASK_NAME), dependsOn(getCleanTask()));
 
         EclipseModel model = project.getExtensions().getByType(EclipseModel.class);
 
@@ -156,7 +156,7 @@ public class EclipseWtpPlugin extends IdePlugin {
 
                 Set<Configuration> libConfigurations = component.getLibConfigurations();
 
-                libConfigurations.add(project.getConfigurations().getByName("runtime"));
+                libConfigurations.add(project.getConfigurations().getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME));
                 component.setClassesDeployPath("/");
                 ((IConventionAware) component).getConventionMapping().map("libDeployPath", new Callable<String>() {
                     @Override
@@ -179,7 +179,7 @@ public class EclipseWtpPlugin extends IdePlugin {
                 Set<Configuration> libConfigurations = component.getLibConfigurations();
                 Set<Configuration> minusConfigurations = component.getMinusConfigurations();
 
-                libConfigurations.add(project.getConfigurations().getByName("runtime"));
+                libConfigurations.add(project.getConfigurations().getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME));
                 minusConfigurations.add(project.getConfigurations().getByName("providedRuntime"));
                 component.setClassesDeployPath("/WEB-INF/classes");
                 ConventionMapping convention = ((IConventionAware) component).getConventionMapping();

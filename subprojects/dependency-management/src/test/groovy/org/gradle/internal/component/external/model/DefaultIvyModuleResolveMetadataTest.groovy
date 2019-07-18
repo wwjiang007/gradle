@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableListMultimap
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.internal.artifacts.DefaultImmutableModuleIdentifierFactory
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.api.internal.artifacts.DependencyManagementTestUtil
 import org.gradle.api.internal.artifacts.dependencies.DefaultMutableVersionConstraint
 import org.gradle.api.internal.artifacts.repositories.metadata.IvyMutableModuleMetadataFactory
 import org.gradle.api.internal.project.ProjectInternal
@@ -29,12 +30,12 @@ import org.gradle.internal.component.external.descriptor.DefaultExclude
 import org.gradle.internal.component.external.model.ivy.IvyDependencyDescriptor
 import org.gradle.internal.component.model.DefaultIvyArtifactName
 import org.gradle.internal.component.model.Exclude
-import org.gradle.util.TestUtil
+import org.gradle.util.AttributeTestUtil
 
 import static org.gradle.internal.component.external.model.DefaultModuleComponentSelector.newSelector
 
 class DefaultIvyModuleResolveMetadataTest extends AbstractLazyModuleComponentResolveMetadataTest {
-    def ivyMetadataFactory = new IvyMutableModuleMetadataFactory(new DefaultImmutableModuleIdentifierFactory(), TestUtil.attributesFactory())
+    def ivyMetadataFactory = new IvyMutableModuleMetadataFactory(new DefaultImmutableModuleIdentifierFactory(), AttributeTestUtil.attributesFactory(), DependencyManagementTestUtil.defaultSchema())
 
     @Override
     ModuleComponentResolveMetadata createMetadata(ModuleComponentIdentifier id, List<Configuration> configurations, List dependencies) {
@@ -60,10 +61,10 @@ class DefaultIvyModuleResolveMetadataTest extends AbstractLazyModuleComponentRes
         def compile = md.getConfiguration("compile")
 
         then:
-        runtime.dependencies*.selector*.versionConstraint.preferredVersion == ["1.1", "1.2", "1.3", "1.5"]
+        runtime.dependencies*.selector*.version == ["1.1", "1.2", "1.3", "1.5"]
         runtime.dependencies.is(runtime.dependencies)
 
-        compile.dependencies*.selector*.versionConstraint.preferredVersion == ["1.2", "1.3", "1.5"]
+        compile.dependencies*.selector*.version == ["1.2", "1.3", "1.5"]
         compile.dependencies.is(compile.dependencies)
     }
 
@@ -87,10 +88,10 @@ class DefaultIvyModuleResolveMetadataTest extends AbstractLazyModuleComponentRes
         def md = metadata
 
         then:
-        md.getConfiguration("a").hierarchy == ["a"]
-        md.getConfiguration("b").hierarchy == ["b", "a"]
-        md.getConfiguration("c").hierarchy == ["c", "a"]
-        md.getConfiguration("d").hierarchy == ["d", "b", "a", "c"]
+        md.getConfiguration("a").hierarchy as List == ["a"]
+        md.getConfiguration("b").hierarchy as List  == ["b", "a"]
+        md.getConfiguration("c").hierarchy as List  == ["c", "a"]
+        md.getConfiguration("d").hierarchy as List == ["d", "b", "a", "c"]
     }
 
     def "builds and caches artifacts for a configuration"() {

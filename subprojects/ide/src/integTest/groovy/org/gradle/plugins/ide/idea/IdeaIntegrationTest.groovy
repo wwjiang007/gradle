@@ -36,6 +36,7 @@ class IdeaIntegrationTest extends AbstractIdeIntegrationTest {
 
     @Test
     void mergesMetadataFilesCorrectly() {
+        file("master/settings.gradle") << ""
         def buildFile = file("master/build.gradle")
         buildFile << """
 apply plugin: 'java'
@@ -145,7 +146,7 @@ repositories {
 }
 
 dependencies {
-    compile "myGroup:myArtifact1:1.0"
+    implementation "myGroup:myArtifact1:1.0"
 }
         """
 
@@ -173,7 +174,7 @@ dependencies {
     }
 
     dependencies {
-        compile "myGroup:myArtifact1:1.0"
+        implementation "myGroup:myArtifact1:1.0"
     }
             """
 
@@ -245,11 +246,11 @@ repositories {
 }
 
 configurations {
-    compile.exclude module: 'myArtifact2'
+    implementation.exclude module: 'myArtifact2'
 }
 
 dependencies {
-    compile "myGroup:myArtifact1:1.0"
+    implementation "myGroup:myArtifact1:1.0"
 }
         """
 
@@ -273,7 +274,7 @@ repositories {
 }
 
 dependencies {
-    compile("myGroup:myArtifact1:1.0") {
+    implementation("myGroup:myArtifact1:1.0") {
         exclude module: "myArtifact2"
     }
 }
@@ -430,7 +431,7 @@ apply plugin: 'org.gradle.scala-lang'
         } catch (AssertionFailedError error) {
             println "EXPECTED:\n${expectedXml}"
             println "ACTUAL:\n${actualXml}"
-            throw new ComparisonFailure("Comparison filure: expected: $expectedFile, actual: $actualFile"
+            throw new ComparisonFailure("Comparison failure: expected: $expectedFile, actual: $actualFile"
                 + "\nUnexpected content for generated actualFile: ${error.message}", expectedXml, actualXml).initCause(error)
         }
     }

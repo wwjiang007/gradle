@@ -16,16 +16,21 @@
 package org.gradle.api.internal.tasks.execution;
 
 import com.google.common.collect.Lists;
+import org.gradle.api.InvalidUserDataException;
+import org.gradle.api.Task;
 import org.gradle.api.internal.TaskInternal;
 import org.gradle.api.internal.file.FileResolver;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.tasks.DefaultTaskValidationContext;
 import org.gradle.api.internal.tasks.TaskExecuter;
+import org.gradle.api.internal.tasks.TaskExecuterResult;
 import org.gradle.api.internal.tasks.TaskExecutionContext;
 import org.gradle.api.internal.tasks.TaskStateInternal;
 import org.gradle.api.internal.tasks.TaskValidationContext;
-import org.gradle.api.tasks.TaskExecutionException;
+import org.gradle.api.tasks.TaskValidationException;
+import org.gradle.internal.file.ReservedFileSystemLocationRegistry;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -33,29 +38,45 @@ import java.util.List;
  */
 public class ValidatingTaskExecuter implements TaskExecuter {
     private final TaskExecuter executer;
+    private final ReservedFileSystemLocationRegistry reservedFileSystemLocationRegistry;
 
-    public ValidatingTaskExecuter(TaskExecuter executer) {
+    public ValidatingTaskExecuter(TaskExecuter executer, ReservedFileSystemLocationRegistry reservedFileSystemLocationRegistry) {
         this.executer = executer;
+        this.reservedFileSystemLocationRegistry = reservedFileSystemLocationRegistry;
     }
 
-    public void execute(TaskInternal task, TaskStateInternal state, TaskExecutionContext context) {
+    @Override
+    public TaskExecuterResult execute(TaskInternal task, TaskStateInternal state, TaskExecutionContext context) {
         List<String> messages = Lists.newArrayList();
         FileResolver resolver = ((ProjectInternal) task.getProject()).getFileResolver();
-        final TaskValidationContext validationContext = new DefaultTaskValidationContext(resolver, messages);
+        final TaskValidationContext validationContext = new DefaultTaskValidationContext(resolver, reservedFileSystemLocationRegistry, messages);
 
-        try {
-            context.getTaskProperties().validate(validationContext);
-        } catch (Exception ex) {
-            throw new TaskExecutionException(task, ex);
-        }
+        context.getTaskProperties().validate(validationContext);
 
         if (!messages.isEmpty()) {
             List<String> firstMessages = messages.subList(0, Math.min(5, messages.size()));
-            if (!validationContext.getHighestSeverity().report(task, firstMessages, state)) {
-                return;
-            }
+            report(task, firstMessages, state);
+            return TaskExecuterResult.WITHOUT_OUTPUTS;
         }
 
-        executer.execute(task, state, context);
+        return executer.execute(task, state, context);
+    }
+
+    private static void report(Task task, List<String> messages, TaskStateInternal state) {
+        Collections.sort(messages);
+        List<InvalidUserDataException> causes = Lists.newArrayListWithCapacity(messages.size());
+        for (String message : messages) {
+            causes.add(new InvalidUserDataException(message));
+        }
+        String errorMessage = getMainMessage(task, messages);
+        state.setOutcome(new TaskValidationException(errorMessage, causes));
+    }
+
+    private static String getMainMessage(Task task, List<String> messages) {
+        if (messages.size() == 1) {
+            return String.format("A problem was found with the configuration of %s.", task);
+        } else {
+            return String.format("Some problems were found with the configuration of %s.", task);
+        }
     }
 }

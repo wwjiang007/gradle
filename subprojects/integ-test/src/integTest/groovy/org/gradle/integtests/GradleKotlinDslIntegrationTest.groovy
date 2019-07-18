@@ -105,7 +105,7 @@ class GradleKotlinDslIntegrationTest extends AbstractIntegrationSpec {
 
         def scriptFile = file("script.gradle.kts") << """
             tasks {
-                "hello" {
+                register("hello") {
                     doLast { 
                         println("Hello!") 
                     }
@@ -136,6 +136,9 @@ class GradleKotlinDslIntegrationTest extends AbstractIntegrationSpec {
 
     def 'can query KotlinBuildScriptModel'() {
         given:
+        // TODO Remove this once the Kotlin DSL upgrades 'pattern("layout") {' to 'patternLayout {
+        // Using expectDeprecationWarning did not work as some setup do not trigger one
+        executer.noDeprecationChecks()
         // This test breaks encapsulation a bit in the interest of ensuring Gradle Kotlin DSL use
         // of internal APIs is not broken by refactorings on the Gradle side
         buildFile << """
@@ -161,5 +164,78 @@ task("dumpKotlinBuildScriptModelClassPath") {
 
         then:
         outputContains("gradle-kotlin-dsl!")
+    }
+
+    def 'can use Kotlin lambda as path notation'() {
+        given:
+        buildFile << """
+            task("listFiles") {
+                doLast {
+
+                    // via FileResolver
+                    val f = file { "cathedral" }
+                    println(f.name)
+
+                    // on FileCollection
+                    val collection = layout.files(
+                        // single lambda
+                        { "foo" },
+                        // nested deferred
+                        { { "bar" } },
+                        // nested unpacking
+                        { file({ "baz" }) },
+                        // nested both
+                        { { file({ { "bazar" } }) } }
+                    )
+                    println(collection.files.map { it.name })                    
+                }
+            }
+        """
+        when:
+        succeeds 'listFiles'
+        then:
+        outputContains 'cathedral'
+        outputContains '[foo, bar, baz, bazar]'
+    }
+
+    def 'can use Kotlin lambda as input property'() {
+        given:
+        buildFile << """
+            import org.gradle.api.*
+            import org.gradle.api.tasks.*
+            import javax.inject.Inject
+
+            open class PrintInputToFile @Inject constructor(objects: ObjectFactory): DefaultTask() {
+                @get:Input
+                val input = { project.property("inputString") }
+                @get:OutputFile
+                val outputFile: RegularFileProperty = objects.fileProperty() 
+
+                @TaskAction fun run() {
+                    outputFile.get().asFile.writeText(input() as String)
+                }
+            }
+
+            task<PrintInputToFile>("writeInputToFile") {
+                outputFile.set(project.layout.buildDirectory.file("output.txt"))
+            }
+            
+        """
+        def taskName = ":writeInputToFile"
+
+        when:
+        run taskName, '-PinputString=string1'
+        then:
+        executedAndNotSkipped(taskName)
+
+        when:
+        run taskName, '-PinputString=string1'
+        then:
+        skipped(taskName)
+
+        when:
+        run taskName, '-PinputString=string2'
+        then:
+        executedAndNotSkipped(taskName)
     }
 }

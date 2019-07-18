@@ -31,8 +31,8 @@ class GradleRunnerMiscEndUserIntegrationTest extends BaseTestKitEndUserIntegrati
             apply plugin: 'groovy'
 
             dependencies {
-                compile localGroovy()
-                testCompile('org.spockframework:spock-core:1.0-groovy-2.4') {
+                implementation localGroovy()
+                testImplementation('org.spockframework:spock-core:1.0-groovy-2.4') {
                     exclude module: 'groovy-all'
                 }
             }
@@ -64,7 +64,7 @@ class GradleRunnerMiscEndUserIntegrationTest extends BaseTestKitEndUserIntegrati
         def testKitJar = jarsDir.listFiles().find { it.name.contains "test-kit" }
         buildFile << """
             dependencies {
-                testCompile fileTree(dir: 'jars', include: '*.jar')
+                testImplementation fileTree(dir: 'jars', include: '*.jar')
             }
         """
 
@@ -152,15 +152,18 @@ class GradleRunnerMiscEndUserIntegrationTest extends BaseTestKitEndUserIntegrati
             import spock.lang.Specification
 
             class $className extends Specification {
-                @Rule final TemporaryFolder testProjectDir = new TemporaryFolder()
+                @Rule TemporaryFolder testProjectDir = new TemporaryFolder()
                 File buildFile
+                File settingsFile
 
                 def setup() {
+                    settingsFile = testProjectDir.newFile('settings.gradle')
                     buildFile = testProjectDir.newFile('build.gradle')
                 }
 
                 def "execute helloWorld task"() {
                     given:
+                    settingsFile << "rootProject.name = 'hello-world'"
                     buildFile << '''
                         task helloWorld {
                             doLast {
@@ -186,7 +189,7 @@ class GradleRunnerMiscEndUserIntegrationTest extends BaseTestKitEndUserIntegrati
     static String gradleTestKitDependency() {
         """
             dependencies {
-                testCompile gradleTestKit()
+                testImplementation gradleTestKit()
             }
         """
     }

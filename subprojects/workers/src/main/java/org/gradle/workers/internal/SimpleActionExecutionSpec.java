@@ -16,23 +16,24 @@
 
 package org.gradle.workers.internal;
 
-import java.io.File;
+import org.gradle.workers.WorkerExecution;
+import org.gradle.workers.WorkerParameters;
 
-public class SimpleActionExecutionSpec implements ActionExecutionSpec {
-    private final Class<?> implementationClass;
+public class SimpleActionExecutionSpec<T extends WorkerParameters> implements ActionExecutionSpec<T> {
+    private final Class<? extends WorkerExecution<T>> implementationClass;
     private final String displayName;
-    private final File executionWorkingDir;
-    private final Object[] params;
+    private final T params;
+    private final ClassLoaderStructure classLoaderStructure;
 
-    public SimpleActionExecutionSpec(Class<?> implementationClass, String displayName, File executionWorkingDir, Object[] params) {
+    public SimpleActionExecutionSpec(Class<? extends WorkerExecution<T>> implementationClass, String displayName, T params, ClassLoaderStructure classLoaderStructure) {
         this.implementationClass = implementationClass;
         this.displayName = displayName;
-        this.executionWorkingDir = executionWorkingDir;
         this.params = params;
+        this.classLoaderStructure = classLoaderStructure;
     }
 
     @Override
-    public Class<?> getImplementationClass() {
+    public Class<? extends WorkerExecution<T>> getImplementationClass() {
         return implementationClass;
     }
 
@@ -42,12 +43,12 @@ public class SimpleActionExecutionSpec implements ActionExecutionSpec {
     }
 
     @Override
-    public File getExecutionWorkingDir() {
-        return executionWorkingDir;
+    public T getParameters() {
+        return params;
     }
 
     @Override
-    public Object[] getParams(ClassLoader classLoader) {
-        return params;
+    public ClassLoaderStructure getClassLoaderStructure() {
+        return classLoaderStructure;
     }
 }

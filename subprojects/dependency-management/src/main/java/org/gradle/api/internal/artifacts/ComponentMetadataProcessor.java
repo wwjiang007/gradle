@@ -29,6 +29,11 @@ public interface ComponentMetadataProcessor {
         public ComponentMetadata processMetadata(ComponentMetadata metadata) {
             return metadata;
         }
+
+        @Override
+        public int getRulesHash() {
+            return 0;
+        };
     };
 
     ModuleComponentResolveMetadata processMetadata(ModuleComponentResolveMetadata metadata);
@@ -40,4 +45,6 @@ public interface ComponentMetadataProcessor {
      * @return updated metadata, if any component metadata rule applies.
      */
     ComponentMetadata processMetadata(ComponentMetadata metadata);
+
+    int getRulesHash();
 }

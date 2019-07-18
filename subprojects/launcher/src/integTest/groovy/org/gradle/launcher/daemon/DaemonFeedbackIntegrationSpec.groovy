@@ -69,7 +69,9 @@ task sleep {
         then:
         def ex = thrown(Exception)
         ex.message.contains(DaemonMessages.UNABLE_TO_START_DAEMON)
-        ex.message.contains("-Xyz")
+        ex.message.contains("Process command line:")
+        ex.message.contains("-Dorg.gradle.jvmargs=-Xyz")
+        ex.message.contains("Unrecognized option: -Xyz")
     }
 
     def "daemon log contains all necessary logging"() {
@@ -159,7 +161,8 @@ task sleep {
     }
 
     //IBM JDK adds a bunch of environment variables that make the foreground daemon not match
-    @Requires(TestPrecondition.NOT_JDK_IBM)
+    //Java 9 and above needs --add-opens to make environment variable mutation work
+    @Requires([TestPrecondition.NOT_JDK_IBM, TestPrecondition.JDK8_OR_EARLIER])
     def "foreground daemon log honors log levels for logging"() {
         given:
         file("build.gradle") << """

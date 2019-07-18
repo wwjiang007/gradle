@@ -76,7 +76,7 @@ public class PgpSignatory extends SignatorySupport {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (PGPException e) {
-            throw new UncheckedException(e);
+            throw UncheckedException.throwAsUncheckedException(e);
         }
     }
 
@@ -96,7 +96,7 @@ public class PgpSignatory extends SignatorySupport {
     }
 
     private void writeSignatureTo(OutputStream signatureDestination, PGPSignature pgpSignature) throws PGPException, IOException {
-        // BCPGOutputStream seems to do some internal buffering, it's unclear whether it's stricly required here though
+        // BCPGOutputStream seems to do some internal buffering, it's unclear whether it's strictly required here though
         BCPGOutputStream bufferedOutput = new BCPGOutputStream(signatureDestination);
         pgpSignature.encode(bufferedOutput);
         bufferedOutput.flush();
@@ -108,7 +108,7 @@ public class PgpSignatory extends SignatorySupport {
             generator.init(PGPSignature.BINARY_DOCUMENT, privateKey);
             return generator;
         } catch (PGPException e) {
-            throw new UncheckedException(e);
+            throw UncheckedException.throwAsUncheckedException(e);
         }
     }
 
@@ -117,7 +117,7 @@ public class PgpSignatory extends SignatorySupport {
             PBESecretKeyDecryptor decryptor = new BcPBESecretKeyDecryptorBuilder(new BcPGPDigestCalculatorProvider()).build(password.toCharArray());
             return secretKey.extractPrivateKey(decryptor);
         } catch (PGPException e) {
-            throw new UncheckedException(e);
+            throw UncheckedException.throwAsUncheckedException(e);
         }
     }
 }

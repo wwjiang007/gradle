@@ -16,6 +16,7 @@
 package org.gradle.util;
 
 import junit.framework.ComparisonFailure;
+import org.spockframework.runtime.ConditionFailedWithExceptionError;
 import org.spockframework.runtime.WrongExceptionThrownError;
 import org.spockframework.runtime.extension.AbstractAnnotationDrivenExtension;
 import org.spockframework.runtime.extension.IMethodInterceptor;
@@ -35,20 +36,25 @@ public class FailsWithMessageExtension extends AbstractAnnotationDrivenExtension
             this.annotation = annotation;
         }
 
+        @Override
         public void intercept(IMethodInvocation invocation) throws Throwable {
             try {
                 invocation.proceed();
+                throw new WrongExceptionThrownError(annotation.type(), null);
+            } catch (ConditionFailedWithExceptionError error) {
+                handleFailure(error.getCause());
             } catch (Throwable t) {
-                if (!annotation.type().isInstance(t)) {
-                    throw new WrongExceptionThrownError(annotation.type(), t);
-                }
-                if (!annotation.message().equals(t.getMessage())) {
-                    throw new ComparisonFailure("Unexpected message for exception.", annotation.message(), t.getMessage());
-                }
-                return;
+                handleFailure(t);
             }
+        }
 
-            throw new WrongExceptionThrownError(annotation.type(), null);
+        private void handleFailure(Throwable t) {
+            if (!annotation.type().isInstance(t)) {
+                throw new WrongExceptionThrownError(annotation.type(), t);
+            }
+            if (!annotation.message().equals(t.getMessage())) {
+                throw new ComparisonFailure("Unexpected message for exception.", annotation.message(), t.getMessage());
+            }
         }
     }
 }

@@ -21,7 +21,6 @@ import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.internal.component.model.ComponentResolveMetadata;
 import org.gradle.internal.resolve.ModuleVersionResolveException;
-import org.gradle.internal.resolve.RejectedBySelectorVersion;
 import org.gradle.internal.resolve.RejectedVersion;
 
 import java.util.Collection;
@@ -33,28 +32,33 @@ public class DefaultBuildableComponentIdResolveResult extends DefaultResourceAwa
     private ComponentIdentifier id;
     private ModuleVersionIdentifier moduleVersionId;
     private boolean rejected;
-    private ImmutableSet.Builder<RejectedBySelectorVersion> unmatchedVersions;
+    private ImmutableSet.Builder<String> unmatchedVersions;
     private ImmutableSet.Builder<RejectedVersion> rejections;
     private Object mark;
 
+    @Override
     public boolean hasResult() {
         return id != null || failure != null;
     }
 
+    @Override
     public ModuleVersionResolveException getFailure() {
         return failure;
     }
 
+    @Override
     public ComponentIdentifier getId() {
         assertResolved();
         return id;
     }
 
+    @Override
     public ModuleVersionIdentifier getModuleVersionId() {
         assertResolved();
         return moduleVersionId;
     }
 
+    @Override
     public ComponentResolveMetadata getMetadata() {
         assertResolved();
         return metadata;
@@ -65,6 +69,7 @@ public class DefaultBuildableComponentIdResolveResult extends DefaultResourceAwa
         return rejected;
     }
 
+    @Override
     public void resolved(ComponentIdentifier id, ModuleVersionIdentifier moduleVersionIdentifier) {
         reset();
         this.id = id;
@@ -77,23 +82,25 @@ public class DefaultBuildableComponentIdResolveResult extends DefaultResourceAwa
         rejected = true;
     }
 
+    @Override
     public void resolved(ComponentResolveMetadata metadata) {
         resolved(metadata.getId(), metadata.getModuleVersionId());
         this.metadata = metadata;
     }
 
+    @Override
     public void failed(ModuleVersionResolveException failure) {
         reset();
         this.failure = failure;
     }
 
     @Override
-    public void unmatched(Collection<RejectedBySelectorVersion> unmatchedVersions) {
+    public void unmatched(Collection<String> unmatchedVersions) {
         if (unmatchedVersions.isEmpty()) {
             return;
         }
         if (this.unmatchedVersions == null) {
-            this.unmatchedVersions = new ImmutableSet.Builder<RejectedBySelectorVersion>();
+            this.unmatchedVersions = new ImmutableSet.Builder<String>();
         }
         this.unmatchedVersions.addAll(unmatchedVersions);
     }
@@ -110,7 +117,7 @@ public class DefaultBuildableComponentIdResolveResult extends DefaultResourceAwa
     }
 
     @Override
-    public Collection<RejectedBySelectorVersion> getUnmatchedVersions() {
+    public Collection<String> getUnmatchedVersions() {
         return safeBuild(unmatchedVersions);
     }
 

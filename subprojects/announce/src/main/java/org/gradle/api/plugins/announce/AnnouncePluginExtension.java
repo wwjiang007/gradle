@@ -29,6 +29,7 @@ import org.gradle.internal.installation.CurrentGradleInstallation;
 /**
  * <p>The extension used by the AnnouncePlugin.</p>
  */
+@Deprecated
 public class AnnouncePluginExtension {
     private final Logger logger = Logging.getLogger(getClass());
     private final LocalAnnouncer onDemandLocalAnnouncer;
@@ -112,6 +113,7 @@ public class AnnouncePluginExtension {
             this.extension = extension;
         }
 
+        @Override
         public void send(String title, String message) {
             if (local == null) {
                 local = extension.getAnnouncerFactory().createAnnouncer("local");

@@ -55,7 +55,7 @@ public class DefaultAsyncWorkTracker implements AsyncWorkTracker {
     }
 
     @Override
-    public void waitForCompletion(BuildOperationRef operation, boolean releaseLocks) {
+    public void waitForCompletion(BuildOperationRef operation, ProjectLockRetention lockRetention) {
         final List<AsyncWorkCompletion> workItems;
         lock.lock();
         try {
@@ -67,29 +67,47 @@ public class DefaultAsyncWorkTracker implements AsyncWorkTracker {
         }
 
         try {
-            if (workItems.size() > 0) {
-                boolean workInProgress = CollectionUtils.any(workItems, new Spec<AsyncWorkCompletion>() {
-                    @Override
-                    public boolean isSatisfiedBy(AsyncWorkCompletion workCompletion) {
-                        return !workCompletion.isComplete();
-                    }
-                });
-                // only release the project lock if we have to wait for items to finish
-                if (releaseLocks && workInProgress) {
-                    projectLeaseRegistry.withoutProjectLock(
-                        new Runnable() {
-                        @Override
-                        public void run() {
-                            waitForItemsAndGatherFailures(workItems);
-                        }
-                    });
-                } else {
-                    waitForItemsAndGatherFailures(workItems);
-                }
+            if (!workItems.isEmpty()) {
+                waitForItemsAndGatherFailures(workItems, lockRetention);
             }
         } finally {
             stopWaiting(operation);
         }
+    }
+
+    private void waitForItemsAndGatherFailures(List<AsyncWorkCompletion> workItems, AsyncWorkTracker.ProjectLockRetention lockRetention) {
+        switch (lockRetention) {
+            case RETAIN_PROJECT_LOCKS:
+                waitForItemsAndGatherFailures(workItems);
+                return;
+            case RELEASE_PROJECT_LOCKS:
+                projectLeaseRegistry.releaseCurrentProjectLocks();
+                waitForItemsAndGatherFailures(workItems);
+                return;
+            case RELEASE_AND_REACQUIRE_PROJECT_LOCKS:
+                if (!hasWorkInProgress(workItems)) {
+                    // All items are complete. Do not release project lock and simply collect failures.
+                    waitForItemsAndGatherFailures(workItems);
+                    return;
+                }
+                projectLeaseRegistry.withoutProjectLock(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                waitForItemsAndGatherFailures(workItems);
+                            }
+                        }
+                );
+        }
+    }
+
+    private boolean hasWorkInProgress(List<AsyncWorkCompletion> workItems) {
+        return CollectionUtils.any(workItems, new Spec<AsyncWorkCompletion>() {
+                        @Override
+                        public boolean isSatisfiedBy(AsyncWorkCompletion workCompletion) {
+                            return !workCompletion.isComplete();
+                        }
+                    });
     }
 
     @Override
@@ -114,12 +132,21 @@ public class DefaultAsyncWorkTracker implements AsyncWorkTracker {
             try {
                 item.waitForCompletion();
             } catch (Throwable t) {
+                if (Thread.currentThread().isInterrupted()) {
+                    cancel(workItems);
+                }
                 failures.add(t);
             }
         }
 
         if (failures.size() > 0) {
             throw new DefaultMultiCauseException("There were failures while executing asynchronous work:", failures);
+        }
+    }
+
+    private void cancel(Iterable<AsyncWorkCompletion> workItems) {
+        for (AsyncWorkCompletion workItem : workItems) {
+            workItem.cancel();
         }
     }
 

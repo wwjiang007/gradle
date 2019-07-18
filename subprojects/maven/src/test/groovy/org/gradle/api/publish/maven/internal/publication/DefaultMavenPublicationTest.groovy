@@ -24,28 +24,33 @@ import org.gradle.api.artifacts.ModuleDependency
 import org.gradle.api.artifacts.ModuleVersionIdentifier
 import org.gradle.api.artifacts.ProjectDependency
 import org.gradle.api.artifacts.PublishArtifact
+import org.gradle.api.attributes.Category
 import org.gradle.api.component.ComponentWithVariants
 import org.gradle.api.file.FileCollection
+import org.gradle.api.internal.CollectionCallbackActionDecorator
 import org.gradle.api.internal.FeaturePreviews
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
+import org.gradle.api.internal.artifacts.DependencyManagementTestUtil
 import org.gradle.api.internal.artifacts.ivyservice.projectmodule.ProjectDependencyPublicationResolver
+import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.internal.component.SoftwareComponentInternal
 import org.gradle.api.internal.component.UsageContext
 import org.gradle.api.internal.file.TestFiles
-import org.gradle.api.internal.model.DefaultObjectFactory
-import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.publish.internal.PublicationInternal
+import org.gradle.api.publish.internal.versionmapping.VersionMappingStrategyInternal
 import org.gradle.api.publish.maven.MavenArtifact
 import org.gradle.api.publish.maven.internal.publisher.MutableMavenProjectIdentity
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.api.tasks.TaskOutputs
-import org.gradle.internal.reflect.DirectInstantiator
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.internal.typeconversion.NotationParser
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
+import org.gradle.util.AttributeTestUtil
 import org.gradle.util.TestUtil
 import org.junit.Rule
 import spock.lang.Specification
+import spock.lang.Unroll
 
 class DefaultMavenPublicationTest extends Specification {
     @Rule
@@ -211,9 +216,9 @@ class DefaultMavenPublicationTest extends Specification {
         artifact2.file >> artifactFile
         artifact2.classifier >> ""
         artifact2.extension >> "jar"
-        def usage1 = Stub(UsageContext)
+        def usage1 = Stub(UsageContext) { getName() >> 'api' }
         usage1.artifacts >> [artifact1]
-        def usage2 = Stub(UsageContext)
+        def usage2 = Stub(UsageContext) { getName() >> 'runtime' }
         usage2.artifacts >> [artifact2]
         def component = Stub(SoftwareComponentInternal)
         component.usages >> [usage1, usage2]
@@ -243,6 +248,7 @@ class DefaultMavenPublicationTest extends Specification {
         moduleDependency.artifacts >> [artifact]
         moduleDependency.excludeRules >> [excludeRule]
         moduleDependency.transitive >> true
+        moduleDependency.attributes >> ImmutableAttributes.EMPTY
 
         and:
         publication.from(componentWithDependency(moduleDependency))
@@ -272,6 +278,7 @@ class DefaultMavenPublicationTest extends Specification {
         moduleDependency.artifacts >> [artifact]
         moduleDependency.excludeRules >> [excludeRule]
         moduleDependency.transitive >> false
+        moduleDependency.attributes >> ImmutableAttributes.EMPTY
 
         and:
         publication.from(componentWithDependency(moduleDependency))
@@ -290,6 +297,38 @@ class DefaultMavenPublicationTest extends Specification {
         }
     }
 
+    @Unroll
+    def 'adopts platform in #scope declaration from added components'() {
+        given:
+        def publication = createPublication()
+        def moduleDependency = Mock(ModuleDependency)
+
+        when:
+        moduleDependency.group >> "group"
+        moduleDependency.name >> "name"
+        moduleDependency.version >> "version"
+        moduleDependency.artifacts >> []
+        moduleDependency.excludeRules >> []
+        moduleDependency.transitive >> true
+        moduleDependency.attributes >> platformAttribute()
+
+        and:
+        publication.from(createComponent([], [moduleDependency], scope))
+
+        then:
+        publication.importDependencyConstraints.size() == 1
+        with(publication.importDependencyConstraints.asList().first()) {
+            groupId == "group"
+            artifactId == "name"
+            version == "version"
+            artifacts == []
+            excludeRules == []
+        }
+
+        where:
+        scope << ['runtime', 'api']
+    }
+
     def "maps project dependency to maven dependency"() {
         given:
         def publication = createPublication()
@@ -297,6 +336,7 @@ class DefaultMavenPublicationTest extends Specification {
 
         and:
         projectDependency.excludeRules >> []
+        projectDependency.getAttributes() >> ImmutableAttributes.EMPTY
         projectDependencyResolver.resolve(ModuleVersionIdentifier, projectDependency) >> DefaultModuleVersionIdentifier.newId("pub-group", "pub-name", "pub-version")
 
         when:
@@ -443,19 +483,22 @@ class DefaultMavenPublicationTest extends Specification {
     }
 
     def createPublication() {
-        def instantiator = DirectInstantiator.INSTANCE
-        def objectFactory = new DefaultObjectFactory(instantiator, new NamedObjectInstantiator())
-        def publication = new DefaultMavenPublication("pub-name", module, notationParser, instantiator, objectFactory, projectDependencyResolver, TestFiles.fileCollectionFactory(), featurePreviews, TestUtil.attributesFactory())
+        def instantiator = TestUtil.instantiatorFactory().decorateLenient()
+        def objectFactory = TestUtil.objectFactory()
+        def publication = new DefaultMavenPublication("pub-name", module, notationParser, instantiator, objectFactory, projectDependencyResolver, TestFiles.fileCollectionFactory(),
+            featurePreviews, AttributeTestUtil.attributesFactory(), CollectionCallbackActionDecorator.NOOP, Mock(VersionMappingStrategyInternal), DependencyManagementTestUtil.platformSupport())
         publication.setPomGenerator(createArtifactGenerator(pomFile))
         publication.setModuleDescriptorGenerator(createArtifactGenerator(gradleMetadataFile))
         return publication
     }
 
     def createArtifactGenerator(File file) {
-        return Stub(Task) {
-            getOutputs() >> Stub(TaskOutputs) {
-                getFiles() >> Stub(FileCollection) {
-                    getSingleFile() >> file
+        return Stub(TaskProvider) {
+            get() >> Stub(Task) {
+                getOutputs() >> Stub(TaskOutputs) {
+                    getFiles() >> Stub(FileCollection) {
+                        getSingleFile() >> file
+                    }
                 }
             }
         }
@@ -470,8 +513,12 @@ class DefaultMavenPublicationTest extends Specification {
     }
 
     def createComponent(def artifacts, def dependencies) {
+        return createComponent(artifacts, dependencies, 'runtime')
+    }
+
+    def createComponent(def artifacts, def dependencies, def scope) {
         def usage = Stub(UsageContext) {
-            getName() >> "runtime"
+            getName() >> scope
             getArtifacts() >> artifacts
             getDependencies() >> dependencies
         }
@@ -486,5 +533,9 @@ class DefaultMavenPublicationTest extends Specification {
         pub.name >> name
         pub.coordinates >> new DefaultModuleVersionIdentifier(group, artifactId, version)
         return pub
+    }
+
+    def platformAttribute() {
+        return AttributeTestUtil.attributesFactory().of(Category.CATEGORY_ATTRIBUTE, TestUtil.objectFactory().named(Category, Category.REGULAR_PLATFORM))
     }
 }

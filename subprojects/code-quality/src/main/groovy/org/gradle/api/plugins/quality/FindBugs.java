@@ -25,7 +25,6 @@ import org.gradle.api.Incubating;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileTree;
-import org.gradle.api.internal.ClosureBackedAction;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.plugins.quality.internal.FindBugsReportsImpl;
@@ -53,6 +52,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.VerificationTask;
 import org.gradle.internal.logging.ConsoleRenderer;
 import org.gradle.process.internal.worker.WorkerProcessFactory;
+import org.gradle.util.ClosureBackedAction;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -65,7 +65,10 @@ import java.util.Collection;
 /**
  * Analyzes code with <a href="http://findbugs.sourceforge.net">FindBugs</a>. See the <a href="http://findbugs.sourceforge.net/manual/">FindBugs Manual</a> for additional information on configuration
  * options.
+ *
+ * @deprecated FindBugs is unmaintained and does not support bytecode compiled for Java 9 and above.
  */
+@Deprecated
 @CacheableTask
 public class FindBugs extends SourceTask implements VerificationTask, Reporting<FindBugsReports> {
 
@@ -107,14 +110,8 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
         reports = getObjectFactory().newInstance(FindBugsReportsImpl.class, this);
     }
 
-    /**
-     * Injects and returns an instance of {@link org.gradle.api.model.ObjectFactory}.
-     *
-     * @since 4.2
-     */
-    @Incubating
     @Inject
-    public ObjectFactory getObjectFactory() {
+    protected ObjectFactory getObjectFactory() {
         throw new UnsupportedOperationException();
     }
 
@@ -128,6 +125,7 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      *
      * @return The reports container
      */
+    @Override
     @Nested
     public FindBugsReports getReports() {
         return reports;
@@ -151,6 +149,7 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      * @param closure The configuration
      * @return The reports container
      */
+    @Override
     public FindBugsReports reports(Closure closure) {
         return reports(new ClosureBackedAction<FindBugsReports>(closure));
     }
@@ -174,6 +173,7 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      * @param configureAction The configuration
      * @return The reports container
      */
+    @Override
     public FindBugsReports reports(Action<? super FindBugsReports> configureAction) {
         configureAction.execute(reports);
         return reports;
@@ -451,6 +451,7 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
     /**
      * Whether to allow the build to continue if there are warnings.
      */
+    @Override
     public void setIgnoreFailures(boolean ignoreFailures) {
         this.ignoreFailures = ignoreFailures;
     }
@@ -551,7 +552,6 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      *
      * @since 2.2
      */
-    @Incubating
     @Nullable
     @Optional
     @Nested
@@ -564,7 +564,6 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      *
      * @since 2.2
      */
-    @Incubating
     public void setIncludeFilterConfig(@Nullable TextResource includeFilterConfig) {
         this.includeFilterConfig = includeFilterConfig;
     }
@@ -574,7 +573,6 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      *
      * @since 2.2
      */
-    @Incubating
     @Nullable
     @Optional
     @Nested
@@ -587,7 +585,6 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      *
      * @since 2.2
      */
-    @Incubating
     public void setExcludeFilterConfig(@Nullable TextResource excludeFilterConfig) {
         this.excludeFilterConfig = excludeFilterConfig;
     }
@@ -597,7 +594,6 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      *
      * @since 2.4
      */
-    @Incubating
     @Nullable
     @Optional
     @Nested
@@ -610,7 +606,6 @@ public class FindBugs extends SourceTask implements VerificationTask, Reporting<
      *
      * @since 2.4
      */
-    @Incubating
     public void setExcludeBugsFilterConfig(@Nullable TextResource excludeBugsFilterConfig) {
         this.excludeBugsFilterConfig = excludeBugsFilterConfig;
     }

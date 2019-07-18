@@ -41,19 +41,19 @@ class JavaProjectUnderTest {
             ${mavenCentralRepository()}
 
             dependencies {
-                testCompile 'junit:junit:4.12'
+                testImplementation 'junit:junit:4.12'
             }
         """
         this
     }
 
-    JavaProjectUnderTest writeSourceFiles() {
-        writeProductionSourceFile()
-        writeTestSourceFile('src/test/java')
+    JavaProjectUnderTest writeSourceFiles(int count = 1) {
+        writeProductionSourceFile(count)
+        writeTestSourceFile('src/test/java', count)
         this
     }
 
-    JavaProjectUnderTest writeIntegrationTestSourceFiles() {
+    JavaProjectUnderTest writeIntegrationTestSourceFiles(int count = 1) {
         String testSrcDir = 'src/integTest/java'
         buildFile << """
             sourceSets {
@@ -61,7 +61,7 @@ class JavaProjectUnderTest {
                     java {
                         srcDir file('$testSrcDir')
                     }
-                    compileClasspath += sourceSets.main.output + configurations.testRuntime
+                    compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
                     runtimeClasspath += output + compileClasspath
                 }
             }
@@ -82,34 +82,38 @@ class JavaProjectUnderTest {
             }
         """
 
-        writeTestSourceFile(testSrcDir, "IntegrationTest")
+        writeTestSourceFile(testSrcDir, count, "IntegrationTest")
         this
     }
 
-    private void writeProductionSourceFile() {
-        file('src/main/java/org/gradle/Class1.java') << """
+    private void writeProductionSourceFile(int count = 1) {
+        (1..count).each { index ->
+            file("src/main/java/org/gradle/Class${index}.java").text = """
             package org.gradle; 
 
-            public class Class1 { 
+            public class Class${index} { 
                 public boolean isFoo(Object arg) { 
                     return true; 
                 }
             }
         """
+        }
     }
 
-    private void writeTestSourceFile(String baseDir, String type="Test") {
-        file("$baseDir/org/gradle/Class1${type}.java") << """
+    private void writeTestSourceFile(String baseDir, int count = 1, String type="Test") {
+        (1..count).each { index ->
+            file("$baseDir/org/gradle/Class${index}${type}.java").text = """
             package org.gradle; 
 
             import org.junit.Test; 
 
-            public class Class1${type} { 
+            public class Class${index}${type} { 
                 @Test 
                 public void someTest() { 
-                    new Class1().isFoo("test"); 
+                    new Class${index}().isFoo("test"); 
                 } 
             }
         """
+        }
     }
 }

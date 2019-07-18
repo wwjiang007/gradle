@@ -17,10 +17,13 @@
 package org.gradle.play.tasks;
 
 import org.gradle.api.Incubating;
+import org.gradle.api.file.FileTree;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.OutputDirectory;
+import org.gradle.api.tasks.PathSensitive;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SourceTask;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.compile.BaseForkOptions;
@@ -47,6 +50,7 @@ import java.util.List;
  * </p>
  */
 @Incubating
+@Deprecated
 public class RoutesCompile extends SourceTask {
 
     /**
@@ -64,6 +68,15 @@ public class RoutesCompile extends SourceTask {
     private PlayPlatform platform;
     private BaseForkOptions forkOptions;
     private boolean injectedRoutesGenerator;
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public FileTree getSource() {
+        return super.getSource();
+    }
 
     /**
      * Returns the directory to generate the parser source files into.

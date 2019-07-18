@@ -18,47 +18,50 @@ package org.gradle.api.plugins;
 
 import com.google.common.collect.ImmutableSet;
 import org.gradle.api.Action;
-import org.gradle.api.ActionConfiguration;
+import org.gradle.api.Incubating;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.type.ArtifactTypeDefinition;
-import org.gradle.api.attributes.AttributeCompatibilityRule;
-import org.gradle.api.attributes.AttributeDisambiguationRule;
-import org.gradle.api.attributes.AttributeMatchingStrategy;
-import org.gradle.api.attributes.CompatibilityCheckDetails;
-import org.gradle.api.attributes.MultipleCandidatesDetails;
+import org.gradle.api.attributes.AttributesSchema;
+import org.gradle.api.attributes.Bundling;
+import org.gradle.api.attributes.LibraryElements;
 import org.gradle.api.attributes.Usage;
 import org.gradle.api.file.SourceDirectorySet;
 import org.gradle.api.internal.ConventionMapping;
 import org.gradle.api.internal.IConventionAware;
+import org.gradle.api.internal.artifacts.JavaEcosystemSupport;
+import org.gradle.api.internal.artifacts.configurations.ConfigurationInternal;
+import org.gradle.api.internal.artifacts.dsl.ComponentMetadataHandlerInternal;
 import org.gradle.api.internal.plugins.DslObject;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.model.ObjectFactory;
+import org.gradle.api.plugins.internal.DefaultJavaPluginConvention;
 import org.gradle.api.plugins.internal.DefaultJavaPluginExtension;
-import org.gradle.api.plugins.internal.SourceSetUtil;
+import org.gradle.api.plugins.internal.JvmPluginsHelper;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.reporting.ReportingExtension;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.compile.AbstractCompile;
+import org.gradle.api.tasks.compile.CompileOptions;
 import org.gradle.api.tasks.compile.JavaCompile;
 import org.gradle.api.tasks.javadoc.Javadoc;
 import org.gradle.api.tasks.testing.Test;
-import org.gradle.internal.Factory;
+import org.gradle.internal.component.external.model.JavaEcosystemVariantDerivationStrategy;
 import org.gradle.internal.model.RuleBasedPluginListener;
-import org.gradle.internal.reflect.Instantiator;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
 import org.gradle.language.jvm.tasks.ProcessResources;
-import org.gradle.util.DeprecationLogger;
-import org.gradle.util.SingleMessageLogger;
 
 import javax.inject.Inject;
 import java.io.File;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
+import static org.gradle.api.attributes.Bundling.BUNDLING_ATTRIBUTE;
 import static org.gradle.api.attributes.Usage.USAGE_ATTRIBUTE;
 
 /**
@@ -73,15 +76,39 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
     public static final String BUILD_NEEDED_TASK_NAME = "buildNeeded";
     public static final String DOCUMENTATION_GROUP = "documentation";
 
-    private final Instantiator instantiator;
+    /**
+     * Set this property to use JARs build from subprojects, instead of the classes folder from these project, on the compile classpath.
+     * The main use case for this is to mitigate performance issues on very large multi-projects building on Windows.
+     * Setting this property will cause the 'jar' task of all subprojects in the dependency tree to always run during compilation.
+     *
+     * @since 5.6
+     */
+    @Incubating
+    public static final String COMPILE_CLASSPATH_PACKAGING_SYSTEM_PROPERTY = "org.gradle.java.compile-classpath-packaging";
+
+    /**
+     * A list of known artifact types which are known to prevent from
+     * publication.
+     *
+     * @since 5.3
+     */
+    @Incubating
+    public static final Set<String> UNPUBLISHABLE_VARIANT_ARTIFACTS = ImmutableSet.of(
+            ArtifactTypeDefinition.JVM_CLASS_DIRECTORY,
+            ArtifactTypeDefinition.JVM_RESOURCES_DIRECTORY,
+            ArtifactTypeDefinition.DIRECTORY_TYPE
+    );
+
     private final ObjectFactory objectFactory;
+    private final boolean javaClasspathPackaging;
 
     @Inject
-    public JavaBasePlugin(Instantiator instantiator, ObjectFactory objectFactory) {
-        this.instantiator = instantiator;
+    public JavaBasePlugin(ObjectFactory objectFactory) {
         this.objectFactory = objectFactory;
+        this.javaClasspathPackaging = Boolean.getBoolean(COMPILE_CLASSPATH_PACKAGING_SYSTEM_PROPERTY);
     }
 
+    @Override
     public void apply(final ProjectInternal project) {
         project.getPluginManager().apply(BasePlugin.class);
         project.getPluginManager().apply(ReportingBasePlugin.class);
@@ -97,18 +124,19 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
         configureBuildDependents(project);
         configureSchema(project);
         bridgeToSoftwareModelIfNecessary(project);
+        configureVariantDerivationStrategy(project);
+    }
+
+    private void configureVariantDerivationStrategy(ProjectInternal project) {
+        ComponentMetadataHandlerInternal metadataHandler = (ComponentMetadataHandlerInternal) project.getDependencies().getComponents();
+        metadataHandler.setVariantDerivationStrategy(new JavaEcosystemVariantDerivationStrategy());
     }
 
     private JavaPluginConvention addExtensions(final ProjectInternal project) {
-        JavaPluginConvention javaConvention = DeprecationLogger.whileDisabled(new Factory<JavaPluginConvention>() {
-            @Override
-            public JavaPluginConvention create() {
-                return new JavaPluginConvention(project, instantiator);
-            }
-        });
+        JavaPluginConvention javaConvention = new DefaultJavaPluginConvention(project, objectFactory);
         project.getConvention().getPlugins().put("java", javaConvention);
         project.getExtensions().add(SourceSetContainer.class, "sourceSets", javaConvention.getSourceSets());
-        project.getExtensions().create(JavaPluginExtension.class, "java", DefaultJavaPluginExtension.class, javaConvention);
+        project.getExtensions().create(JavaPluginExtension.class, "java", DefaultJavaPluginExtension.class, javaConvention, project);
         return javaConvention;
     }
 
@@ -122,54 +150,55 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
     }
 
     private void configureSchema(ProjectInternal project) {
-        AttributeMatchingStrategy<Usage> matchingStrategy = project.getDependencies().getAttributesSchema().attribute(Usage.USAGE_ATTRIBUTE);
-        matchingStrategy.getCompatibilityRules().add(UsageCompatibilityRules.class);
-        matchingStrategy.getDisambiguationRules().add(UsageDisambiguationRules.class, new Action<ActionConfiguration>() {
-            @Override
-            public void execute(ActionConfiguration actionConfiguration) {
-                actionConfiguration.params(objectFactory.named(Usage.class, Usage.JAVA_API));
-                actionConfiguration.params(objectFactory.named(Usage.class, Usage.JAVA_API_CLASSES));
-                actionConfiguration.params(objectFactory.named(Usage.class, Usage.JAVA_RUNTIME_JARS));
-                actionConfiguration.params(objectFactory.named(Usage.class, Usage.JAVA_RUNTIME_CLASSES));
-                actionConfiguration.params(objectFactory.named(Usage.class, Usage.JAVA_RUNTIME_RESOURCES));
-            }
-        });
-
-        project.getDependencies().getArtifactTypes().create(ArtifactTypeDefinition.JAR_TYPE).getAttributes().attribute(Usage.USAGE_ATTRIBUTE, objectFactory.named(Usage.class, Usage.JAVA_RUNTIME_JARS));
+        AttributesSchema attributesSchema = project.getDependencies().getAttributesSchema();
+        JavaEcosystemSupport.configureSchema(attributesSchema, objectFactory);
+        project.getDependencies().getArtifactTypes().create(ArtifactTypeDefinition.JAR_TYPE).getAttributes()
+                .attribute(Usage.USAGE_ATTRIBUTE, objectFactory.named(Usage.class, Usage.JAVA_RUNTIME))
+                .attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objectFactory.named(LibraryElements.class, LibraryElements.JAR));
     }
+
+
 
     private void configureSourceSetDefaults(final JavaPluginConvention pluginConvention) {
         final Project project = pluginConvention.getProject();
         pluginConvention.getSourceSets().all(new Action<SourceSet>() {
+            @Override
             public void execute(final SourceSet sourceSet) {
                 ConventionMapping outputConventionMapping = ((IConventionAware) sourceSet.getOutput()).getConventionMapping();
 
                 ConfigurationContainer configurations = project.getConfigurations();
 
-                defineConfigurationsForSourceSet(sourceSet, configurations);
+                defineConfigurationsForSourceSet(sourceSet, configurations, pluginConvention);
                 definePathsForSourceSet(sourceSet, outputConventionMapping, project);
-                SourceSetUtil.configureOutputDirectoryForSourceSet(sourceSet, sourceSet.getJava(), project);
 
                 createProcessResourcesTask(sourceSet, sourceSet.getResources(), project);
-                createCompileJavaTask(sourceSet, sourceSet.getJava(), project);
+                Provider<JavaCompile> compileTask = createCompileJavaTask(sourceSet, sourceSet.getJava(), project);
                 createClassesTask(sourceSet, project);
+
+                JvmPluginsHelper.configureOutputDirectoryForSourceSet(sourceSet, sourceSet.getJava(), project, compileTask, compileTask.map(new Transformer<CompileOptions, JavaCompile>() {
+                    @Override
+                    public CompileOptions transform(JavaCompile javaCompile) {
+                        return javaCompile.getOptions();
+                    }
+                }));
             }
         });
     }
 
-    private void createCompileJavaTask(final SourceSet sourceSet, final SourceDirectorySet sourceDirectorySet, final Project target) {
-        target.getTasks().register(sourceSet.getCompileJavaTaskName(), JavaCompile.class, new Action<JavaCompile>() {
+    private Provider<JavaCompile> createCompileJavaTask(final SourceSet sourceSet, final SourceDirectorySet sourceDirectorySet, final Project target) {
+        return target.getTasks().register(sourceSet.getCompileJavaTaskName(), JavaCompile.class, new Action<JavaCompile>() {
             @Override
             public void execute(JavaCompile compileTask) {
                 compileTask.setDescription("Compiles " + sourceDirectorySet + ".");
                 compileTask.setSource(sourceDirectorySet);
                 ConventionMapping conventionMapping = compileTask.getConventionMapping();
                 conventionMapping.map("classpath", new Callable<Object>() {
+                    @Override
                     public Object call() {
                         return sourceSet.getCompileClasspath();
                     }
                 });
-                SourceSetUtil.configureAnnotationProcessorPath(sourceSet, compileTask.getOptions(), target);
+                JvmPluginsHelper.configureAnnotationProcessorPath(sourceSet, sourceDirectorySet, compileTask.getOptions(), target);
                 compileTask.setDestinationDir(target.provider(new Callable<File>() {
                     @Override
                     public File call() {
@@ -185,7 +214,8 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
             @Override
             public void execute(ProcessResources resourcesTask) {
                 resourcesTask.setDescription("Processes " + resourceSet + ".");
-                new DslObject(resourcesTask).getConventionMapping().map("destinationDir", new Callable<File>() {
+                new DslObject(resourcesTask.getRootSpec()).getConventionMapping().map("destinationDir", new Callable<File>() {
+                    @Override
                     public File call() {
                         return sourceSet.getOutput().getResourcesDir();
                     }
@@ -211,7 +241,8 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
 
     private void definePathsForSourceSet(final SourceSet sourceSet, ConventionMapping outputConventionMapping, final Project project) {
         outputConventionMapping.map("resourcesDir", new Callable<Object>() {
-            public Object call() throws Exception {
+            @Override
+            public Object call() {
                 String classesDirName = "resources/" + sourceSet.getName();
                 return new File(project.getBuildDir(), classesDirName);
             }
@@ -221,7 +252,7 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
         sourceSet.getResources().srcDir("src/" + sourceSet.getName() + "/resources");
     }
 
-    private void defineConfigurationsForSourceSet(SourceSet sourceSet, ConfigurationContainer configurations) {
+    private void defineConfigurationsForSourceSet(SourceSet sourceSet, ConfigurationContainer configurations, final JavaPluginConvention convention) {
         String compileConfigurationName = sourceSet.getCompileConfigurationName();
         String implementationConfigurationName = sourceSet.getImplementationConfigurationName();
         String runtimeConfigurationName = sourceSet.getRuntimeConfigurationName();
@@ -231,6 +262,8 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
         String annotationProcessorConfigurationName = sourceSet.getAnnotationProcessorConfigurationName();
         String runtimeClasspathConfigurationName = sourceSet.getRuntimeClasspathConfigurationName();
         String sourceSetName = sourceSet.toString();
+        Action<ConfigurationInternal> configureDefaultTargetPlatform = configureDefaultTargetPlatform(convention);
+
 
         Configuration compileConfiguration = configurations.maybeCreate(compileConfigurationName);
         compileConfiguration.setVisible(false);
@@ -258,6 +291,9 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
         compileClasspathConfiguration.setDescription("Compile classpath for " + sourceSetName + ".");
         compileClasspathConfiguration.setCanBeConsumed(false);
         compileClasspathConfiguration.getAttributes().attribute(USAGE_ATTRIBUTE, objectFactory.named(Usage.class, Usage.JAVA_API));
+        compileClasspathConfiguration.getAttributes().attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objectFactory.named(LibraryElements.class, javaClasspathPackaging? LibraryElements.JAR : LibraryElements.CLASSES));
+        compileClasspathConfiguration.getAttributes().attribute(BUNDLING_ATTRIBUTE, objectFactory.named(Bundling.class, Bundling.EXTERNAL));
+        ((ConfigurationInternal)compileClasspathConfiguration).beforeLocking(configureDefaultTargetPlatform);
 
         Configuration annotationProcessorConfiguration = configurations.maybeCreate(annotationProcessorConfigurationName);
         annotationProcessorConfiguration.setVisible(false);
@@ -278,44 +314,40 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
         runtimeClasspathConfiguration.setDescription("Runtime classpath of " + sourceSetName + ".");
         runtimeClasspathConfiguration.extendsFrom(runtimeOnlyConfiguration, runtimeConfiguration, implementationConfiguration);
         runtimeClasspathConfiguration.getAttributes().attribute(USAGE_ATTRIBUTE, objectFactory.named(Usage.class, Usage.JAVA_RUNTIME));
+        runtimeClasspathConfiguration.getAttributes().attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objectFactory.named(LibraryElements.class, LibraryElements.JAR));
+        runtimeClasspathConfiguration.getAttributes().attribute(BUNDLING_ATTRIBUTE, objectFactory.named(Bundling.class, Bundling.EXTERNAL));
+        ((ConfigurationInternal)runtimeClasspathConfiguration).beforeLocking(configureDefaultTargetPlatform);
 
         sourceSet.setCompileClasspath(compileClasspathConfiguration);
         sourceSet.setRuntimeClasspath(sourceSet.getOutput().plus(runtimeClasspathConfiguration));
         sourceSet.setAnnotationProcessorPath(annotationProcessorConfiguration);
     }
 
-    @Deprecated
-    public void configureForSourceSet(final SourceSet sourceSet, final AbstractCompile compile) {
-        SingleMessageLogger.nagUserOfDiscontinuedMethod("configureForSourceSet(SourceSet, AbstractCompile)");
-        ConventionMapping conventionMapping;
-        compile.setDescription("Compiles the " + sourceSet.getJava() + ".");
-        conventionMapping = compile.getConventionMapping();
-        compile.setSource(sourceSet.getJava());
-        conventionMapping.map("classpath", new Callable<Object>() {
-            public Object call() throws Exception {
-                return sourceSet.getCompileClasspath().plus(compile.getProject().files(sourceSet.getJava().getOutputDir()));
+    private Action<ConfigurationInternal> configureDefaultTargetPlatform(final JavaPluginConvention convention) {
+        return new Action<ConfigurationInternal>() {
+            @Override
+            public void execute(ConfigurationInternal conf) {
+                if (!convention.getAutoTargetJvmDisabled()) {
+                    JavaEcosystemSupport.configureDefaultTargetPlatform(conf, convention.getTargetCompatibility());
+                }
             }
-        });
-        // TODO: This doesn't really work any more, but configureForSourceSet is a public API.
-        // This should allow builds to continue to work, but it will kill build caching for JavaCompile
-        conventionMapping.map("destinationDir", new Callable<Object>() {
-            public Object call() throws Exception {
-                return sourceSet.getOutput().getClassesDir();
-            }
-        });
+        };
     }
 
     private void configureCompileDefaults(final Project project, final JavaPluginConvention javaConvention) {
         project.getTasks().withType(AbstractCompile.class).configureEach(new Action<AbstractCompile>() {
+            @Override
             public void execute(final AbstractCompile compile) {
                 ConventionMapping conventionMapping = compile.getConventionMapping();
                 conventionMapping.map("sourceCompatibility", new Callable<Object>() {
-                    public Object call() throws Exception {
+                    @Override
+                    public Object call() {
                         return javaConvention.getSourceCompatibility().toString();
                     }
                 });
                 conventionMapping.map("targetCompatibility", new Callable<Object>() {
-                    public Object call() throws Exception {
+                    @Override
+                    public Object call() {
                         return javaConvention.getTargetCompatibility().toString();
                     }
                 });
@@ -325,14 +357,17 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
 
     private void configureJavaDoc(final Project project, final JavaPluginConvention convention) {
         project.getTasks().withType(Javadoc.class).configureEach(new Action<Javadoc>() {
+            @Override
             public void execute(Javadoc javadoc) {
                 javadoc.getConventionMapping().map("destinationDir", new Callable<Object>() {
-                    public Object call() throws Exception {
+                    @Override
+                    public Object call() {
                         return new File(convention.getDocsDir(), "javadoc");
                     }
                 });
                 javadoc.getConventionMapping().map("title", new Callable<Object>() {
-                    public Object call() throws Exception {
+                    @Override
+                    public Object call() {
                         return project.getExtensions().getByType(ReportingExtension.class).getApiDocTitle();
                     }
                 });
@@ -372,6 +407,7 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
 
     private void configureTest(final Project project, final JavaPluginConvention convention) {
         project.getTasks().withType(Test.class).configureEach(new Action<Test>() {
+            @Override
             public void execute(final Test test) {
                 configureTestDefaults(test, project, convention);
             }
@@ -383,95 +419,23 @@ public class JavaBasePlugin implements Plugin<ProjectInternal> {
         DslObject xmlReport = new DslObject(test.getReports().getJunitXml());
 
         xmlReport.getConventionMapping().map("destination", new Callable<Object>() {
-            public Object call() throws Exception {
+            @Override
+            public Object call() {
                 return new File(convention.getTestResultsDir(), test.getName());
             }
         });
         htmlReport.getConventionMapping().map("destination", new Callable<Object>() {
-            public Object call() throws Exception {
+            @Override
+            public Object call() {
                 return new File(convention.getTestReportDir(), test.getName());
             }
         });
-        test.getConventionMapping().map("binResultsDir", new Callable<Object>() {
-            public Object call() throws Exception {
-                return new File(convention.getTestResultsDir(), test.getName() + "/binary");
+        test.getBinaryResultsDirectory().convention(project.getLayout().getProjectDirectory().dir(project.provider(new Callable<String>() {
+            @Override
+            public String call() {
+                return new File(convention.getTestResultsDir(), test.getName() + "/binary").getAbsolutePath();
             }
-        });
+        })));
         test.workingDir(project.getProjectDir());
-    }
-
-    static class UsageDisambiguationRules implements AttributeDisambiguationRule<Usage> {
-        final Usage javaApi;
-        final Usage javaApiClasses;
-        final Usage javaRuntimeJars;
-        final Usage javaRuntimeClasses;
-        final Usage javaRuntimeResources;
-
-        final ImmutableSet<Usage> javaApiAndJavaApiClasses;
-        final ImmutableSet<Usage> javaApiAndJavaRuntimeJars;
-        final ImmutableSet<Usage> javaRuntimeJarsAndJavaRuntimeClassesAndJavaRuntimeResources;
-
-        @Inject
-        UsageDisambiguationRules(Usage javaApi, Usage javaApiClasses, Usage javaRuntimeJars, Usage javaRuntimeClasses, Usage javaRuntimeResources) {
-            this.javaApi = javaApi;
-            this.javaApiClasses = javaApiClasses;
-            this.javaRuntimeJars = javaRuntimeJars;
-            this.javaRuntimeClasses = javaRuntimeClasses;
-            this.javaRuntimeResources = javaRuntimeResources;
-            this.javaApiAndJavaApiClasses = ImmutableSet.of(javaApi, javaApiClasses);
-            this.javaApiAndJavaRuntimeJars = ImmutableSet.of(javaApi, javaRuntimeJars);
-            this.javaRuntimeJarsAndJavaRuntimeClassesAndJavaRuntimeResources = ImmutableSet.of(javaRuntimeJars, javaRuntimeClasses, javaRuntimeResources);
-        }
-
-        @Override
-        public void execute(MultipleCandidatesDetails<Usage> details) {
-            if (details.getCandidateValues().equals(javaApiAndJavaApiClasses)) {
-                details.closestMatch(javaApiClasses);
-            } else if (details.getConsumerValue() == null) {
-                if (details.getCandidateValues().equals(javaApiAndJavaRuntimeJars)) {
-                    // Use the Jars when nothing has been requested
-                    details.closestMatch(javaRuntimeJars);
-                } else if (details.getCandidateValues().equals(javaRuntimeJarsAndJavaRuntimeClassesAndJavaRuntimeResources)) {
-                    // Use the Jars when nothing has been requested
-                    details.closestMatch(javaRuntimeJars);
-                }
-            } else if (details.getConsumerValue() != null) {
-                Usage requested = details.getConsumerValue();
-                if ((requested.getName().equals(Usage.JAVA_API) || requested.getName().equals(Usage.JAVA_API_CLASSES)) && details.getCandidateValues().equals(javaApiAndJavaRuntimeJars)) {
-                    // Prefer the API over the runtime when the API has been requested
-                    details.closestMatch(javaApi);
-                }
-            }
-        }
-    }
-
-    static class UsageCompatibilityRules implements AttributeCompatibilityRule<Usage> {
-        @Override
-        public void execute(CompatibilityCheckDetails<Usage> details) {
-            if (details.getConsumerValue().getName().equals(Usage.JAVA_API)) {
-                if (details.getProducerValue().getName().equals(Usage.JAVA_API_CLASSES)) {
-                    details.compatible();
-                } else if (details.getProducerValue().getName().equals(Usage.JAVA_RUNTIME_JARS)) {
-                    // Can use the runtime Jars if present, but prefer Java API
-                    details.compatible();
-                }
-            } else if (details.getConsumerValue().getName().equals(Usage.JAVA_API_CLASSES)) {
-                if (details.getProducerValue().getName().equals(Usage.JAVA_API)) {
-                    // Can use the Java API if present, but prefer Java API classes
-                    details.compatible();
-                } else if (details.getProducerValue().getName().equals(Usage.JAVA_RUNTIME_JARS)) {
-                    // Can use the Java runtime jars if present, but prefer Java API classes
-                    details.compatible();
-                }
-            } else if (details.getConsumerValue().getName().equals(Usage.JAVA_RUNTIME) && details.getProducerValue().getName().equals(Usage.JAVA_RUNTIME_JARS)) {
-                details.compatible();
-            } else if (details.getConsumerValue().getName().equals(Usage.JAVA_RUNTIME_CLASSES) && details.getProducerValue().getName().equals(Usage.JAVA_RUNTIME_JARS)) {
-                // Can use the Java runtime jars if present, but prefer Java runtime classes
-                details.compatible();
-            } else if (details.getConsumerValue().getName().equals(Usage.JAVA_RUNTIME_RESOURCES) && details.getProducerValue().getName().equals(Usage.JAVA_RUNTIME_JARS)) {
-                // Can use the Java runtime jars if present, but prefer Java runtime resources
-                details.compatible();
-            }
-        }
     }
 }

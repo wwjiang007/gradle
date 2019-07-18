@@ -16,18 +16,19 @@
 
 package org.gradle.api.plugins.quality.codenarc
 
-import org.gradle.api.plugins.quality.CodeNarcPlugin
+
 import org.gradle.integtests.fixtures.MultiVersionIntegrationSpec
-import org.gradle.integtests.fixtures.TargetVersions
+import org.gradle.integtests.fixtures.TargetCoverage
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
+import org.gradle.quality.integtest.fixtures.CodeNarcCoverage
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.ToBeImplemented
 import spock.lang.IgnoreIf
 import spock.lang.Issue
 
-import static org.hamcrest.Matchers.startsWith
+import static org.hamcrest.CoreMatchers.startsWith
 
-@TargetVersions(["0.17", "0.21", "0.23", "0.24.1", "0.25.2", "1.0", CodeNarcPlugin.DEFAULT_CODENARC_VERSION])
+@TargetCoverage({ CodeNarcCoverage.supportedVersionsByJdk })
 class CodeNarcPluginVersionIntegrationTest extends MultiVersionIntegrationSpec {
     def setup() {
         buildFile << """
@@ -41,7 +42,7 @@ class CodeNarcPluginVersionIntegrationTest extends MultiVersionIntegrationSpec {
             }
 
             dependencies {
-                compile localGroovy()
+                implementation localGroovy()
             }
         """.stripIndent()
 
@@ -63,14 +64,18 @@ class CodeNarcPluginVersionIntegrationTest extends MultiVersionIntegrationSpec {
         goodCode()
 
         expect:
-        succeeds("codenarcMain") && ":codenarcMain" in nonSkippedTasks
-        succeeds(":codenarcMain") && ":codenarcMain" in skippedTasks
+        succeeds("codenarcMain")
+        executedAndNotSkipped(":codenarcMain")
+
+        succeeds(":codenarcMain")
+        skipped(":codenarcMain")
 
         when:
         report("main").delete()
 
         then:
-        succeeds("codenarcMain") && ":codenarcMain" in nonSkippedTasks
+        succeeds("codenarcMain")
+        executedAndNotSkipped(":codenarcMain")
     }
 
     @IgnoreIf({ GradleContextualExecuter.parallel })
@@ -88,7 +93,7 @@ class CodeNarcPluginVersionIntegrationTest extends MultiVersionIntegrationSpec {
 
         expect:
         succeeds("check")
-        ":codenarcMain" in nonSkippedTasks
+        executedAndNotSkipped(":codenarcMain")
         ["html", "xml", "txt"].each {
             assert report("main", it).exists()
         }
@@ -187,7 +192,7 @@ class CodeNarcPluginVersionIntegrationTest extends MultiVersionIntegrationSpec {
 
         then:
         // TODO These should match
-        !!! nonSkippedTasks.contains(':codenarcMain')
+        !!! skipped(':codenarcMain')
         !!! output.contains('CodeNarc Report')
         !!! output.contains('CodeNarc completed: (p1=0; p2=0; p3=0)')
     }

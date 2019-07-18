@@ -17,9 +17,8 @@
 package org.gradle.api.tasks;
 
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
+import org.gradle.api.NamedDomainObjectProvider;
 import org.gradle.api.Task;
-import org.gradle.api.provider.Provider;
 
 /**
  * Providers a task of the given type.
@@ -27,14 +26,14 @@ import org.gradle.api.provider.Provider;
  * @param <T> Task type
  * @since 4.8
  */
-@Incubating
-public interface TaskProvider<T extends Task> extends Provider<T> {
+public interface TaskProvider<T extends Task> extends NamedDomainObjectProvider<T> {
     /**
      * Configures the task with the given action. Actions are run in the order added.
      *
      * @param action A {@link Action} that can configure the task when required.
      * @since 4.8
      */
+    @Override
     void configure(Action<? super T> action);
 
     /**
@@ -45,5 +44,6 @@ public interface TaskProvider<T extends Task> extends Provider<T> {
      * @return The task name. Never null.
      * @since 4.9
      */
+    @Override
     String getName();
 }

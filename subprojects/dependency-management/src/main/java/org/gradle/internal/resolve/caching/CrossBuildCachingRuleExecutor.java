@@ -21,9 +21,6 @@ import com.google.common.collect.Multimap;
 import org.gradle.api.Action;
 import org.gradle.api.Transformer;
 import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy;
-import org.gradle.api.internal.changedetection.state.InMemoryCacheDecoratorFactory;
-import org.gradle.api.internal.changedetection.state.ValueSnapshotter;
-import org.gradle.api.internal.changedetection.state.isolation.Isolatable;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.cache.CacheRepository;
@@ -31,13 +28,16 @@ import org.gradle.cache.FileLockManager;
 import org.gradle.cache.PersistentCache;
 import org.gradle.cache.PersistentIndexedCache;
 import org.gradle.cache.PersistentIndexedCacheParameters;
+import org.gradle.cache.internal.InMemoryCacheDecoratorFactory;
 import org.gradle.cache.internal.filelock.LockOptionsBuilder;
-import org.gradle.caching.internal.DefaultBuildCacheHasher;
 import org.gradle.internal.Cast;
-import org.gradle.internal.hash.HashCode;
 import org.gradle.internal.action.ConfigurableRule;
 import org.gradle.internal.action.ConfigurableRules;
 import org.gradle.internal.action.InstantiatingAction;
+import org.gradle.internal.hash.HashCode;
+import org.gradle.internal.hash.Hasher;
+import org.gradle.internal.hash.Hashing;
+import org.gradle.internal.isolation.Isolatable;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.serialize.AbstractSerializer;
 import org.gradle.internal.serialize.BaseSerializerFactory;
@@ -45,13 +45,13 @@ import org.gradle.internal.serialize.Decoder;
 import org.gradle.internal.serialize.Encoder;
 import org.gradle.internal.serialize.HashCodeSerializer;
 import org.gradle.internal.serialize.Serializer;
+import org.gradle.internal.snapshot.ValueSnapshotter;
 import org.gradle.util.BuildCommencedTimeProvider;
 
 import javax.annotation.Nullable;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +60,7 @@ public class CrossBuildCachingRuleExecutor<KEY, DETAILS, RESULT> implements Cach
     private final static Logger LOGGER = Logging.getLogger(CrossBuildCachingRuleExecutor.class);
 
     private final ValueSnapshotter snapshotter;
-    private final Transformer<Serializable, KEY> ketToSnapshottable;
+    private final Transformer<?, KEY> keyToSnapshottable;
     private final PersistentCache cache;
     private final PersistentIndexedCache<HashCode, CachedEntry<RESULT>> store;
     private final BuildCommencedTimeProvider timeProvider;
@@ -72,11 +72,11 @@ public class CrossBuildCachingRuleExecutor<KEY, DETAILS, RESULT> implements Cach
                                          ValueSnapshotter snapshotter,
                                          BuildCommencedTimeProvider timeProvider,
                                          EntryValidator<RESULT> validator,
-                                         Transformer<Serializable, KEY> ketToSnapshottable,
+                                         Transformer<?, KEY> keyToSnapshottable,
                                          Serializer<RESULT> resultSerializer) {
         this.snapshotter = snapshotter;
         this.validator = validator;
-        this.ketToSnapshottable = ketToSnapshottable;
+        this.keyToSnapshottable = keyToSnapshottable;
         this.timeProvider = timeProvider;
         this.cache = cacheRepository
             .cache(name)
@@ -87,13 +87,13 @@ public class CrossBuildCachingRuleExecutor<KEY, DETAILS, RESULT> implements Cach
     }
 
     private PersistentIndexedCacheParameters<HashCode, CachedEntry<RESULT>> createCacheConfiguration(String name, Serializer<RESULT> resultSerializer, InMemoryCacheDecoratorFactory cacheDecoratorFactory) {
-        PersistentIndexedCacheParameters<HashCode, CachedEntry<RESULT>> cacheParams = new PersistentIndexedCacheParameters<HashCode, CachedEntry<RESULT>>(
+        return PersistentIndexedCacheParameters.of(
             name,
             new HashCodeSerializer(),
             createEntrySerializer(resultSerializer)
+        ).withCacheDecorator(
+            cacheDecoratorFactory.decorator(2000, true)
         );
-        cacheParams.cacheDecorator(cacheDecoratorFactory.decorator(2000, true));
-        return cacheParams;
     }
 
     private Serializer<CachedEntry<RESULT>> createEntrySerializer(final Serializer<RESULT> resultSerializer) {
@@ -150,14 +150,14 @@ public class CrossBuildCachingRuleExecutor<KEY, DETAILS, RESULT> implements Cach
      */
     private HashCode computeExplicitInputsSnapshot(KEY key, ConfigurableRules<DETAILS> rules) {
         List<Object> toBeSnapshotted = Lists.newArrayListWithExpectedSize(2 + 2 * rules.getConfigurableRules().size());
-        toBeSnapshotted.add(ketToSnapshottable.transform(key));
+        toBeSnapshotted.add(keyToSnapshottable.transform(key));
         for (ConfigurableRule<DETAILS> rule : rules.getConfigurableRules()) {
             Class<? extends Action<DETAILS>> ruleClass = rule.getRuleClass();
             Isolatable<Object[]> ruleParams = rule.getRuleParams();
             toBeSnapshotted.add(ruleClass);
             toBeSnapshotted.add(ruleParams);
         }
-        DefaultBuildCacheHasher hasher = new DefaultBuildCacheHasher();
+        Hasher hasher = Hashing.newHasher();
         snapshotter.snapshot(toBeSnapshotted).appendToHasher(hasher);
         return hasher.hash();
     }

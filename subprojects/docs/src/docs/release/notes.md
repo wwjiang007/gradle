@@ -1,54 +1,183 @@
-## New and noteworthy
+The Gradle team is excited to announce Gradle @version@.
 
-Here are the new features introduced in this Gradle release.
+This release features [1](), [2](), ... [n](), and more.
 
-<!--
-IMPORTANT: if this is a patch release, ensure that a prominent link is included in the foreword to all releases of the same minor stream.
-Add-->
+We would like to thank the following community contributors to this release of Gradle:
+<!-- 
+Include only their name, impactful features should be called out separately below.
+ [Some person](https://github.com/some-person)
+-->
+[Roberto Perez Alcolea](https://github.com/rpalcolea),
+[Dan Sănduleac](https://github.com/dansanduleac),
+[Andrew K.](https://github.com/miokowpak),
+[Noa Resare](https://github.com/nresare),
+[Juan Martín Sotuyo Dodero](https://github.com/jsotuyod),
+[Semyon Levin](https://github.com/remal),
+[wreulicke](https://github.com/wreulicke),
+[John Rodriguez](https://github.com/jrodbx),
+[mig4](https://github.com/mig4),
+[Evgeny Mandrikov](https://github.com/Godin),
+[Bjørn Mølgård Vester](https://github.com/bjornvester),
+[Simon Legner](https://github.com/simon04),
+[Sebastian Schuberth](https://github.com/sschuberth),
+[Ian Kerins](https://github.com/isker),
+[Ivo Anjo](https://github.com/ivoanjo),
+[Stefan M.](https://github.com/StefMa),
+[Nickolay Chameev](https://github.com/lukaville),
+[Dominik Giger](https://github.com/gigerdo),
+[Stephan Windmüller](https://github.com/stovocor),
+[Zemian Deng](https://github.com/zemian),
+[Robin Verduijn](https://github.com/robinverduijn),
+[Sandu Turcan](https://github.com/idlsoft),
+[Emmanuel Guérin](https://github.com/emmanuelguerin),
+and [Christian Fränkel](https://github.com/fraenkelc).
 
-### Use SNAPSHOT plugin versions with the `plugins {}` block
+## Upgrade Instructions
 
-Starting with this release, it is now possible to use SNAPSHOT plugin versions in the `plugins {}` and `pluginManagement {}` blocks.
+Switch your build to use Gradle @version@ by updating your wrapper:
 
-### Incremental Java compilation by default
+`./gradlew wrapper --gradle-version=@version@`
 
-This release fixes all known issues of the incremental compiler. It now
+See the [Gradle 5.x upgrade guide](userguide/upgrading_version_5.html#changes_@baseVersion@) to learn about deprecations, breaking changes and other considerations when upgrading to Gradle @version@.
 
-- deletes empty package directories when the last class file is removed
-- recompiles all classes when module-info files change
-- recompiles all classes in a package when that package's package-info changes
+<!-- Do not add breaking changes or deprecations here! Add them to the upgrade guide instead. --> 
 
-It's memory usage has also been reduced. For our own build, its heap usage dropped from 350MB to just 10MB.
+<a name="test-fixtures"/>
 
-We are now confident that the incremental compiler is ready to be used in every build, so it is now the new default setting.
+## Test fixtures for Java projects
 
-### Nested included builds
+Gradle 5.6 introduces a new [Java test fixtures plugin](userguide/java_testing.html#sec:java_test_fixtures), which, when applied in combination with the `java` or `java-library` plugin, will create a conventional `testFixtures` source set.
+Gradle will automatically perform the wiring so that the `test` compilation depends on test fixtures, but more importantly, it allows other projects to depend on the test fixtures of a library.
+For example:
 
-Composite builds is a feature that allows a Gradle build to 'include' another build and conveniently use its outputs locally rather than via a binary repository. This makes some common workflows more convenient, such as working on multiple source repositories at the same time to implement a cross-cutting feature. In previous releases, it was not possible for a Gradle build to include another build that also includes other builds, which limits the usefulness of this feature for these workflows. In this Gradle release, a build can now include another build that also includes other builds. In other words, composite builds can now be nested.
+```groovy
+dependencies {
+   // this will add the test fixtures of "my-lib" on the compile classpath of the tests of _this_ project
+   testImplementation(testFixtures(project(":my-lib")))
+}
+```
 
-There are a number of limitations to be aware of. These will be improved in later Gradle releases:
+## Central management of plugin versions with settings script
 
-- A `buildSrc` build cannot include other builds, such as a shared plugin build.
-- The root project of each build must have a unique name.
+Gradle 5.6 makes it easier to manage the versions of plugins used by your build. By configuring all plugin versions in a settings script within the new `pluginManagement.plugins {}` block, build scripts can apply plugins via the `plugins {}` block without specifying a version.
 
-### Periodic cache cleanup
+```groovy
+pluginManagement {
+    plugins {
+        id 'org.my.plugin' version '1.1'
+    }
+}
+```
 
-Caching has always been one of the strong suits of Gradle. Over time, more and more persistent caches have been added to improve performance and support new features, requiring more and more disk space on build servers and developer workstations. Gradle now addresses one of the most highly voted issues on GitHub and introduces the following cleanup strategies:
+One benefit of managing plugin versions in this way is that the `pluginManagement.plugins {}` block does not have the same constrained syntax as a build script `plugins {}` block. Plugin versions may be loaded from `gradle.properties`, or defined programmatically.
 
-- Version-specific cache directories in `GRADLE_USER_HOME/caches/<gradle-version>/` are checked periodically (at most every 24 hours) for whether they are still in use. If not, directories for release versions are deleted after 30 days of inactivity, snapshot versions after 7 days of inactivity. Moreover, the corresponding Gradle distributions in `GRADLE_USER_HOME/wrapper/dists/` are deleted as well, if present.
-- Similarly, after building a project, version-specific cache directories in `PROJECT_DIR/.gradle/<gradle-version>/` are checked periodically (at most every 24 hours) for whether they are still in use. They are deleted if they haven't been used for 7 days.
-- Shared versioned cache directories in `GRADLE_USER_HOME/caches/` (e.g. `jars-*`) are checked periodically (at most every 24 hours) for whether they are still in use. If there's no Gradle version that still uses them, they are deleted.
-- Files in shared caches used by the current Gradle version in `GRADLE_USER_HOME/caches/` (e.g. `jars-3` or `modules-2`) are checked periodically (at most every 24 hours) for when they were last accessed. Depending on whether the file can be recreated locally or would have to be downloaded from a remote repository again, it will be deleted after 7 or 30 days of not being accessed, respectively.
+See [plugin version management](userguide/plugins.html#sec:plugin_version_management) for more details.
 
-### Authorization for Maven repositories with custom HTTP headers
+## Performance fix for using the Java library plugin in very large projects on Windows
 
-Now it is possible to define a custom HTTP header to authorize access to a Maven repository. This enables Gradle to access private Gitlab and TFS repositories
-used as Maven repositories or any OAuth2 protected Maven repositories.
+Very large multi-projects can suffer from a significant performance decrease in Java compilation when switching from the `java` to the `java-library` plugin.
+This is caused by the large amount of class files on the classpath, which is only an issue on Windows systems.
+You can now tell the `java-library` plugin to [prefer jars over class folders on the compile classpath](userguide/java_library_plugin.html#sec:java_library_known_issues_windows_performance) by setting the `org.gradle.java.compile-classpath-packaging` system property to `true`.
+
+## Improvements for plugin authors
+
+### Task dependencies are honored for `@Input` properties of type `Provider`
+
+Gradle can automatically calculate task dependencies based on the value of certain task input properties. 
+For example, for a property that is annotated with `@InputFiles` and that has type `FileCollection` or `Provider<Set<RegularFile>>`, 
+Gradle will inspect the value of the property and automatically add task dependencies for any task output files or directories in the collection. 
+
+In this release, Gradle also performs this analysis on task properties that are annotated with `@Input` and that have type `Provider<T>` (which also includes types such as `Property<T>`).
+This allow you to connect an output of a task to a non-file input parameter of another task.
+For example, you might have a task that runs the `git` command to determine the name of the current branch, and another task that uses the branch name to produce an application bundle.
+With this change you can connect the output of the first task as an input of the second task, and avoid running the `git` command at configuration time. 
+
+See the [user manual](userguide/lazy_configuration.html#sec:working_with_task_dependencies_in_lazy_properties) for examples and more details.
+
+### Convert a `FileCollection` to a `Provider`
+
+A new method `FileCollection.getElements()` has been added to allow the contents of the file collection to be viewed as a `Provider`. This `Provider` tracks the elements of the file collection and tasks that
+produce these files and can be connected to a `Property` instance.
+ 
+### Finalize the value of a `ConfigurableFileCollection`
+
+A new method `ConfigurableFileCollection.finalizeValue()` has been added. This method resolves deferred values, such as `Provider` instances or Groovy closures or Kotlin functions, that may be present in the collection 
+to their final file locations and prevents further changes to the collection.
+
+This method works similarly to other `finalizeValue()` methods, such as `Property.finalizeValue()`.
+
+### Prevent changes to a `Property` or `ConfigurableFileCollection`
+
+New methods `Property.disallowChanges()` and `ConfigurableFileCollection.disallowChanges()` have been added. These methods disallow further changes to the property or collection.
+
+### `Provider` methods
+
+New methods `Provider.orElse(T)` and `Provider.orElse(Provider<T>)` has been added. These allow you to perform an 'or' operation on a provider and some other value.
+
+### Worker API improvements
+
+TBD
+
+## Improved handling of ZIP archives on classpaths
+
+Compile classpath and runtime classpath analysis will now detect the most common zip extension instead of only supporting `.jar`.
+It will inspect nested zip archives as well instead of treating them as blobs. This improves the likelihood of cache hits for tasks
+that take such nested zips as an input, e.g. when testing applications packaged as a fat jar.
+
+The ZIP analysis now also avoids unpacking entries that are irrelevant, e.g. resource files on a compile classpath. 
+This improves performance for projects with a large amount of resource files.
+
+## Support for PMD incremental analysis
+
+TBD
+
+This was contributed by [Juan Martín Sotuyo Dodero](https://github.com/jsotuyod).
+
+## Incubating support for Groovy compilation avoidance
+
+Gradle now supports experimental compilation avoidance for Groovy. 
+This accelerates Groovy compilation by avoiding re-compiling dependent projects if only non-ABI changes are detected.
+See [Groovy compilation avoidance](userguide/groovy_plugin.html#sec:groovy_compilation_avoidance) for more details.
+
+## Experimental incremental Groovy compilation
+
+Gradle now supports experimental incremental compilation for Groovy.
+If only a small set of Groovy source files are changed, only the affected source files will be recompiled.
+For example, if you only change a few Groovy test classes, you don't need to recompile all Groovy test source files - only the changed ones need to be recompiled.
+See [Incremental Groovy compilation](userguide/groovy_plugin.html#sec:incremental_groovy_compilation) in the user manual for more details.
+
+## Closed Eclipse Buildship projects
+
+Closed gradle projects in an eclipse workspace can now be substituted for their respective jar files. In addition to this 
+those jars can now be built during Buildship eclipse model synchronization.
+
+The upcoming version of Buildship is required to take advantage of this behavior.
+
+This was contributed by [Christian Fränkel](https://github.com/fraenkelc).
+
+## Executable Jar support with `project.javaexec` and `JavaExec`
+
+TBD
+
+## File case changes when copying files on case-insensitive file systems are now handled correctly
+
+On case-insensitive file systems (e.g. NTFS and APFS), a file/folder rename where only the case is changed is now handled properly by Gradle's file copying operations. 
+For example, renaming an input of a `Copy` task called `file.txt` to `FILE.txt` will now cause `FILE.txt` being created in the destination directory. 
+The `Sync` task and `Project.copy()` and `sync()` operations now also handle case-renames as expected.
+
+## Unavailable files are handled more gracefully
+
+Generally, broken symlinks, named pipes and unreadable files/directories (hereinafter referred to as unavailable files) found in inputs and outputs of tasks are handled gracefully from now on: as if they don't exist.
+
+For example copying into a directory with a leftover named pipe or broken symbolic link won't break the build anymore.
+
+## Fail the build on deprecation warnings
+
+The `warning-mode` command line option now has a [new `fail` value](userguide/command_line_interface.html#sec:command_line_warnings) that will behave like `all` and in addition fail the build if any deprecation warning was reported during the execution.
 
 ## Promoted features
-
 Promoted features are features that were incubating in previous versions of Gradle but are now supported and subject to backwards compatibility.
-See the User guide section on the “[Feature Lifecycle](userguide/feature_lifecycle.html)” for more information.
+See the User Manual section on the “[Feature Lifecycle](userguide/feature_lifecycle.html)” for more information.
 
 The following are the features that have been promoted in this Gradle release.
 
@@ -56,70 +185,23 @@ The following are the features that have been promoted in this Gradle release.
 ### Example promoted
 -->
 
+### Transforming dependency artifacts on resolution
+
+The API around [artifact transforms](userguide/dependency_management_attribute_based_matching.html#sec:abm_artifact_transforms) is not incubating any more.
+
 ## Fixed issues
-
-## Deprecations
-
-Features that have become superseded or irrelevant due to the natural evolution of Gradle become *deprecated*, and scheduled to be removed
-in the next major Gradle version (Gradle 5.0). See the User guide section on the “[Feature Lifecycle](userguide/feature_lifecycle.html)” for more information.
-
-The following are the newly deprecated items in this Gradle release. If you have concerns about a deprecation, please raise it via the [Gradle Forums](https://discuss.gradle.org).
-
-### Creating instances of JavaPluginConvention
-
-Instances of this class are intended to be created only by the `java-base` plugin and should not be created directly. Creating instances using the constructor of `JavaPluginConvention` will become an error in Gradle 5.0. The class itself is not deprecated and it is still be possible to use the instances created by the `java-base` plugin.
-
-### Creating instances of ApplicationPluginConvention
-
-Instances of this class are intended to be created only by the `application` plugin and should not be created directly. Creating instances using the constructor of `ApplicationPluginConvention` will become an error in Gradle 5.0. The class itself is not deprecated and it is still be possible to use the instances created by the `application` plugin.
-
-### Creating instances of WarPluginConvention
-
-Instances of this class are intended to be created only by the `war` plugin and should not be created directly. Creating instances using the constructor of `WarPluginConvention` will become an error in Gradle 5.0. The class itself is not deprecated and it is still be possible to use the instances created by the `war` plugin.
-
-### Creating instances of EarPluginConvention
-
-Instances of this class are intended to be created only by the `ear` plugin and should not be created directly. Creating instances using the constructor of `EarPluginConvention` will become an error in Gradle 5.0. The class itself is not deprecated and it is still be possible to use the instances created by the `ear` plugin.
-
-### Creating instances of BasePluginConvention
-
-Instances of this class are intended to be created only by the `base` plugin and should not be created directly. Creating instances using the constructor of `BasePluginConvention` will become an error in Gradle 5.0. The class itself is not deprecated and it is still be possible to use the instances created by the `base` plugin.
-
-### Creating instances of ProjectReportsPluginConvention
-
-Instances of this class are intended to be created only by the `project-reports` plugin and should not be created directly. Creating instances using the constructor of `ProjectReportsPluginConvention` will become an error in Gradle 5.0. The class itself is not deprecated and it is still be possible to use the instances created by the `project-reports` plugin.
-
-### Adding tasks via TaskContainer.add() and TaskContainer.addAll() 
-
-These methods have been deprecated and the `create()` or `register()` methods should be used instead.
-
-## Potential breaking changes
-
-### Kotlin DSL breakages
-
-- `project.java.sourceSets` is now `project.sourceSets`
-
-## External contributions
-
-
-We would like to thank the following community members for making contributions to this release of Gradle.
-
-<!--
- - [Some person](https://github.com/some-person) - fixed some issue (gradle/gradle#1234)
--->
-
-We love getting contributions from the Gradle community. For information on contributing, please see [gradle.org/contribute](https://gradle.org/contribute).
-
-- [Björn Kautler](https://github.com/Vampire) - Update Spock version in docs and build init (gradle/gradle#5627)
-- [Kyle Moore](https://github.com/DPUkyle) - Use latest Gosu plugin 0.3.10 (gradle/gradle#5855)
-- [Mata Saru](https://github.com/matasaru) - Add missing verb into docs (gradle/gradle#5694)
-- [Sébastien Deleuze](https://github.com/sdeleuze) - Add support for SNAPSHOT plugin versions in the `plugins {}` block (gradle/gradle#5762)
-- [Ben McCann](https://github.com/benmccann) - Decouple Play and Twirl versions (gradle/gradle#2062)
-- [Mike Kobit](https://github.com/mkobit) - Add ability to use `RegularFile` and `Directory` as publishable artifacts (gradle/gradle#5109)
-- [Mészáros Máté Róbert](https://github.com/mrmeszaros) - Fix typo in userguide java plugin configuration image (gradle/gradle#6011)
-- [Paul Wellner Bou](https://github.com/paulwellnerbou) - Authorization for Maven repositories with custom HTTP headers (gradle/gradle#5571)
-- [Kenzie Togami](https://github.com/kenzierocks) - Docs are unclear on how JavaExec parses --args (gradle/gradle#6056)
 
 ## Known issues
 
 Known issues are problems that were discovered post release that are directly related to changes made in this release.
+
+## External contributions
+
+We love getting contributions from the Gradle community. For information on contributing, please see [gradle.org/contribute](https://gradle.org/contribute).
+
+## Reporting Problems
+
+If you find a problem with this release, please file a bug on [GitHub Issues](https://github.com/gradle/gradle/issues) adhering to our issue guidelines. 
+If you're not sure you're encountering a bug, please use the [forum](https://discuss.gradle.org/c/help-discuss).
+
+We hope you will build happiness with Gradle, and we look forward to your feedback via [Twitter](https://twitter.com/gradle) or on [GitHub](https://github.com/gradle).

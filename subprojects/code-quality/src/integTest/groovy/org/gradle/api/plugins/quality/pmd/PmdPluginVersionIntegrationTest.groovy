@@ -21,8 +21,8 @@ import org.hamcrest.Matcher
 import spock.lang.Issue
 
 import static org.gradle.util.Matchers.containsLine
-import static org.hamcrest.Matchers.containsString
-import static org.hamcrest.Matchers.not
+import static org.hamcrest.CoreMatchers.containsString
+import static org.hamcrest.CoreMatchers.not
 import static org.junit.Assume.assumeTrue
 
 class PmdPluginVersionIntegrationTest extends AbstractPmdPluginVersionIntegrationTest {
@@ -44,7 +44,7 @@ class PmdPluginVersionIntegrationTest extends AbstractPmdPluginVersionIntegratio
                 classpath = files()
             }"""}
 
-            ${!TestPrecondition.FIX_TO_WORK_ON_JAVA9.fulfilled ? "sourceCompatibility = 1.6" : ""}
+            ${!TestPrecondition.FIX_TO_WORK_ON_JAVA9.fulfilled ? "sourceCompatibility = 1.7" : ""}
         """.stripIndent()
     }
 
@@ -96,7 +96,7 @@ class PmdPluginVersionIntegrationTest extends AbstractPmdPluginVersionIntegratio
         file("build/reports/pmd/main.xml").assertContents(not(containsClass("org.gradle.Class1")))
         file("build/reports/pmd/test.xml").
             assertContents(containsClass("org.gradle.Class1Test")).
-            assertContents(containsLine(containsString('BooleanInstantiation'))).
+            assertContents(containsLine(containsString('AvoidMultipleUnaryOperators'))).
             assertContents(not(containsLine(containsString('OverrideBothEqualsAndHashcode'))))
     }
 
@@ -216,7 +216,7 @@ class PmdPluginVersionIntegrationTest extends AbstractPmdPluginVersionIntegratio
         failure.assertHasDescription("Execution failed for task ':pmdTest'.")
         failure.assertThatCause(containsString("2 PMD rule violations were found. See the report at:"))
         file("build/reports/pmd/test.xml").assertContents(containsClass("org.gradle.Class1Test"))
-        output.contains "\tAvoid instantiating Boolean objects"
+        output.contains "\tUsing multiple unary operators may be a bug"
         output.contains "\tEnsure you override both equals() and hashCode()"
     }
 
@@ -242,7 +242,7 @@ class PmdPluginVersionIntegrationTest extends AbstractPmdPluginVersionIntegratio
         succeeds('clean', 'check')
 
         then:
-        nonSkippedTasks.contains(':pmdMain')
+        executedAndNotSkipped(':pmdMain')
         output.contains("PMD rule violations were found")
     }
 
@@ -261,17 +261,17 @@ class PmdPluginVersionIntegrationTest extends AbstractPmdPluginVersionIntegratio
         // No Warnings
         file("src/main/java/org/gradle/Class1.java") <<
             "package org.gradle; class Class1 { public boolean isFoo(Object arg) { return true; } }"
-        // PMD Lvl 2 Warning BooleanInstantiation
+        // PMD Lvl 2 Warning AvoidMultipleUnaryOperators
         // PMD Lvl 3 Warning OverrideBothEqualsAndHashcode
         file("src/test/java/org/gradle/Class1Test.java") <<
-            "package org.gradle; class Class1Test { public boolean equals(Object arg) { return java.lang.Boolean.valueOf(true); } }"
+            "package org.gradle; class Class1Test { public boolean equals(Object arg) { return !!true; } }"
     }
 
     private customCode() {
-        // class that would fail basic rule set but doesn't fail custom rule set
+        // class that would fail default rule set but doesn't fail custom rule set
         file("src/main/java/org/gradle/Class1.java") <<
             "package org.gradle; public class Class1 { public void doit() { boolean x = true; if (x) {} } }" // empty then-block
-        // class that wouldn't fail basic rule set but does fail custom rule set
+        // class that wouldn't fail default rule set but does fail custom rule set
         file("src/main/java/org/gradle/Class2.java") <<
             "package org.gradle; public class Class2 { public void doit() { boolean x = true; if (x) x = false; } }" // missing braces
     }
@@ -281,9 +281,12 @@ class PmdPluginVersionIntegrationTest extends AbstractPmdPluginVersionIntegratio
     }
 
     private static customRuleSetText() {
-        String pathToRuleset = "rulesets/java/braces.xml"
+        String pathToRuleset = "category/java/codestyle.xml/IfStmtsMustUseBraces"
         if (versionNumber < VersionNumber.version(5)) {
             pathToRuleset = "rulesets/braces.xml"
+        }
+        else if (versionNumber < VersionNumber.version(6)) {
+            pathToRuleset = "rulesets/java/braces.xml"
         }
         """
             <ruleset name="custom"

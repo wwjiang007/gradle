@@ -28,10 +28,10 @@ class GradleBuildTaskIntegrationTest extends AbstractIntegrationSpec {
 
     def "handles properties which are not String when calling GradleBuild"() {
         given:
+        settingsFile << "rootProject.name = 'parent'"
         buildFile << """
             task buildInBuild(type:GradleBuild) {
                 buildFile = 'other.gradle'
-                startParameter.searchUpwards = false
                 startParameter.projectProperties['foo'] = true // not a String
             }
         """
@@ -47,10 +47,10 @@ class GradleBuildTaskIntegrationTest extends AbstractIntegrationSpec {
     def "nested build can use Gradle home directory that is different to outer build"() {
         given:
         def dir = file("other-home")
+        settingsFile << "rootProject.name = 'parent'"
         buildFile << """
             task otherBuild(type:GradleBuild) {
                 buildFile = 'other.gradle'
-                startParameter.searchUpwards = false
                 startParameter.gradleUserHomeDir = file("${dir.toURI()}")
             }
         """
@@ -73,9 +73,9 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
         buildFile << """
             task otherBuild(type:GradleBuild) {
                 dir = 'other'
-                startParameter.searchUpwards = false
             }
         """
+        file('other/settings.gradle') << "rootProject.name = 'other'"
         file('other/buildSrc/src/main/java/Thing.java') << "class Thing { }"
         file('other/build.gradle') << """
             new Thing()
@@ -85,8 +85,7 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
         run 'otherBuild'
 
         then:
-        // TODO - Fix test fixtures to allow assertions on buildSrc tasks rather than relying on output scraping in tests
-        outputContains(":other:buildSrc:assemble")
+        result.assertTaskExecuted(":other:buildSrc:assemble")
     }
 
     def "buildSrc can have nested build"() {
@@ -99,6 +98,7 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
             }
             classes.dependsOn(otherBuild)
         """
+        file('other/settings.gradle') << ""
         file('other/build.gradle') << """
             task build
         """
@@ -107,9 +107,8 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
         run()
 
         then:
-        // TODO - Fix test fixtures to allow assertions on buildSrc tasks rather than relying on output scraping in tests
-        outputContains(":buildSrc:other:build")
-        outputContains(":buildSrc:otherBuild")
+        result.assertTaskExecuted(":buildSrc:other:build")
+        result.assertTaskExecuted(":buildSrc:otherBuild")
     }
 
     def "nested build can nest more builds"() {
@@ -120,12 +119,14 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
                 tasks = ['otherBuild']
             }
         """
+        file('other/settings.gradle').touch()
         file('other/build.gradle') << """
             task otherBuild(type:GradleBuild) {
                 dir = '../other2'
                 tasks = ['build']
             }
         """
+        file('other2/settings.gradle').touch()
         file('other2/build.gradle') << """
             task build
         """
@@ -188,7 +189,6 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
                 task otherBuild(type:GradleBuild) {
                     dir = "\${rootProject.file('subprojects')}"
                     tasks = ['log']
-                    startParameter.searchUpwards = false
                 }
                 otherBuild.doFirst {
                     ${barrier.callFromBuildUsingExpression('project.name + "-started"')}
@@ -200,7 +200,6 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
             task otherBuild(type:GradleBuild) {
                 dir = "main"
                 tasks = ['log']
-                startParameter.searchUpwards = false
             }
         """
         file('main/settings.gradle') << """
@@ -211,6 +210,7 @@ println "build script code source: " + getClass().protectionDomain.codeSource.lo
             assert gradle.parent.rootProject.name == 'root'
             task log { }
         """
+        file('subprojects/settings.gradle') << ""
         file('subprojects/build.gradle') << """
             assert gradle.parent.rootProject.name == 'root'
             task log { }

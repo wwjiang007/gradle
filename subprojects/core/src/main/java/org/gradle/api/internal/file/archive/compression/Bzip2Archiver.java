@@ -16,10 +16,10 @@
 
 package org.gradle.api.internal.file.archive.compression;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.tools.bzip2.CBZip2InputStream;
 import org.apache.tools.bzip2.CBZip2OutputStream;
 import org.gradle.api.resources.internal.ReadableResourceInternal;
+import org.gradle.internal.IoActions;
 import org.gradle.internal.resource.ResourceExceptions;
 
 import java.io.BufferedInputStream;
@@ -35,6 +35,7 @@ public class Bzip2Archiver extends AbstractArchiver {
         super(resource);
     }
 
+    @Override
     protected String getSchemePrefix() {
         return "bzip2:";
     }
@@ -43,6 +44,7 @@ public class Bzip2Archiver extends AbstractArchiver {
         // this is not very beautiful but at some point we will
         // get rid of ArchiveOutputStreamFactory in favor of the writable Resource
         return new ArchiveOutputStreamFactory() {
+            @Override
             public OutputStream createArchiveOutputStream(File destination) throws FileNotFoundException {
                 OutputStream outStr = new BufferedOutputStream(new FileOutputStream(destination));
                 try {
@@ -50,7 +52,7 @@ public class Bzip2Archiver extends AbstractArchiver {
                     outStr.write('Z');
                     return new CBZip2OutputStream(outStr);
                 } catch (Exception e) {
-                    IOUtils.closeQuietly(outStr);
+                    IoActions.closeQuietly(outStr);
                     String message = String.format("Unable to create bzip2 output stream for file %s", destination);
                     throw new RuntimeException(message, e);
                 }
@@ -58,6 +60,7 @@ public class Bzip2Archiver extends AbstractArchiver {
         };
     }
 
+    @Override
     public InputStream read() {
         InputStream input = new BufferedInputStream(resource.read());
         try {
@@ -66,7 +69,7 @@ public class Bzip2Archiver extends AbstractArchiver {
             input.read(skip);
             return new CBZip2InputStream(input);
         } catch (Exception e) {
-            IOUtils.closeQuietly(input);
+            IoActions.closeQuietly(input);
             throw ResourceExceptions.readFailed(resource.getDisplayName(), e);
         }
     }

@@ -16,18 +16,17 @@
 package org.gradle.api.plugins.quality.findbugs
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.util.Matchers
 import org.gradle.util.Resources
 import org.hamcrest.Matcher
 import org.junit.Rule
-import spock.lang.IgnoreIf
 import spock.lang.Issue
 
 import static org.gradle.util.Matchers.containsLine
 import static org.gradle.util.TextUtil.normaliseFileSeparators
-import static org.hamcrest.Matchers.containsString
-import static org.hamcrest.Matchers.startsWith
+import static org.hamcrest.CoreMatchers.containsString
+import static org.hamcrest.CoreMatchers.not
+import static org.hamcrest.CoreMatchers.startsWith
 
 abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegrationSpec {
 
@@ -36,6 +35,18 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
 
     def setup() {
         writeBuildFile()
+        executer.beforeExecute {
+            expectDeprecationWarning()
+        }
+    }
+
+    def "emits deprecating warning"() {
+        when:
+        succeeds("help")
+
+        then:
+        outputContains("The findbugs plugin has been deprecated.")
+        outputContains("Consider using the com.github.spotbugs plugin instead.")
     }
 
     def "default findbugs version can be inspected"() {
@@ -77,20 +88,23 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         file("build/reports/findbugs/test.xml").assertContents(containsClass("org.gradle.BadClassTest"))
     }
 
-    @IgnoreIf({GradleContextualExecuter.parallel})
     def "is incremental"() {
         given:
         goodCode()
 
         expect:
-        succeeds("findbugsMain") && ":findbugsMain" in nonSkippedTasks
-        succeeds(":findbugsMain") && ":findbugsMain" in skippedTasks
+        succeeds("findbugsMain")
+        executedAndNotSkipped(":findbugsMain")
+
+        succeeds(":findbugsMain")
+        skipped(":findbugsMain")
 
         when:
         file("build/reports/findbugs/main.xml").delete()
 
         then:
-        succeeds("findbugsMain") && ":findbugsMain" in nonSkippedTasks
+        succeeds("findbugsMain")
+        executedAndNotSkipped(":findbugsMain")
     }
 
     def "cannot generate multiple reports"() {
@@ -199,15 +213,24 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
             findbugsMain.reports {
                 xml.enabled false
                 html.enabled true
+                html.stylesheet resources.text.fromFile('${anotherSampleStylesheet()}')
+            }
+        """
+        goodCode()
+        when:
+        succeeds"findbugsMain"
+        then:
+        file("build/reports/findbugs/main.html").exists()
+        file("build/reports/findbugs/main.html").assertContents(not(containsString("A custom Findbugs stylesheet")))
+
+        when:
+        // Change to a custom stylesheet
+        buildFile << """
+            findbugsMain.reports {
                 html.stylesheet resources.text.fromFile('${sampleStylesheet()}')
             }
         """
-
-        and:
-        goodCode()
-
-        when:
-        run "findbugsMain"
+        succeeds "findbugsMain"
 
         then:
         file("build/reports/findbugs/main.html").exists()
@@ -266,7 +289,6 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         file("build/reports/findbugs/test.xml").assertContents(containsClass("org.gradle.Class800Test"))
     }
 
-    @IgnoreIf({GradleContextualExecuter.parallel})
     def "is incremental for reporting settings"() {
         given:
         buildFile << """
@@ -283,16 +305,14 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
 
         then:
         file("build/reports/findbugs/main.xml").exists()
-        ":findbugsMain" in nonSkippedTasks
-        !(":findbugsMain" in skippedTasks)
+        executedAndNotSkipped(":findbugsMain")
 
         when:
         succeeds "findbugsMain"
 
         then:
         file("build/reports/findbugs/main.xml").exists()
-        !(":findbugsMain" in nonSkippedTasks)
-        ":findbugsMain" in skippedTasks
+        skipped(":findbugsMain")
 
         when:
         buildFile << """
@@ -305,11 +325,9 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
 
         then:
         file("build/reports/findbugs/main.xml").exists()
-        ":findbugsMain" in nonSkippedTasks
-        !(":findbugsMain" in skippedTasks)
+        executedAndNotSkipped(":findbugsMain" )
     }
 
-    @IgnoreIf({GradleContextualExecuter.parallel})
     def "is incremental for withMessage"() {
         given:
         buildFile << """
@@ -332,8 +350,7 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         then:
         file("build/reports/findbugs/main.xml").exists()
         containsXmlMessages(file("build/reports/findbugs/main.xml"))
-        ":findbugsMain" in nonSkippedTasks
-        !(":findbugsMain" in skippedTasks)
+        executedAndNotSkipped(":findbugsMain")
 
         when:
         succeeds "findbugsMain"
@@ -341,8 +358,7 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         then:
         file("build/reports/findbugs/main.xml").exists()
         containsXmlMessages(file("build/reports/findbugs/main.xml"))
-        !(":findbugsMain" in nonSkippedTasks)
-        ":findbugsMain" in skippedTasks
+        skipped(":findbugsMain")
 
         when:
         buildFile << """
@@ -361,11 +377,9 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         then:
         file("build/reports/findbugs/main.xml").exists()
         !containsXmlMessages(file("build/reports/findbugs/main.xml"))
-        ":findbugsMain" in nonSkippedTasks
-        !(":findbugsMain" in skippedTasks)
+        executedAndNotSkipped(":findbugsMain")
     }
 
-    @IgnoreIf({GradleContextualExecuter.parallel})
     def "is withMessage ignored for non-XML report setting"() {
         given:
         buildFile << """
@@ -401,8 +415,7 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         then:
         !file("build/reports/findbugs/main.xml").exists()
         file("build/reports/findbugs/main.html").exists()
-        !(":findbugsMain" in nonSkippedTasks)
-        ":findbugsMain" in skippedTasks
+        skipped(":findbugsMain")
     }
 
     @Issue("https://issues.gradle.org/browse/GRADLE-3214")
@@ -505,14 +518,13 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         failure.assertThatCause(Matchers.matchesRegexp("Process 'Gradle FindBugs Worker [0-9]+' finished with non-zero exit value 1"))
     }
 
-    @IgnoreIf({GradleContextualExecuter.parallel})
     def "out-of-date with mixed Java and Groovy sources"() {
         given:
         goodCode()
         buildFile << """
             apply plugin: 'groovy'
             dependencies {
-                compile localGroovy()
+                implementation localGroovy()
             }
         """
         file("src/main/groovy/org/gradle/Groovy1.groovy") << """
@@ -642,7 +654,7 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
         succeeds('clean', 'check')
 
         then:
-        nonSkippedTasks.contains(':findbugsMain')
+        executedAndNotSkipped(':findbugsMain')
         output.contains("Analyzing classes")
     }
 
@@ -666,6 +678,10 @@ abstract class AbstractFindBugsPluginIntegrationTest extends AbstractIntegration
 
     private sampleStylesheet() {
         normaliseFileSeparators(resources.getResource('/findbugs-custom-stylesheet.xsl').absolutePath)
+    }
+
+    private anotherSampleStylesheet() {
+        normaliseFileSeparators(resources.getResource('/findbugs-another-custom-stylesheet.xsl').absolutePath)
     }
 
     private static Matcher<String> containsClass(String className) {

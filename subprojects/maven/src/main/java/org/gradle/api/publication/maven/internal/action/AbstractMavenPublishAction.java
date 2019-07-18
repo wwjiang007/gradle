@@ -56,7 +56,6 @@ abstract class AbstractMavenPublishAction implements MavenPublishAction {
     private final List<Artifact> attached = new ArrayList<Artifact>();
     private Artifact pomArtifact;
     private Artifact mainArtifact;
-    private SnapshotVersionManager snapshotVersionManager = new SnapshotVersionManager();
 
     protected AbstractMavenPublishAction(String packaging, MavenProjectIdentity projectIdentity, List<File> wagonJars) {
         container = newPlexusContainer(wagonJars);
@@ -75,14 +74,12 @@ abstract class AbstractMavenPublishAction implements MavenPublishAction {
         session.setLocalRepositoryManager(new SimpleLocalRepositoryManager(localMavenRepository));
     }
 
-    public void produceLegacyMavenMetadata() {
-        session.getConfigProperties().put("maven.metadata.legacy", "true");
-    }
-
+    @Override
     public void setPomArtifact(File file) {
         pomArtifact = pomArtifact.setFile(file);
     }
 
+    @Override
     public void setMainArtifact(File file) {
         mainArtifact = mainArtifact.setFile(file);
     }
@@ -92,6 +89,7 @@ abstract class AbstractMavenPublishAction implements MavenPublishAction {
         attached.add(createTypedArtifact(type, classifier).setFile(file));
     }
 
+    @Override
     public void publish() {
         List<Artifact> artifacts = new ArrayList<Artifact>();
         if (mainArtifact.getFile() != null) {
@@ -144,7 +142,6 @@ abstract class AbstractMavenPublishAction implements MavenPublishAction {
             deployer.setMetadataFactories(null);
             deployer.addMetadataGeneratorFactory(new VersionsMetadataGeneratorFactory());
             deployer.addMetadataGeneratorFactory(new SnapshotMetadataGeneratorFactory());
-            deployer.addMetadataGeneratorFactory(snapshotVersionManager);
             return container.lookup(RepositorySystem.class);
         } catch (ComponentLookupException e) {
             throw UncheckedException.throwAsUncheckedException(e);
@@ -161,9 +158,5 @@ abstract class AbstractMavenPublishAction implements MavenPublishAction {
             }
         }
         return new DefaultArtifact(projectIdentity.getGroupId().get(), projectIdentity.getArtifactId().get(), classifier, extension, projectIdentity.getVersion().get());
-    }
-
-    public void setUniqueVersion(boolean uniqueVersion) {
-        snapshotVersionManager.setUniqueVersion(uniqueVersion);
     }
 }

@@ -16,7 +16,7 @@
 
 package org.gradle.api.internal.tasks.compile.processing;
 
-import org.gradle.api.internal.tasks.compile.incremental.processing.AnnotationProcessingResult;
+import org.gradle.api.internal.tasks.compile.incremental.processing.AnnotationProcessorResult;
 
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.Element;
@@ -28,9 +28,9 @@ import java.util.Set;
  * The strategy that updates the processing result according to the type and runtime behavior of a processor.
  */
 abstract class IncrementalProcessingStrategy {
-    private final AnnotationProcessingResult result;
+    protected final AnnotationProcessorResult result;
 
-    IncrementalProcessingStrategy(AnnotationProcessingResult result) {
+    IncrementalProcessingStrategy(AnnotationProcessorResult result) {
         this.result = result;
     }
 
@@ -38,11 +38,12 @@ abstract class IncrementalProcessingStrategy {
 
     public abstract void recordGeneratedType(CharSequence name, Element[] originatingElements);
 
-    public final void recordGeneratedResource(JavaFileManager.Location location, CharSequence pkg, CharSequence relativeName, Element[] originatingElements) {
-        result.setFullRebuildCause("incremental annotation processors are not allowed to create resources");
-    }
+    public abstract void recordGeneratedResource(JavaFileManager.Location location, CharSequence pkg, CharSequence relativeName, Element[] originatingElements);
 
+    /**
+     * We don't trigger a full recompile on resource reads, because we already trigger a full recompile when any
+     * resource changes.
+     */
     public final void recordAccessedResource(JavaFileManager.Location location, CharSequence pkg, CharSequence relativeName) {
-        result.setFullRebuildCause("incremental annotation processors are not allowed to read resources");
     }
 }

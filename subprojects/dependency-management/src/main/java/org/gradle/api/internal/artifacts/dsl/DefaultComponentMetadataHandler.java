@@ -16,7 +16,6 @@
 package org.gradle.api.internal.artifacts.dsl;
 
 import com.google.common.collect.Interner;
-import com.google.common.collect.Sets;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.ActionConfiguration;
@@ -36,7 +35,6 @@ import org.gradle.api.internal.artifacts.MetadataResolutionContext;
 import org.gradle.api.internal.artifacts.repositories.resolver.DependencyConstraintMetadataImpl;
 import org.gradle.api.internal.artifacts.repositories.resolver.DirectDependencyMetadataImpl;
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
-import org.gradle.api.internal.changedetection.state.isolation.IsolatableFactory;
 import org.gradle.api.internal.notations.ComponentIdentifierParserFactory;
 import org.gradle.api.internal.notations.DependencyMetadataNotationParser;
 import org.gradle.api.internal.notations.ModuleIdentifierNotationConverter;
@@ -44,6 +42,8 @@ import org.gradle.api.specs.Spec;
 import org.gradle.api.specs.Specs;
 import org.gradle.internal.action.ConfigurableRule;
 import org.gradle.internal.action.DefaultConfigurableRule;
+import org.gradle.internal.component.external.model.VariantDerivationStrategy;
+import org.gradle.internal.isolation.IsolatableFactory;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.resolve.caching.ComponentMetadataRuleExecutor;
 import org.gradle.internal.rules.DefaultRuleActionAdapter;
@@ -58,16 +58,14 @@ import org.gradle.internal.typeconversion.UnsupportedNotationException;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 
-public class DefaultComponentMetadataHandler implements ComponentMetadataHandler, ComponentMetadataProcessorFactory {
+public class DefaultComponentMetadataHandler implements ComponentMetadataHandler, ComponentMetadataHandlerInternal, ComponentMetadataProcessorFactory {
     private static final String ADAPTER_NAME = ComponentMetadataHandler.class.getSimpleName();
     private static final List<Class<?>> VALIDATOR_PARAM_LIST = Collections.<Class<?>>singletonList(IvyModuleDescriptor.class);
     private static final String INVALID_SPEC_ERROR = "Could not add a component metadata rule for module '%s'.";
 
     private final Instantiator instantiator;
-    private final Set<SpecRuleAction<? super ComponentMetadataDetails>> rules = Sets.newLinkedHashSet();
-    private final Set<SpecConfigurableRule> classBasedRules = Sets.newLinkedHashSet();
+    private final ComponentMetadataRuleContainer metadataRuleContainer;
     private final RuleActionAdapter ruleActionAdapter;
     private final NotationParser<Object, ModuleIdentifier> moduleIdentifierNotationParser;
     private final NotationParser<Object, DirectDependencyMetadataImpl> dependencyMetadataNotationParser;
@@ -88,7 +86,7 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
         this.ruleActionAdapter = ruleActionAdapter;
         this.moduleIdentifierNotationParser = NotationParserBuilder
             .toType(ModuleIdentifier.class)
-            .converter(new ModuleIdentifierNotationConverter(moduleIdentifierFactory))
+            .fromCharSequence(new ModuleIdentifierNotationConverter(moduleIdentifierFactory))
             .toComposite();
         this.ruleExecutor = ruleExecutor;
         this.dependencyMetadataNotationParser = DependencyMetadataNotationParser.parser(instantiator, DirectDependencyMetadataImpl.class, stringInterner);
@@ -96,6 +94,7 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
         this.componentIdentifierNotationParser = new ComponentIdentifierParserFactory().create();
         this.attributesFactory = attributesFactory;
         this.isolatableFactory = isolatableFactory;
+        this.metadataRuleContainer = new ComponentMetadataRuleContainer();
     }
 
     public DefaultComponentMetadataHandler(Instantiator instantiator, ImmutableModuleIdentifierFactory moduleIdentifierFactory, Interner<String> stringInterner, ImmutableAttributesFactory attributesFactory, IsolatableFactory isolatableFactory, ComponentMetadataRuleExecutor ruleExecutor) {
@@ -108,15 +107,12 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
     }
 
     private ComponentMetadataHandler addRule(SpecRuleAction<? super ComponentMetadataDetails> ruleAction) {
-        if (!classBasedRules.isEmpty()) {
-            throw new IllegalArgumentException("Non class based component metadata rules must all be added before class based ones.");
-        }
-        rules.add(ruleAction);
+        metadataRuleContainer.addRule(ruleAction);
         return this;
     }
 
     private ComponentMetadataHandler addClassBasedRule(SpecConfigurableRule ruleAction) {
-        classBasedRules.add(ruleAction);
+        metadataRuleContainer.addClassRule(ruleAction);
         return this;
     }
 
@@ -137,26 +133,32 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
         return new SpecRuleAction<ComponentMetadataDetails>(ruleAction, spec);
     }
 
+    @Override
     public ComponentMetadataHandler all(Action<? super ComponentMetadataDetails> rule) {
         return addRule(createAllSpecRuleAction(ruleActionAdapter.createFromAction(rule)));
     }
 
+    @Override
     public ComponentMetadataHandler all(Closure<?> rule) {
         return addRule(createAllSpecRuleAction(ruleActionAdapter.createFromClosure(ComponentMetadataDetails.class, rule)));
     }
 
+    @Override
     public ComponentMetadataHandler all(Object ruleSource) {
         return addRule(createAllSpecRuleAction(ruleActionAdapter.createFromRuleSource(ComponentMetadataDetails.class, ruleSource)));
     }
 
+    @Override
     public ComponentMetadataHandler withModule(Object id, Action<? super ComponentMetadataDetails> rule) {
         return addRule(createSpecRuleActionForModule(id, ruleActionAdapter.createFromAction(rule)));
     }
 
+    @Override
     public ComponentMetadataHandler withModule(Object id, Closure<?> rule) {
         return addRule(createSpecRuleActionForModule(id, ruleActionAdapter.createFromClosure(ComponentMetadataDetails.class, rule)));
     }
 
+    @Override
     public ComponentMetadataHandler withModule(Object id, Object ruleSource) {
         return addRule(createSpecRuleActionForModule(id, ruleActionAdapter.createFromRuleSource(ComponentMetadataDetails.class, ruleSource)));
     }
@@ -200,7 +202,12 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
 
     @Override
     public ComponentMetadataProcessor createComponentMetadataProcessor(MetadataResolutionContext resolutionContext) {
-        return new DefaultComponentMetadataProcessor(rules, classBasedRules, instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser, attributesFactory, ruleExecutor, resolutionContext);
+        return new DefaultComponentMetadataProcessor(metadataRuleContainer, instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser, attributesFactory, ruleExecutor, resolutionContext);
+    }
+
+    @Override
+    public void setVariantDerivationStrategy(VariantDerivationStrategy strategy) {
+        metadataRuleContainer.setVariantDerivationStrategy(strategy);
     }
 
     static class ComponentMetadataDetailsMatchingSpec implements Spec<ComponentMetadataDetails> {
@@ -210,6 +217,7 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
             this.target = target;
         }
 
+        @Override
         public boolean isSatisfiedBy(ComponentMetadataDetails componentMetadataDetails) {
             ModuleVersionIdentifier identifier = componentMetadataDetails.getId();
             return identifier.getGroup().equals(target.getGroup()) && identifier.getName().equals(target.getName());
@@ -223,6 +231,7 @@ public class DefaultComponentMetadataHandler implements ComponentMetadataHandler
             this.target = target;
         }
 
+        @Override
         public boolean isSatisfiedBy(ModuleVersionIdentifier identifier) {
             return identifier.getGroup().equals(target.getGroup()) && identifier.getName().equals(target.getName());
         }

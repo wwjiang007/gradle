@@ -20,10 +20,11 @@ import org.gradle.integtests.fixtures.DefaultTestExecutionResult
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import spock.lang.Issue
+import spock.lang.Timeout
 import spock.lang.Unroll
 
 import static org.gradle.testing.fixture.JUnitCoverage.LATEST_JUPITER_VERSION
-import static org.hamcrest.Matchers.containsString
+import static org.hamcrest.CoreMatchers.containsString
 
 @Requires(TestPrecondition.JDK8_OR_LATER)
 class JUnitPlatformIntegrationTest extends JUnitPlatformIntegrationSpec {
@@ -44,7 +45,7 @@ class JUnitPlatformIntegrationTest extends JUnitPlatformIntegrationSpec {
         given:
         buildFile << """
         dependencies {
-            testCompile 'org.junit.platform:junit-platform-runner:1.0.3'
+            testImplementation 'org.junit.platform:junit-platform-runner:1.0.3'
         }
         """
         createSimpleJupiterTest()
@@ -101,12 +102,13 @@ class JUnitPlatformIntegrationTest extends JUnitPlatformIntegrationSpec {
     }
 
     @Unroll
-    def 'can handle class level error in #location'() {
+    def 'can handle class-level error in #location method'() {
         given:
         file('src/test/java/org/gradle/ClassErrorTest.java') << """ 
             package org.gradle;
             
             import org.junit.jupiter.api.*;
+            import static org.junit.jupiter.api.Assertions.*;
 
             public class ClassErrorTest {
                 @Test
@@ -131,12 +133,14 @@ class JUnitPlatformIntegrationTest extends JUnitPlatformIntegrationSpec {
         then:
         new DefaultTestExecutionResult(testDirectory)
             .assertTestClassesExecuted('org.gradle.ClassErrorTest')
-            .testClass('org.gradle.ClassErrorTest').assertTestCount(successCount + failureCount, failureCount, 0)
+            .testClass('org.gradle.ClassErrorTest')
+            .assertTestCount(successCount + 1, 1, 0)
+            .assertTestFailed(failedTestName, containsString(location))
 
         where:
-        location    | beforeStatement                | afterStatement                 | successCount | failureCount
-        'beforeAll' | 'throw new RuntimeException()' | ''                             | 0            | 1
-        'afterAll'  | ''                             | 'throw new RuntimeException()' | 1            | 1
+        location     | beforeStatement      | afterStatement      | successCount | failedTestName
+        '@BeforeAll' | 'fail("@BeforeAll")' | ''                  | 0            | "initializationError"
+        '@AfterAll'  | ''                   | 'fail("@AfterAll")' | 1            | "executionError"
     }
 
     def 'can handle class level assumption'() {
@@ -259,17 +263,17 @@ test {
     def 'can handle test engine failure'() {
         given:
         createSimpleJupiterTest()
-        file('src/test/java/UninstantiatableExtension.java') << '''
+        file('src/test/java/UninstantiableExtension.java') << '''
 import org.junit.jupiter.api.extension.*;
-public class UninstantiatableExtension implements BeforeEachCallback {
-  private UninstantiatableExtension(){}
+public class UninstantiableExtension implements BeforeEachCallback {
+  private UninstantiableExtension(){}
 
   @Override
   public void beforeEach(final ExtensionContext context) throws Exception {
   }
 }
 '''
-        file('src/test/resources/META-INF/services/org.junit.jupiter.api.extension.Extension') << 'UninstantiatableExtension'
+        file('src/test/resources/META-INF/services/org.junit.jupiter.api.extension.Extension') << 'UninstantiableExtension'
         buildFile << '''
             test {
                 systemProperty('junit.jupiter.extensions.autodetection.enabled', 'true')
@@ -282,7 +286,7 @@ public class UninstantiatableExtension implements BeforeEachCallback {
         then:
         new DefaultTestExecutionResult(testDirectory)
             .testClass('UnknownClass')
-            .assertTestFailed('initializationError', containsString('UninstantiatableExtension'))
+            .assertTestFailed('initializationError', containsString('UninstantiableExtension'))
     }
 
     @Issue('https://github.com/gradle/gradle/issues/4427')
@@ -361,5 +365,54 @@ public class StaticInnerTest {
         'excludeTags'    | '"ok"'
         'includeEngines' | '"junit-jupiter"'
         'excludeEngines' | '"junit-jupiter"'
+    }
+
+    @Timeout(60)
+    @Issue('https://github.com/gradle/gradle/issues/6453')
+    def "can handle parallel test execution"() {
+        given:
+        def numTestClasses = 32
+        buildScriptWithJupiterDependencies("""
+            test {
+                useJUnitPlatform()
+                systemProperty('junit.jupiter.execution.parallel.enabled', 'true')
+                systemProperty('junit.jupiter.execution.parallel.config.strategy', 'fixed')
+                systemProperty('junit.jupiter.execution.parallel.config.fixed.parallelism', '$numTestClasses')
+            }
+        """)
+        file('src/test/java/org/gradle/Tests.java') << """
+            package org.gradle;
+
+            import java.util.concurrent.*;
+            import org.junit.jupiter.api.*;
+            import org.junit.jupiter.api.parallel.*;
+            import static org.junit.jupiter.api.Assertions.*;
+            import static org.junit.jupiter.api.parallel.ExecutionMode.CONCURRENT;
+
+            @Execution(CONCURRENT)
+            class Sync {
+                static CountDownLatch LATCH = new CountDownLatch($numTestClasses);
+            }
+
+            ${(1..numTestClasses).collect { classNumber -> """
+                class Test$classNumber extends Sync {
+                    @Test
+                    public void test() throws Exception {
+                        LATCH.countDown();
+                        LATCH.await();
+                    }
+                }
+            """ }.join("") }
+        """
+
+        when:
+        succeeds(':test')
+
+        then:
+        with(new DefaultTestExecutionResult(testDirectory)) {
+            (1..numTestClasses).every { classNumber ->
+                testClass("org.gradle.Test$classNumber").assertTestCount(1, 0, 0)
+            }
+        }
     }
 }

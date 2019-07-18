@@ -17,7 +17,6 @@
 package org.gradle.api.tasks.incremental;
 
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.NonExtensible;
 
 /**
@@ -37,9 +36,9 @@ import org.gradle.api.NonExtensible;
  *
  *      {@literal @}TaskAction
  *      void execute(IncrementalTaskInputs inputs) {
- *          if (!inputs.incremental)
+ *          if (!inputs.incremental) {
  *              project.delete(outputDir.listFiles())
- *
+ *          }
  *          inputs.outOfDate { change -&gt;
  *              def targetFile = project.file("$outputDir/${change.file.name}")
  *              targetFile.text = change.file.text.reverse()
@@ -71,11 +70,10 @@ import org.gradle.api.NonExtensible;
  *     <li>{@link #outOfDate} must be executed before {@link #removed} is called.</li>
  * </ul>
  */
-@Incubating
 @NonExtensible
 public interface IncrementalTaskInputs {
     /**
-     * Indicates if it was possible for Gradle to determine which exactly input files were out of date compared to a previous execution.
+     * Indicates if it was possible for Gradle to determine which input files were out of date compared to a previous execution.
      * This is <em>not</em> possible in the case of no previous execution, changed input properties, output files, etc.
      * <p>
      * When <code>true</code>:

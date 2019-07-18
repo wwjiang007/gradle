@@ -20,7 +20,7 @@ import org.gradle.api.JavaVersion
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.archives.TestReproducibleArchives
 import org.gradle.test.fixtures.archive.JarTestFixture
-import org.hamcrest.Matchers
+import org.hamcrest.CoreMatchers
 import spock.lang.Issue
 import spock.lang.Unroll
 
@@ -29,7 +29,7 @@ import static org.gradle.util.TextUtil.toPlatformLineSeparators
 @TestReproducibleArchives
 class EarPluginIntegrationTest extends AbstractIntegrationSpec {
 
-    void "setup"() {
+    def "setup"() {
         file("rootLib.jar").createNewFile()
         file("earLib.jar").createNewFile()
 
@@ -80,7 +80,7 @@ ear {
         then:
         def ear = new JarTestFixture(file('build/libs/root.ear'))
         ear.assertContainsFile("CUSTOM/lib/earLib.jar")
-        ear.assertFileContent("META-INF/application.xml", Matchers.containsString("cool ear"))
+        ear.assertFileContent("META-INF/application.xml", CoreMatchers.containsString("cool ear"))
     }
 
     void "includes modules in deployment descriptor"() {
@@ -438,9 +438,9 @@ ear {
                 }
             }
             project(":b") {
-                apply plugin: 'java'
+                apply plugin: 'java-library'
                 dependencies {
-                    compile project(':c')
+                    api project(':c')
                 }
             }
             project(":c") {
@@ -514,4 +514,32 @@ ear {
         ear.assertContainsFile("lib/d.jar")
         ear.assertNotContainsFile("lib/e.jar")
     }
+
+    def "using nested descriptor file name is deprecated"() {
+        buildScript '''
+            apply plugin: 'ear'
+            
+            ear {
+                deploymentDescriptor {
+                    fileName = 'nested/blubb.xml'
+                    applicationName = 'NestedDemo'
+
+                }
+            }
+            
+        '''.stripIndent()
+
+        def deprecationMessage = "File paths in deployment descriptor file name has been deprecated. This is scheduled to be removed in Gradle 6.0. Use simple file name instead."
+
+        when:
+        executer.expectDeprecationWarning()
+        run 'assemble'
+
+        then:
+
+        output.contains(deprecationMessage)
+        def ear = new JarTestFixture(file('build/libs/root.ear'))
+        ear.assertContainsFile("META-INF/nested/blubb.xml")
+    }
+
 }

@@ -66,6 +66,7 @@ public class GroupingProgressLogEventGenerator implements OutputEventListener {
         this.verbose = verbose;
     }
 
+    @Override
     public void onOutput(OutputEvent event) {
         if (event instanceof ProgressStartEvent) {
             onStart((ProgressStartEvent) event);
@@ -83,7 +84,7 @@ public class GroupingProgressLogEventGenerator implements OutputEventListener {
     }
 
     private void onStart(ProgressStartEvent startEvent) {
-        boolean isGrouped = isGroupedOperation(startEvent.getBuildOperationCategory());
+        boolean isGrouped = startEvent.getBuildOperationCategory().isGrouped();
         OperationIdentifier progressId = startEvent.getProgressOperationId();
         if (startEvent.isBuildOperationStart() && isGrouped) {
             // Create a new group for tasks or configure project
@@ -97,10 +98,6 @@ public class GroupingProgressLogEventGenerator implements OutputEventListener {
         if (!isGrouped && GUtil.isTrue(startEvent.getLoggingHeader())) {
             onUngroupedOutput(new LogEvent(startEvent.getTimestamp(), startEvent.getCategory(), startEvent.getLogLevel(), startEvent.getLoggingHeader(), null, null));
         }
-    }
-
-    private boolean isGroupedOperation(BuildOperationCategory buildOperationCategory) {
-        return buildOperationCategory == BuildOperationCategory.TASK || buildOperationCategory == BuildOperationCategory.CONFIGURE_PROJECT;
     }
 
     private void handleOutput(RenderableOutputEvent event) {
@@ -206,7 +203,6 @@ public class GroupingProgressLogEventGenerator implements OutputEventListener {
             this.category = category;
             this.lastUpdateTime = startTime;
             this.description = description;
-            this.lastUpdateTime = startTime;
             this.buildOperationCategory = buildOperationCategory;
         }
 
@@ -291,7 +287,7 @@ public class GroupingProgressLogEventGenerator implements OutputEventListener {
         }
 
         private boolean shouldForward() {
-            return !bufferedLogs.isEmpty() || (buildOperationCategory == BuildOperationCategory.TASK && (shouldPrintHeader() || statusIsFailed()));
+            return !bufferedLogs.isEmpty() || (buildOperationCategory.isShowHeader() && (shouldPrintHeader() || statusIsFailed()));
         }
     }
 }

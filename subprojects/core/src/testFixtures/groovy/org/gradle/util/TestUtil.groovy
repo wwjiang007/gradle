@@ -15,84 +15,101 @@
  */
 package org.gradle.util
 
-import org.codehaus.groovy.control.CompilerConfiguration
 import org.gradle.api.Task
-import org.gradle.api.attributes.Attribute
-import org.gradle.api.internal.AsmBackedClassGenerator
-import org.gradle.api.internal.DefaultInstantiatorFactory
+import org.gradle.api.internal.CollectionCallbackActionDecorator
 import org.gradle.api.internal.FeaturePreviews
-import org.gradle.api.internal.InstantiatorFactory
-import org.gradle.api.internal.attributes.DefaultImmutableAttributesFactory
-import org.gradle.api.internal.attributes.ImmutableAttributes
-import org.gradle.api.internal.attributes.ImmutableAttributesFactory
-import org.gradle.api.internal.changedetection.state.ValueSnapshotter
+import org.gradle.api.internal.MutationGuards
+import org.gradle.api.internal.collections.DefaultDomainObjectCollectionFactory
+import org.gradle.api.internal.collections.DomainObjectCollectionFactory
+import org.gradle.api.internal.file.DefaultFilePropertyFactory
+import org.gradle.api.internal.file.FileResolver
+import org.gradle.api.internal.file.TestFiles
 import org.gradle.api.internal.model.DefaultObjectFactory
 import org.gradle.api.internal.model.NamedObjectInstantiator
 import org.gradle.api.internal.project.ProjectInternal
-import org.gradle.api.internal.project.taskfactory.ITaskFactory
+import org.gradle.api.internal.project.taskfactory.TaskInstantiator
 import org.gradle.api.internal.provider.DefaultProviderFactory
 import org.gradle.api.model.ObjectFactory
-import org.gradle.api.provider.ProviderFactory
-import org.gradle.cache.internal.CrossBuildInMemoryCacheFactory
-import org.gradle.groovy.scripts.DefaultScript
-import org.gradle.groovy.scripts.Script
-import org.gradle.groovy.scripts.ScriptSource
-import org.gradle.internal.classloader.ClassLoaderHierarchyHasher
-import org.gradle.internal.event.DefaultListenerManager
-import org.gradle.internal.hash.HashCode
+import org.gradle.cache.internal.TestCrossBuildInMemoryCacheFactory
+import org.gradle.internal.instantiation.DefaultInstantiatorFactory
+import org.gradle.internal.instantiation.InjectAnnotationHandler
+import org.gradle.internal.instantiation.InstantiatorFactory
 import org.gradle.internal.service.DefaultServiceRegistry
+import org.gradle.internal.service.ServiceRegistry
+import org.gradle.internal.state.ManagedFactoryRegistry
 import org.gradle.test.fixtures.file.TestDirectoryProvider
+import org.gradle.test.fixtures.file.TestFile
 import org.gradle.testfixtures.ProjectBuilder
 import org.gradle.testfixtures.internal.NativeServicesTestFixture
-
-import java.rmi.server.UID
+import org.gradle.testfixtures.internal.ProjectBuilderImpl
 
 import static org.gradle.api.internal.FeaturePreviews.Feature.GRADLE_METADATA
-import static org.gradle.api.internal.FeaturePreviews.Feature.IMPROVED_POM_SUPPORT
 
 class TestUtil {
     public static final Closure TEST_CLOSURE = {}
+    private static InstantiatorFactory instantiatorFactory
+    private static ManagedFactoryRegistry managedFactoryRegistry
+    private static ServiceRegistry services
 
-    private final File rootDir;
+    private final File rootDir
 
     private TestUtil(File rootDir) {
         NativeServicesTestFixture.initialize()
-        this.rootDir = rootDir;
+        this.rootDir = rootDir
     }
 
     static InstantiatorFactory instantiatorFactory() {
-        def generator = new AsmBackedClassGenerator()
-        return new DefaultInstantiatorFactory(generator, new CrossBuildInMemoryCacheFactory(new DefaultListenerManager()))
+        if (instantiatorFactory == null) {
+            NativeServicesTestFixture.initialize()
+            def annotationHandlers = ProjectBuilderImpl.getGlobalServices().getAll(InjectAnnotationHandler.class)
+            instantiatorFactory = new DefaultInstantiatorFactory(new TestCrossBuildInMemoryCacheFactory(), annotationHandlers)
+        }
+        return instantiatorFactory
+    }
+
+    static ManagedFactoryRegistry managedFactoryRegistry() {
+        if (managedFactoryRegistry == null) {
+            NativeServicesTestFixture.initialize()
+            managedFactoryRegistry = ProjectBuilderImpl.getGlobalServices().get(ManagedFactoryRegistry.class)
+        }
+        return managedFactoryRegistry
+    }
+
+    static DomainObjectCollectionFactory domainObjectCollectionFactory() {
+        return new DefaultDomainObjectCollectionFactory(instantiatorFactory(), services(), CollectionCallbackActionDecorator.NOOP, MutationGuards.identity())
     }
 
     static ObjectFactory objectFactory() {
-        DefaultServiceRegistry services = new DefaultServiceRegistry()
-        services.add(ProviderFactory, new DefaultProviderFactory())
-        return new DefaultObjectFactory(instantiatorFactory().injectAndDecorate(services), NamedObjectInstantiator.INSTANCE)
+        return objFactory(TestFiles.resolver())
     }
 
-    static ValueSnapshotter valueSnapshotter() {
-        return new ValueSnapshotter(new ClassLoaderHierarchyHasher() {
-            @Override
-            HashCode getClassLoaderHash(ClassLoader classLoader) {
-                return HashCode.fromInt(classLoader.hashCode())
+    static ObjectFactory objectFactory(TestFile baseDir) {
+        return objFactory(TestFiles.resolver(baseDir))
+    }
+
+    private static ObjectFactory objFactory(FileResolver fileResolver) {
+        return new DefaultObjectFactory(instantiatorFactory().injectAndDecorate(services()), objectInstantiator(), fileResolver, TestFiles.directoryFileTreeFactory(), new DefaultFilePropertyFactory(fileResolver), TestFiles.fileCollectionFactory(), domainObjectCollectionFactory())
+    }
+
+    private static ServiceRegistry services() {
+        if (services == null) {
+            services = new DefaultServiceRegistry()
+            services.register {
+                it.add(DefaultProviderFactory)
+                it.add(InstantiatorFactory, instantiatorFactory())
+                it.add(TestCrossBuildInMemoryCacheFactory)
+                it.add(NamedObjectInstantiator)
             }
-        }, NamedObjectInstantiator.INSTANCE)
-    }
-
-    static ImmutableAttributesFactory attributesFactory() {
-        return new DefaultImmutableAttributesFactory(valueSnapshotter(), NamedObjectInstantiator.INSTANCE)
+        }
+        return services
     }
 
     static NamedObjectInstantiator objectInstantiator() {
-        return NamedObjectInstantiator.INSTANCE
+        return services().get(NamedObjectInstantiator)
     }
 
-    static FeaturePreviews featurePreviews(boolean improvedPomSupportEnabled = false, boolean gradleMetadataEnabled = false) {
+    static FeaturePreviews featurePreviews(boolean gradleMetadataEnabled = false) {
         def previews = new FeaturePreviews()
-        if (improvedPomSupportEnabled) {
-            previews.enableFeature(IMPROVED_POM_SUPPORT)
-        }
         if (gradleMetadataEnabled) {
             previews.enableFeature(GRADLE_METADATA)
         }
@@ -100,37 +117,15 @@ class TestUtil {
     }
 
     static TestUtil create(File rootDir) {
-        return new TestUtil(rootDir);
+        return new TestUtil(rootDir)
     }
 
     static TestUtil create(TestDirectoryProvider testDirectoryProvider) {
-        return new TestUtil(testDirectoryProvider.testDirectory);
+        return new TestUtil(testDirectoryProvider.testDirectory)
     }
 
     public <T extends Task> T task(Class<T> type) {
         return createTask(type, createRootProject(this.rootDir))
-    }
-
-    public <T extends Task> T task(Class<T> type, Map taskFields) {
-        def task = createTask(type, createRootProject(rootDir))
-        hackInTaskProperties(type, task, taskFields)
-        return task
-    }
-
-    private static void hackInTaskProperties(Class type, Task task, Map args) {
-        args.each { k, v ->
-            def field = type.getDeclaredFields().find { it.name == k }
-            if (!field) {
-                field = type.getSuperclass().getDeclaredFields().find { it.name == k }
-            }
-            if (field) {
-                field.setAccessible(true)
-                field.set(task, v)
-            } else {
-                //I'm feeling lucky
-                task."$k" = v
-            }
-        }
     }
 
     static <T extends Task> T createTask(Class<T> type, ProjectInternal project) {
@@ -138,15 +133,15 @@ class TestUtil {
     }
 
     static <T extends Task> T createTask(Class<T> type, ProjectInternal project, String name) {
-        return project.services.get(ITaskFactory).create(name, type)
+        return project.services.get(TaskInstantiator).create(name, type)
     }
 
     static ProjectBuilder builder(File rootDir) {
-        return ProjectBuilder.builder().withProjectDir(rootDir);
+        return ProjectBuilder.builder().withProjectDir(rootDir)
     }
 
     static ProjectBuilder builder(TestDirectoryProvider temporaryFolder) {
-        return builder(temporaryFolder.testDirectory);
+        return builder(temporaryFolder.testDirectory)
     }
 
     ProjectInternal rootProject() {
@@ -166,7 +161,7 @@ class TestUtil {
             .withName(name)
             .withParent(parent)
             .withProjectDir(projectDir)
-            .build();
+            .build()
     }
 
     static groovy.lang.Script createScript(String code) {
@@ -181,16 +176,6 @@ class TestUtil {
         return new GroovyShell().evaluate("return " + text)
     }
 
-    static Closure toClosure(ScriptSource source) {
-        CompilerConfiguration configuration = new CompilerConfiguration();
-        configuration.setScriptBaseClass(TestScript.getName());
-
-        GroovyShell shell = new GroovyShell(configuration)
-        Script script = shell.parse(source.resource.text)
-        script.setScriptSource(source)
-        return script.run()
-    }
-
     static Closure toClosure(TestClosure closure) {
         return { param -> closure.call(param) }
     }
@@ -198,33 +183,8 @@ class TestUtil {
     static Closure returns(Object value) {
         return { value }
     }
-
-    static Closure createSetterClosure(String name, String value) {
-        return {
-            "set$name"(value)
-        }
-    }
-
-    static String createUniqueId() {
-        return new UID().toString();
-    }
-
-    static ImmutableAttributes attributes(Map<String, ?> values) {
-        def attrs = ImmutableAttributes.EMPTY
-        if (values) {
-            values.each { String key, Object value ->
-                attrs = attributesFactory().concat(attrs, Attribute.of(key, value.class), value)
-            }
-        }
-        return attrs
-    }
-
 }
-
 
 interface TestClosure {
     Object call(Object param);
-}
-
-abstract class TestScript extends DefaultScript {
 }

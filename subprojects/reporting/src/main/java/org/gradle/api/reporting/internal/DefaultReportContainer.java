@@ -20,6 +20,7 @@ import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.NamedDomainObjectSet;
+import org.gradle.api.internal.CollectionCallbackActionDecorator;
 import org.gradle.api.internal.DefaultNamedDomainObjectSet;
 import org.gradle.api.reporting.Report;
 import org.gradle.api.reporting.ReportContainer;
@@ -32,32 +33,36 @@ import java.util.Map;
 import java.util.SortedMap;
 
 public class DefaultReportContainer<T extends Report> extends DefaultNamedDomainObjectSet<T> implements ReportContainer<T> {
-
-    private static final Action<Void> IMMUTABLE_VIOLATION_EXCEPTION = new Action<Void>() {
-        public void execute(Void arg) {
+    private static final Action<Object> IMMUTABLE_VIOLATION_EXCEPTION = new Action<Object>() {
+        @Override
+        public void execute(Object arg) {
             throw new ImmutableViolationException();
         }
     };
-
-
     private NamedDomainObjectSet<T> enabled;
 
-    public DefaultReportContainer(Class<? extends T> type, Instantiator instantiator) {
-        super(type, instantiator, Report.NAMER);
+    public DefaultReportContainer(Class<? extends T> type, Instantiator instantiator, CollectionCallbackActionDecorator callbackActionDecorator) {
+        super(type, instantiator, Report.NAMER, callbackActionDecorator);
 
         enabled = matching(new Spec<T>() {
+            @Override
             public boolean isSatisfiedBy(T element) {
                 return element.isEnabled();
             }
         });
-
-        beforeChange(IMMUTABLE_VIOLATION_EXCEPTION);
     }
 
+    @Override
+    protected void assertMutableCollectionContents() {
+        IMMUTABLE_VIOLATION_EXCEPTION.execute(null);
+    }
+
+    @Override
     public NamedDomainObjectSet<T> getEnabled() {
         return enabled;
     }
 
+    @Override
     public ReportContainer<T> configure(Closure cl) {
         ConfigureUtil.configureSelf(cl, this);
         return this;
@@ -75,11 +80,10 @@ public class DefaultReportContainer<T extends Report> extends DefaultNamedDomain
 
     protected <N extends T> N add(Class<N> clazz, Object... constructionArgs) {
         N report = getInstantiator().newInstance(clazz, constructionArgs);
-
-        if (report.getName().equals("enabled")) {
+        String name = report.getName();
+        if (name.equals("enabled")) {
             throw new InvalidUserDataException("Reports that are part of a ReportContainer cannot be named 'enabled'");
         }
-
         getStore().add(report);
         index();
         return report;

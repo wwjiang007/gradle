@@ -29,8 +29,6 @@ import java.lang.invoke.MethodType;
 import java.net.URL;
 import java.net.URLConnection;
 
-import static org.gradle.internal.reflect.JavaReflectionUtil.method;
-
 public abstract class ClassLoaderUtils {
     private static final ClassDefiner CLASS_DEFINER;
 
@@ -81,6 +79,14 @@ public abstract class ClassLoaderUtils {
 
     public static <T> Class<T> defineDecorator(Class<?> decoratedClass, ClassLoader targetClassLoader, String className, byte[] clazzBytes) {
         return CLASS_DEFINER.defineDecoratorClass(decoratedClass, targetClassLoader, className, clazzBytes);
+    }
+
+    public static Class<?> classFromContextLoader(String className) {
+        try {
+            return Thread.currentThread().getContextClassLoader().loadClass(className);
+        } catch (ClassNotFoundException e) {
+            throw UncheckedException.throwAsUncheckedException(e);
+        }
     }
 
     /**
@@ -147,7 +153,7 @@ public abstract class ClassLoaderUtils {
         private final JavaMethod<ClassLoader, Class> defineClassMethod;
 
         private ReflectionClassDefiner() {
-            defineClassMethod = method(ClassLoader.class, Class.class, "defineClass", String.class, byte[].class, int.class, int.class);
+            defineClassMethod = JavaMethod.of(ClassLoader.class, Class.class, "defineClass", String.class, byte[].class, int.class, int.class);
         }
 
         @Override
@@ -188,8 +194,8 @@ public abstract class ClassLoaderUtils {
     }
 
     private static class ReflectionPackagesFetcher implements ClassLoaderPackagesFetcher {
-        private static final JavaMethod<ClassLoader, Package[]> GET_PACKAGES_METHOD = method(ClassLoader.class, Package[].class, "getPackages");
-        private static final JavaMethod<ClassLoader, Package> GET_PACKAGE_METHOD = method(ClassLoader.class, Package.class, "getPackage", String.class);
+        private static final JavaMethod<ClassLoader, Package[]> GET_PACKAGES_METHOD = JavaMethod.of(ClassLoader.class, Package[].class, "getPackages");
+        private static final JavaMethod<ClassLoader, Package> GET_PACKAGE_METHOD = JavaMethod.of(ClassLoader.class, Package.class, "getPackage", String.class);
 
         @Override
         public Package[] getPackages(ClassLoader classLoader) {

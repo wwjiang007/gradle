@@ -29,22 +29,27 @@ public class LatestVersionSelector extends AbstractStringVersionSelector {
         return selectorStatus;
     }
 
+    @Override
     public boolean isDynamic() {
         return true;
     }
 
+    @Override
     public boolean requiresMetadata() {
         return true;
     }
 
+    @Override
     public boolean matchesUniqueVersion() {
         return true;
     }
 
+    @Override
     public boolean accept(String candidate) {
         throw new UnsupportedOperationException("accept(String)");
     }
 
+    @Override
     public boolean accept(ComponentMetadata candidate) {
         int selectorStatusIndex = candidate.getStatusScheme().indexOf(selectorStatus);
         int candidateStatusIndex = candidate.getStatusScheme().indexOf(candidate.getStatus());
@@ -54,34 +59,5 @@ public class LatestVersionSelector extends AbstractStringVersionSelector {
     @Override
     public boolean canShortCircuitWhenVersionAlreadyPreselected() {
         return false;
-    }
-
-    public VersionSelector forLocking() {
-        return new LockingAwareLatestVersionSelector(getSelector());
-    }
-
-    private static class LockingAwareLatestVersionSelector extends LatestVersionSelector {
-        private LockingAwareLatestVersionSelector(String selector) {
-            super(selector);
-        }
-
-        @Override
-        public boolean accept(String candidate) {
-            // This is not right, we should really call accept with ComponentMetadata because
-            // we need to check if the status of the candidate is matching. However, this is
-            // only used in the context of dependency locking, and this method will only be
-            // called with a candidate which is assumed to pass the test.
-            return true;
-        }
-
-        @Override
-        public boolean matchesUniqueVersion() {
-            return false;
-        }
-
-        @Override
-        public boolean canShortCircuitWhenVersionAlreadyPreselected() {
-            return true;
-        }
     }
 }

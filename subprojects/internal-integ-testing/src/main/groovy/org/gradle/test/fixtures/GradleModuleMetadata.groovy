@@ -19,6 +19,7 @@ package org.gradle.test.fixtures
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
 import groovy.transform.Canonical
+import groovy.transform.EqualsAndHashCode
 import org.gradle.internal.hash.HashValue
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.GradleVersion
@@ -34,7 +35,7 @@ class GradleModuleMetadata {
             JsonReader reader = new JsonReader(r)
             values = readObject(reader)
         }
-        assert values.formatVersion == '0.4'
+        assert values.formatVersion == '1.0'
         assert values.createdBy.gradle.version == GradleVersion.current().version
         assert values.createdBy.gradle.buildId
         variants = (values.variants ?: []).collect { new Variant(it.name, it) }
@@ -68,7 +69,7 @@ class GradleModuleMetadata {
 
     Variant variant(String name) {
         def matches = variants.findAll { it.name == name }
-        assert matches.size() == 1 : "Variant '$name' not found"
+        assert matches.size() == 1 : "Variant '$name' not found in ${variants.name}"
         return matches.first()
     }
 
@@ -154,11 +155,15 @@ class GradleModuleMetadata {
             return ref == null ? null : new ModuleReference(ref.group, ref.module, ref.version, ref.url)
         }
 
+        Map<String, String> getAttributes() {
+            values.attributes
+        }
+
         List<Dependency> getDependencies() {
             if (dependencies == null) {
                 dependencies = (values.dependencies ?: []).collect {
                     def exclusions = it.excludes ? it.excludes.collect { "${it.group}:${it.module}" } : []
-                    new Dependency(it.group, it.module, it.version?.prefers, it.version?.rejects ?: [], exclusions, it.reason, normalizeForTests(it.attributes))
+                    new Dependency(it.group, it.module, it.version?.requires, it.version?.prefers, it.version?.strictly, it.version?.rejects ?: [], exclusions, it.reason, normalizeForTests(it.attributes))
                 }
             }
             dependencies
@@ -175,7 +180,7 @@ class GradleModuleMetadata {
         List<DependencyConstraint> getDependencyConstraints() {
             if (dependencyConstraints == null) {
                 dependencyConstraints = (values.dependencyConstraints ?: []).collect {
-                    new DependencyConstraint(it.group, it.module, it.version.prefers, it.version.rejects ?: [], it.reason, normalizeForTests(it.attributes))
+                    new DependencyConstraint(it.group, it.module, it.version.requires, it.version.prefers, it.version.strictly, it.version.rejects ?: [], it.reason, normalizeForTests(it.attributes))
                 }
             }
             dependencyConstraints
@@ -185,7 +190,7 @@ class GradleModuleMetadata {
             return (values.files ?: []).collect { new File(it.name, it.url, it.size, new HashValue(it.sha1), new HashValue(it.md5)) }
         }
 
-        DependencyView dependency(String group, String module, String version, @DelegatesTo(value=DependencyView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = {}) {
+        DependencyView dependency(String group, String module, String version, @DelegatesTo(value=DependencyView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = { exists() }) {
             def view = new DependencyView(group, module, version)
             action.delegate = view
             action.resolveStrategy = Closure.DELEGATE_FIRST
@@ -193,12 +198,12 @@ class GradleModuleMetadata {
             view
         }
 
-        DependencyView dependency(String notation, @DelegatesTo(value=DependencyView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = {}) {
+        DependencyView dependency(String notation, @DelegatesTo(value=DependencyView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = { exists() }) {
             def (String group, String module, String version) = notation.split(':') as List
             dependency(group, module, version, action)
         }
 
-        DependencyConstraintView constraint(String group, String module, String version, @DelegatesTo(value=DependencyView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = {}) {
+        DependencyConstraintView constraint(String group, String module, String version, @DelegatesTo(value=DependencyView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = { exists() }) {
             def view = new DependencyConstraintView(group, module, version)
             action.delegate = view
             action.resolveStrategy = Closure.DELEGATE_FIRST
@@ -206,7 +211,7 @@ class GradleModuleMetadata {
             view
         }
 
-        DependencyConstraintView constraint(String notation, @DelegatesTo(value=DependencyConstraintView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = {}) {
+        DependencyConstraintView constraint(String notation, @DelegatesTo(value=DependencyConstraintView, strategy= Closure.DELEGATE_FIRST) Closure<Void> action = { exists() }) {
             def (String group, String module, String version) = notation.split(':') as List
             constraint(group, module, version, action)
         }
@@ -275,6 +280,18 @@ class GradleModuleMetadata {
                 noMoreExcludes()
             }
 
+            DependencyView prefers(String version = null) {
+                String actualPrefers = find()?.prefers
+                assert actualPrefers == version
+                this
+            }
+
+            DependencyView strictly(String version = null) {
+                String actualStrictly = find()?.strictly
+                assert actualStrictly == version
+                this
+            }
+
             DependencyView rejects(String... rejections) {
                 Set<String> actualRejects = find()?.rejectsVersion
                 Set<String> expectedRejects = rejections as Set
@@ -319,12 +336,25 @@ class GradleModuleMetadata {
 
             DependencyConstraint find() {
                 def depConstraint = dependencyConstraints.find { it.group == group && it.module == module && it.version == version }
+                assert depConstraint : "constraint ${group}:${module}:${version} not found in $dependencyConstraints"
                 checkedDependencyConstraints << depConstraint
                 depConstraint
             }
 
             DependencyConstraintView exists() {
                 assert find()
+                this
+            }
+
+            DependencyConstraintView prefers(String version) {
+                String actualPrefers = find()?.prefers
+                assert actualPrefers == version
+                this
+            }
+
+            DependencyConstraintView strictly(String version) {
+                String actualStrictly = find()?.strictly
+                assert actualStrictly == version
                 this
             }
 
@@ -361,25 +391,30 @@ class GradleModuleMetadata {
         }
     }
 
+    @EqualsAndHashCode
     static class Coords {
         final String group
         final String module
         final String version
+        final String prefers
+        final String strictly
         final List<String> rejectsVersion
         final String reason
         final Map<String, String> attributes
 
-        Coords(String group, String module, String version, List<String> rejectsVersion = [], String reason = null, Map<String, String> attributes = [:]) {
+        Coords(String group, String module, String version, String prefers = '', String strictly = '', List<String> rejectsVersion = [], String reason = null, Map<String, String> attributes = [:]) {
             this.group = group
             this.module = module
             this.version = version
+            this.prefers = prefers
+            this.strictly = strictly
             this.rejectsVersion = rejectsVersion
             this.reason = reason
             this.attributes = attributes
         }
 
         String getCoords() {
-            return "$group:$module:${version ?: ''}"
+            return "$group:$module:${version ?: prefers ?: ''}"
         }
 
         String toString() {
@@ -387,6 +422,7 @@ class GradleModuleMetadata {
         }
     }
 
+    @EqualsAndHashCode
     static class ModuleReference extends Coords {
         final String url
 
@@ -400,10 +436,12 @@ class GradleModuleMetadata {
         }
     }
 
+    @EqualsAndHashCode
     static class Dependency extends Coords {
         final List<String> excludes
-        Dependency(String group, String module, String version, List<String> rejectedVersions, List<String> excludes, String reason, Map<String, String> attributes) {
-            super(group, module, version, rejectedVersions, reason, attributes)
+
+        Dependency(String group, String module, String requires, String prefers, String strictly, List<String> rejectedVersions, List<String> excludes, String reason, Map<String, String> attributes) {
+            super(group, module, requires, prefers, strictly, rejectedVersions, reason, attributes)
             this.excludes = excludes*.toString()
         }
 
@@ -416,9 +454,10 @@ class GradleModuleMetadata {
         }
     }
 
+    @EqualsAndHashCode
     static class DependencyConstraint extends Coords {
-        DependencyConstraint(String group, String module, String version, List<String> rejectedVersions, String reason, Map<String, String> attributes) {
-            super(group, module, version, rejectedVersions, reason, attributes)
+        DependencyConstraint(String group, String module, String version, String prefers, String strictly, List<String> rejectedVersions, String reason, Map<String, String> attributes) {
+            super(group, module, version, prefers, strictly, rejectedVersions, reason, attributes)
         }
     }
 

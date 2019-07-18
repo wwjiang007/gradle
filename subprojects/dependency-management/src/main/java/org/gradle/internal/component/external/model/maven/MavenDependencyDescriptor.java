@@ -30,6 +30,7 @@ import org.gradle.internal.component.model.IvyArtifactName;
 
 import javax.annotation.Nullable;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -38,18 +39,18 @@ import java.util.List;
 public class MavenDependencyDescriptor extends ExternalDependencyDescriptor {
     private final ModuleComponentSelector selector;
     private final MavenScope scope;
-    private final boolean optional;
+    private final MavenDependencyType type;
     private final ImmutableList<ExcludeMetadata> excludes;
 
     // A dependency artifact will be defined if the descriptor specified a classifier or non-default type attribute.
     @Nullable
     private final IvyArtifactName dependencyArtifact;
 
-    public MavenDependencyDescriptor(MavenScope scope, boolean optional, ModuleComponentSelector selector,
+    public MavenDependencyDescriptor(MavenScope scope, MavenDependencyType type, ModuleComponentSelector selector,
                                      @Nullable IvyArtifactName dependencyArtifact, List<ExcludeMetadata> excludes) {
         this.scope = scope;
         this.selector = selector;
-        this.optional = optional;
+        this.type = type;
         this.dependencyArtifact = dependencyArtifact;
         this.excludes = ImmutableList.copyOf(excludes);
     }
@@ -70,7 +71,7 @@ public class MavenDependencyDescriptor extends ExternalDependencyDescriptor {
 
     @Override
     public boolean isTransitive() {
-        return true;
+        return !(isConstraint() || isOptional());
     }
 
     /**
@@ -79,6 +80,7 @@ public class MavenDependencyDescriptor extends ExternalDependencyDescriptor {
      *    - Otherwise, choose 'runtime' if it exists, or 'default'. Also include 'compile' if it's not a parent of chosen ('runtime'/'default').
      *    - Always include 'master' if it exists, and it has dependencies and/or artifacts.
      */
+    @Override
     public List<ConfigurationMetadata> selectLegacyConfigurations(ComponentIdentifier fromComponent, ConfigurationMetadata fromConfiguration, ComponentResolveMetadata targetComponent) {
         ImmutableList.Builder<ConfigurationMetadata> result = ImmutableList.builder();
         boolean requiresCompile = fromConfiguration.getName().equals("compile");
@@ -112,15 +114,23 @@ public class MavenDependencyDescriptor extends ExternalDependencyDescriptor {
 
     @Override
     protected ExternalDependencyDescriptor withRequested(ModuleComponentSelector newRequested) {
-        return new MavenDependencyDescriptor(scope, isOptional(), newRequested, dependencyArtifact, excludes);
+        return new MavenDependencyDescriptor(scope, type, newRequested, dependencyArtifact, excludes);
     }
 
     public List<ExcludeMetadata> getAllExcludes() {
         return excludes;
     }
 
+    public MavenDependencyType getType() {
+        return type;
+    }
+
     @Override
     public List<ExcludeMetadata> getConfigurationExcludes(Collection<String> configurations) {
+        // Ignore exclusions for dependencies with `<optional>true</optional>`, but not for <dependencyManagement>.
+        if (type == MavenDependencyType.OPTIONAL_DEPENDENCY) {
+            return Collections.emptyList();
+        }
         return excludes;
     }
 
@@ -172,7 +182,12 @@ public class MavenDependencyDescriptor extends ExternalDependencyDescriptor {
 
     @Override
     public boolean isOptional() {
-        return optional;
+        return type == MavenDependencyType.OPTIONAL_DEPENDENCY;
+    }
+
+    @Override
+    public boolean isConstraint() {
+        return type == MavenDependencyType.DEPENDENCY_MANAGEMENT;
     }
 
     @Override
@@ -185,7 +200,7 @@ public class MavenDependencyDescriptor extends ExternalDependencyDescriptor {
         }
 
         MavenDependencyDescriptor that = (MavenDependencyDescriptor) o;
-        return optional == that.optional
+        return type == that.type
             && Objects.equal(selector, that.selector)
             && scope == that.scope
             && Objects.equal(excludes, that.excludes)
@@ -197,7 +212,7 @@ public class MavenDependencyDescriptor extends ExternalDependencyDescriptor {
         return Objects.hashCode(
             selector,
             scope,
-            optional,
+            type,
             excludes,
             dependencyArtifact);
     }

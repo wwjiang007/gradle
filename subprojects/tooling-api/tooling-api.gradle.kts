@@ -17,21 +17,21 @@
 import org.gradle.gradlebuild.testing.integrationtests.cleanup.WhenNotEmpty
 import accessors.*
 import org.gradle.build.BuildReceipt
-import org.gradle.gradlebuild.BuildEnvironment
-import org.gradle.gradlebuild.packaging.ShadedJarExtension
 import org.gradle.gradlebuild.test.integrationtests.IntegrationTest
 import org.gradle.gradlebuild.unittestandcompile.ModuleType
 import org.gradle.plugins.ide.eclipse.model.Classpath
+import org.gradle.plugins.ide.eclipse.model.SourceFolder
 
 plugins {
-    id("gradlebuild.shaded-jar")
+    `java-library`
+    gradlebuild.`shaded-jar`
 }
 
 val testPublishRuntime by configurations.creating
 
-val buildReceipt: Provider<RegularFile> = rootProject.tasks.withType<BuildReceipt>().named("createBuildReceipt").map { layout.file(provider { it.receiptFile }).get() }
+val buildReceipt: Provider<RegularFile> = rootProject.tasks.named<BuildReceipt>("createBuildReceipt").map { layout.file(provider { it.receiptFile }).get() }
 
-the<ShadedJarExtension>().apply {
+shadedJar {
     shadedConfiguration.exclude(mapOf("group" to "org.slf4j", "module" to "slf4j-api"))
     keepPackages.set(listOf("org.gradle.tooling"))
     unshadedPackages.set(listOf("org.gradle", "org.slf4j", "sun.misc"))
@@ -40,42 +40,69 @@ the<ShadedJarExtension>().apply {
 }
 
 dependencies {
-    compile(project(":core"))
-    compile(project(":messaging"))
-    compile(project(":wrapper"))
-    compile(project(":baseServices"))
-    publishCompile(library("slf4j_api")) { version { prefer(libraryVersion("slf4j_api")) } }
-    compile(library("jcip"))
+    implementation(project(":baseServices"))
+    implementation(project(":messaging"))
+    implementation(project(":logging"))
+    implementation(project(":coreApi"))
+    implementation(project(":core"))
+    implementation(project(":wrapper"))
 
-    testFixturesCompile(project(":baseServicesGroovy"))
-    testFixturesCompile(project(":internalIntegTesting"))
+    implementation(library("guava"))
 
-    integTestRuntime(project(":toolingApiBuilders"))
-    integTestRuntime(project(":ivy"))
+    publishImplementation(library("slf4j_api")) { version { prefer(libraryVersion("slf4j_api")) } }
 
-    crossVersionTestRuntime("org.gradle:gradle-kotlin-dsl:${BuildEnvironment.gradleKotlinDslVersion}")
-    crossVersionTestRuntime(project(":buildComparison"))
-    crossVersionTestRuntime(project(":ivy"))
-    crossVersionTestRuntime(project(":maven"))
+    testFixturesImplementation(project(":coreApi"))
+    testFixturesImplementation(project(":core"))
+    testFixturesImplementation(project(":modelCore"))
+    testFixturesImplementation(project(":baseServices"))
+    testFixturesImplementation(project(":baseServicesGroovy"))
+    testFixturesImplementation(project(":internalTesting"))
+    testFixturesImplementation(project(":internalIntegTesting"))
+    testFixturesImplementation(library("commons_io"))
+    testFixturesImplementation(library("slf4j_api"))
+
+    integTestImplementation(project(":jvmServices"))
+    integTestImplementation(project(":persistentCache"))
+    integTestRuntimeOnly(project(":toolingApiBuilders"))
+    integTestRuntimeOnly(project(":ivy"))
+
+    crossVersionTestImplementation(project(":jvmServices"))
+    crossVersionTestImplementation(testLibrary("jetty"))
+    crossVersionTestImplementation(library("commons_io"))
+
+    crossVersionTestRuntimeOnly(project(":kotlinDsl"))
+    crossVersionTestRuntimeOnly(project(":kotlinDslProviderPlugins"))
+    crossVersionTestRuntimeOnly(project(":kotlinDslToolingBuilders"))
+    crossVersionTestRuntimeOnly(project(":buildComparison"))
+    crossVersionTestRuntimeOnly(project(":ivy"))
+    crossVersionTestRuntimeOnly(project(":maven"))
+    crossVersionTestRuntimeOnly(project(":apiMetadata"))
+    crossVersionTestRuntimeOnly(project(":runtimeApiInfo"))
+    crossVersionTestRuntimeOnly(project(":testingJunitPlatform"))
+    crossVersionTestRuntimeOnly(testLibrary("cglib")) {
+        because("BuildFinishedCrossVersionSpec classpath inference requires cglib enhancer")
+    }
+
+    testImplementation(testFixtures(project(":core")))
+    testImplementation(testFixtures(project(":logging")))
+    testImplementation(testFixtures(project(":dependencyManagement")))
+    testImplementation(testFixtures(project(":ide")))
+    testImplementation(testFixtures(project(":workers")))
+
+    integTestRuntimeOnly(project(":runtimeApiInfo"))
 }
 
 gradlebuildJava {
-    moduleType = ModuleType.ENTRY_POINT
-}
-
-testFixtures {
-    from(":core")
-    from(":logging")
-    from(":dependencyManagement")
-    from(":ide")
+    moduleType = ModuleType.CORE
 }
 
 apply(from = "buildship.gradle")
 
-tasks.named("sourceJar").configureAs<Jar> {
+tasks.sourceJar {
     configurations.compile.allDependencies.withType<ProjectDependency>().forEach {
-        from(it.dependencyProject.java.sourceSets[SourceSet.MAIN_SOURCE_SET_NAME].groovy.srcDirs)
-        from(it.dependencyProject.java.sourceSets[SourceSet.MAIN_SOURCE_SET_NAME].java.srcDirs)
+        val sourceSet = it.dependencyProject.java.sourceSets[SourceSet.MAIN_SOURCE_SET_NAME]
+        from(sourceSet.groovy.srcDirs)
+        from(sourceSet.java.srcDirs)
     }
 }
 
@@ -83,15 +110,15 @@ eclipse {
     classpath {
         file.whenMerged(Action<Classpath> {
             //**TODO
-            entries.removeAll { path.contains("src/test/groovy") }
-            entries.removeAll { path.contains("src/integTest/groovy") }
+            entries.removeAll { it is SourceFolder && it.path.contains("src/test/groovy") }
+            entries.removeAll { it is SourceFolder && it.path.contains("src/integTest/groovy") }
         })
     }
 }
 
 tasks.register<Upload>("publishLocalArchives") {
     val repoBaseDir = rootProject.file("build/repo")
-    configuration = configurations.publishRuntime
+    configuration = configurations.publishRuntime.get()
     isUploadDescriptor = false
     repositories {
         ivy {

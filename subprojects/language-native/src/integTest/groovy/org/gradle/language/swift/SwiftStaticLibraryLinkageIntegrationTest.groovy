@@ -16,12 +16,19 @@
 
 package org.gradle.language.swift
 
+
 import org.gradle.nativeplatform.fixtures.app.SwiftLib
+import org.gradle.nativeplatform.fixtures.app.SwiftSourceElement
 
 class SwiftStaticLibraryLinkageIntegrationTest extends AbstractSwiftIntegrationTest {
     @Override
-    protected List<String> getTasksToAssembleDevelopmentBinary() {
-        return [":compileDebugSwift", ":createDebug"]
+    protected List<String> getTasksToAssembleDevelopmentBinary(String variant) {
+        return [":compileDebug${variant.capitalize()}Swift", ":createDebug${variant.capitalize()}"]
+    }
+
+    @Override
+    protected SwiftSourceElement getComponentUnderTest() {
+        return new SwiftLib()
     }
 
     @Override
@@ -35,6 +42,12 @@ class SwiftStaticLibraryLinkageIntegrationTest extends AbstractSwiftIntegrationT
     @Override
     String getDevelopmentBinaryCompileTask() {
         return ":compileDebugSwift"
+    }
+
+    @Override
+    void assertComponentUnderTestWasBuilt() {
+        file("build/modules/main/debug/${componentUnderTest.moduleName}.swiftmodule").assertIsFile()
+        staticLibrary("build/lib/main/debug/${componentUnderTest.moduleName}").assertExists()
     }
 
     @Override

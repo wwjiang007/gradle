@@ -81,10 +81,10 @@ class CalculateTaskGraphBuildOperationIntegrationTest extends AbstractIntegratio
 
     def "errors in calculating task graph are exposed"() {
         when:
-        fails('someNonExisting')
+        fails('someNonexistent')
 
         then:
-        operation().failure.contains("Task 'someNonExisting' not found in root project")
+        operation().failure.contains("Task 'someNonexistent' not found in root project")
     }
 
     def "build path for calculated task graph is exposed"() {
@@ -98,12 +98,12 @@ class CalculateTaskGraphBuildOperationIntegrationTest extends AbstractIntegratio
             apply plugin:'java'
             
             dependencies {
-                compile "org.acme:b:1.0"            
+                implementation "org.acme:b:1.0"            
             }
         """
 
         file("b/build.gradle") << """
-            apply plugin:'java'
+            apply plugin:'java-library'
             group = 'org.acme'
             version = '1.0'
         """
@@ -121,7 +121,7 @@ class CalculateTaskGraphBuildOperationIntegrationTest extends AbstractIntegratio
         taskGraphCalculations[1].details.buildPath == ":"
         taskGraphCalculations[1].result.requestedTaskPaths == [":build"]
         taskGraphCalculations[2].details.buildPath== ":b"
-        taskGraphCalculations[2].result.requestedTaskPaths == [":jar"]
+        taskGraphCalculations[2].result.requestedTaskPaths == [":compileJava", ":jar"]
     }
 
     private BuildOperationRecord operation() {

@@ -17,12 +17,11 @@ package org.gradle.api.internal;
 
 import groovy.lang.Closure;
 import org.gradle.api.Action;
+import org.gradle.api.NamedDomainObjectProvider;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.Namer;
-import org.gradle.api.provider.Provider;
 import org.gradle.internal.Cast;
-import org.gradle.internal.ImmutableActionSet;
 import org.gradle.internal.Transformers;
 import org.gradle.internal.metaobject.AbstractDynamicObject;
 import org.gradle.internal.metaobject.ConfigureDelegate;
@@ -39,16 +38,19 @@ public abstract class AbstractPolymorphicDomainObjectContainer<T>
 
     private final ContainerElementsDynamicObject elementsDynamicObject = new ContainerElementsDynamicObject();
 
-    protected AbstractPolymorphicDomainObjectContainer(Class<T> type, Instantiator instantiator, Namer<? super T> namer) {
-        super(type, instantiator, namer);
+    protected AbstractPolymorphicDomainObjectContainer(Class<T> type, Instantiator instantiator, Namer<? super T> namer, CollectionCallbackActionDecorator callbackDecorator) {
+        super(type, instantiator, namer, callbackDecorator);
     }
 
     protected abstract <U extends T> U doCreate(String name, Class<U> type);
 
+    @Override
     public <U extends T> U create(String name, Class<U> type) {
+        assertMutable("create(String, Class)");
         return create(name, type, null);
     }
 
+    @Override
     public <U extends T> U maybeCreate(String name, Class<U> type) throws InvalidUserDataException {
         T item = findByName(name);
         if (item != null) {
@@ -57,7 +59,9 @@ public abstract class AbstractPolymorphicDomainObjectContainer<T>
         return create(name, type);
     }
 
+    @Override
     public <U extends T> U create(String name, Class<U> type, Action<? super U> configuration) {
+        assertMutable("create(String, Class, Action)");
         assertCanAdd(name);
         U object = doCreate(name, type);
         add(object);
@@ -68,93 +72,35 @@ public abstract class AbstractPolymorphicDomainObjectContainer<T>
     }
 
     @Override
-    public <U extends T> Provider<U> register(String name, Class<U> type) throws InvalidUserDataException {
+    public <U extends T> NamedDomainObjectProvider<U> register(String name, Class<U> type) throws InvalidUserDataException {
+        assertMutable("register(String, Class)");
         return createDomainObjectProvider(name, type, null);
     }
 
     @Override
-    public <U extends T> Provider<U> register(String name, Class<U> type, Action<? super U> configurationAction) throws InvalidUserDataException {
+    public <U extends T> NamedDomainObjectProvider<U> register(String name, Class<U> type, Action<? super U> configurationAction) throws InvalidUserDataException {
+        assertMutable("register(String, Class, Action)");
         return createDomainObjectProvider(name, type, configurationAction);
     }
 
-    protected <U extends T> Provider<U> createDomainObjectProvider(String name, Class<U> type, @Nullable Action<? super U> configurationAction) {
+    protected <U extends T> NamedDomainObjectProvider<U> createDomainObjectProvider(String name, Class<U> type, @Nullable Action<? super U> configurationAction) {
         assertCanAdd(name);
-        Provider<U> provider = Cast.uncheckedCast(
-            getInstantiator().newInstance(DomainObjectCreatingProvider.class, AbstractPolymorphicDomainObjectContainer.this, name, type, configurationAction)
+        NamedDomainObjectProvider<U> provider = Cast.uncheckedCast(
+            getInstantiator().newInstance(NamedDomainObjectCreatingProvider.class, AbstractPolymorphicDomainObjectContainer.this, name, type, configurationAction)
         );
         addLater(provider);
         return provider;
     }
 
     // Cannot be private due to reflective instantiation
-    public class DomainObjectCreatingProvider<I extends T> extends AbstractDomainObjectProvider<I> {
-        private I object;
-        private Throwable cause;
-        private ImmutableActionSet<I> onCreate;
-        private final Class<I> type;
-
-        public DomainObjectCreatingProvider(String name, Class<I> type, @Nullable Action<? super I> configureAction) {
-            super(name);
-            this.type = type;
-            this.onCreate = ImmutableActionSet.<I>empty().mergeFrom(getEventRegister().getAddActions());
-
-            if (configureAction != null) {
-                configure(configureAction);
-            }
-        }
-
-        @Nullable
-        @Override
-        public Class<I> getType() {
-            return type;
+    public class NamedDomainObjectCreatingProvider<I extends T> extends AbstractDomainObjectCreatingProvider<I> {
+        public NamedDomainObjectCreatingProvider(String name, Class<I> type, @Nullable Action<? super I> configureAction) {
+            super(name, type, configureAction);
         }
 
         @Override
-        public boolean isPresent() {
-            return findDomainObject(getName()) != null;
-        }
-
-        public void configure(final Action<? super I> action) {
-            if (object != null) {
-                // Already realized, just run the action now
-                action.execute(object);
-                return;
-            }
-            // Collect any container level add actions then add the object specific action
-            onCreate = onCreate.mergeFrom(getEventRegister().getAddActions()).add(action);
-        }
-
-        @Override
-        public I getOrNull() {
-            if (cause != null) {
-                throw createIllegalStateException();
-            }
-            if (object == null) {
-                object = getType().cast(findByNameWithoutRules(getName()));
-                if (object == null) {
-                    try {
-                        // Collect any container level add actions added since the last call to configure()
-                        onCreate = onCreate.mergeFrom(getEventRegister().getAddActions());
-
-                        // Create the domain object
-                        object = doCreate(getName(), type);
-
-                        // Register the domain object
-                        add(object, onCreate);
-                    } catch (RuntimeException ex) {
-                        cause = ex;
-                        throw createIllegalStateException();
-                    } finally {
-                        // Discard state that is no longer required
-                        onCreate = ImmutableActionSet.empty();
-                    }
-                }
-            }
-            return object;
-        }
-
-        private IllegalStateException createIllegalStateException() {
-            return new IllegalStateException(String.format("Could not create domain object '%s' (%s)", getName(), getType().getSimpleName()), cause);
+        protected I createDomainObject() {
+            return doCreate(getName(), getType());
         }
     }
 
@@ -216,6 +162,7 @@ public abstract class AbstractPolymorphicDomainObjectContainer<T>
         }
     }
 
+    @Override
     public <U extends T> NamedDomainObjectContainer<U> containerWithType(Class<U> type) {
         return getInstantiator().newInstance(TypedDomainObjectContainerWrapper.class, type, this);
     }

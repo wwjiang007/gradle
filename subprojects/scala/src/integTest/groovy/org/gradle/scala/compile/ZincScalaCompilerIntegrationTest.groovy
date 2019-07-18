@@ -37,6 +37,7 @@ class ZincScalaCompilerIntegrationTest extends MultiVersionIntegrationSpec {
     def setup() {
         args("-PscalaVersion=$version")
         buildFile << buildScript()
+        executer.withRepositoryMirrors()
     }
 
     def compileGoodCode() {
@@ -134,7 +135,7 @@ compileScala.scalaCompileOptions.failOnError = false
             ${mavenCentralRepository()}
 
             dependencies {
-                compile 'org.scala-lang:scala-library:2.11.12'
+                implementation 'org.scala-lang:scala-library:2.11.12'
             }
             
             tasks.withType(ScalaCompile) { 
@@ -240,7 +241,7 @@ repositories {
 }
 
 dependencies {
-    compile "org.scala-lang:scala-library:$version"
+    implementation "org.scala-lang:scala-library:$version"
 }
 """
     }

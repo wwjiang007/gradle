@@ -17,10 +17,8 @@
 package org.gradle.language.nativeplatform.internal.incremental;
 
 import com.google.common.collect.ImmutableSet;
-import org.gradle.api.internal.changedetection.state.FileSystemSnapshotter;
-import org.gradle.api.internal.changedetection.state.mirror.PhysicalSnapshot;
-import org.gradle.internal.file.FileType;
 import org.gradle.internal.hash.HashCode;
+import org.gradle.internal.snapshot.FileSystemSnapshotter;
 import org.gradle.language.nativeplatform.internal.Include;
 import org.gradle.language.nativeplatform.internal.IncludeDirectives;
 import org.gradle.language.nativeplatform.internal.IncludeType;
@@ -44,23 +42,25 @@ public class IncrementalCompileFilesFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(IncrementalCompileFilesFactory.class);
     private static final String IGNORE_UNRESOLVED_HEADERS_IN_DEPENDENCIES_PROPERTY_NAME = "org.gradle.internal.native.headers.unresolved.dependencies.ignore";
 
+    private final IncludeDirectives initialIncludeDirectives;
     private final SourceIncludesParser sourceIncludesParser;
     private final SourceIncludesResolver sourceIncludesResolver;
     private final FileSystemSnapshotter fileSystemSnapshotter;
     private final boolean ignoreUnresolvedHeadersInDependencies;
 
-    public IncrementalCompileFilesFactory(SourceIncludesParser sourceIncludesParser, SourceIncludesResolver sourceIncludesResolver, FileSystemSnapshotter fileSystemSnapshotter) {
+    public IncrementalCompileFilesFactory(IncludeDirectives initialIncludeDirectives, SourceIncludesParser sourceIncludesParser, SourceIncludesResolver sourceIncludesResolver, FileSystemSnapshotter fileSystemSnapshotter) {
+        this.initialIncludeDirectives = initialIncludeDirectives;
         this.sourceIncludesParser = sourceIncludesParser;
         this.sourceIncludesResolver = sourceIncludesResolver;
         this.fileSystemSnapshotter = fileSystemSnapshotter;
         this.ignoreUnresolvedHeadersInDependencies = Boolean.getBoolean(IGNORE_UNRESOLVED_HEADERS_IN_DEPENDENCIES_PROPERTY_NAME);
     }
 
-    public IncementalCompileSourceProcessor files(CompilationState previousCompileState) {
-        return new DefaultIncementalCompileSourceProcessor(previousCompileState);
+    public IncrementalCompileSourceProcessor files(CompilationState previousCompileState) {
+        return new DefaultIncrementalCompileSourceProcessor(previousCompileState);
     }
 
-    private class DefaultIncementalCompileSourceProcessor implements IncementalCompileSourceProcessor {
+    private class DefaultIncrementalCompileSourceProcessor implements IncrementalCompileSourceProcessor {
         private final CompilationState previous;
         private final BuildableCompilationState current = new BuildableCompilationState();
         private final List<File> toRecompile = new ArrayList<File>();
@@ -68,7 +68,7 @@ public class IncrementalCompileFilesFactory {
         private final Map<File, FileDetails> visitedFiles = new HashMap<File, FileDetails>();
         private boolean hasUnresolvedHeaders;
 
-        DefaultIncementalCompileSourceProcessor(CompilationState previousCompileState) {
+        DefaultIncrementalCompileSourceProcessor(CompilationState previousCompileState) {
             this.previous = previousCompileState == null ? new CompilationState() : previousCompileState;
         }
 
@@ -88,12 +88,11 @@ public class IncrementalCompileFilesFactory {
          * @return true if this source file requires recompilation, false otherwise.
          */
         private boolean visitSourceFile(File sourceFile) {
-            PhysicalSnapshot fileSnapshot = fileSystemSnapshotter.snapshotSelf(sourceFile);
-            if (fileSnapshot.getType() != FileType.RegularFile) {
+            HashCode fileContent = fileSystemSnapshotter.getRegularFileContentHash(sourceFile);
+            if (fileContent == null) {
                 // Skip things that aren't files
                 return false;
             }
-            HashCode fileContent = fileSnapshot.getContentHash();
 
             SourceFileState previousState = previous.getState(sourceFile);
 
@@ -114,7 +113,7 @@ public class IncrementalCompileFilesFactory {
             // Source file has not been compiled before, or its include file graph has changed in some way
             // Calculate the include file graph for the source file and mark for recompilation
 
-            CollectingMacroLookup visibleMacros = new CollectingMacroLookup();
+            CollectingMacroLookup visibleMacros = new CollectingMacroLookup(initialIncludeDirectives);
             FileVisitResult result = visitFile(sourceFile, fileContent, visibleMacros, new HashSet<HashCode>(), existingHeaders);
             Set<IncludeFileEdge> includedFiles = new LinkedHashSet<IncludeFileEdge>();
             result.collectFilesInto(includedFiles, new HashSet<File>());

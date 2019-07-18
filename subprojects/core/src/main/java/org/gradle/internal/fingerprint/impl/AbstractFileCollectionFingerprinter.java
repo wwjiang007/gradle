@@ -18,24 +18,14 @@ package org.gradle.internal.fingerprint.impl;
 
 import org.gradle.api.NonNullApi;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.cache.StringInterner;
-import org.gradle.api.internal.changedetection.state.FileSystemSnapshotter;
-import org.gradle.api.internal.changedetection.state.mirror.FileSystemSnapshot;
-import org.gradle.api.internal.changedetection.state.mirror.PhysicalSnapshot;
-import org.gradle.api.internal.file.FileCollectionInternal;
-import org.gradle.api.internal.file.FileCollectionVisitor;
-import org.gradle.api.internal.file.FileTreeInternal;
-import org.gradle.api.internal.file.collections.DirectoryFileTree;
-import org.gradle.api.internal.file.collections.DirectoryFileTreeFactory;
 import org.gradle.internal.fingerprint.CurrentFileCollectionFingerprint;
 import org.gradle.internal.fingerprint.FileCollectionFingerprint;
 import org.gradle.internal.fingerprint.FileCollectionFingerprinter;
+import org.gradle.internal.fingerprint.FileCollectionSnapshotter;
 import org.gradle.internal.fingerprint.FingerprintingStrategy;
-import org.gradle.internal.serialize.SerializerRegistry;
-import org.gradle.internal.serialize.Serializers;
+import org.gradle.internal.snapshot.FileSystemLocationSnapshot;
+import org.gradle.internal.snapshot.FileSystemSnapshot;
 
-import java.io.File;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -43,74 +33,32 @@ import java.util.List;
  */
 @NonNullApi
 public abstract class AbstractFileCollectionFingerprinter implements FileCollectionFingerprinter {
-    private final StringInterner stringInterner;
-    private final DirectoryFileTreeFactory directoryFileTreeFactory;
-    private final FileSystemSnapshotter fileSystemSnapshotter;
+    private final FileCollectionSnapshotter fileCollectionSnapshotter;
+    private final FingerprintingStrategy fingerprintingStrategy;
 
-    public AbstractFileCollectionFingerprinter(StringInterner stringInterner, DirectoryFileTreeFactory directoryFileTreeFactory, FileSystemSnapshotter fileSystemSnapshotter) {
-        this.stringInterner = stringInterner;
-        this.directoryFileTreeFactory = directoryFileTreeFactory;
-        this.fileSystemSnapshotter = fileSystemSnapshotter;
+    public AbstractFileCollectionFingerprinter(FingerprintingStrategy fingerprintingStrategy, FileCollectionSnapshotter fileCollectionSnapshotter) {
+        this.fileCollectionSnapshotter = fileCollectionSnapshotter;
+        this.fingerprintingStrategy = fingerprintingStrategy;
     }
 
-    public void registerSerializers(SerializerRegistry registry) {
-        registry.register(DefaultHistoricalFileCollectionFingerprint.class, new DefaultHistoricalFileCollectionFingerprint.SerializerImpl(stringInterner));
-        registry.register(EmptyFileCollectionFingerprint.class, Serializers.constant(EmptyFileCollectionFingerprint.INSTANCE));
+    @Override
+    public CurrentFileCollectionFingerprint fingerprint(FileCollection files) {
+        List<FileSystemSnapshot> roots = fileCollectionSnapshotter.snapshot(files);
+        return DefaultCurrentFileCollectionFingerprint.from(roots, fingerprintingStrategy);
     }
 
-    public CurrentFileCollectionFingerprint fingerprint(FileCollection input, FingerprintingStrategy strategy) {
-        FileCollectionInternal fileCollection = (FileCollectionInternal) input;
-        FileCollectionVisitorImpl visitor = new FileCollectionVisitorImpl();
-        fileCollection.visitRootElements(visitor);
-        List<FileSystemSnapshot> roots = visitor.getRoots();
-        if (roots.isEmpty()) {
-            return EmptyFileCollectionFingerprint.INSTANCE;
-        }
-        return DefaultCurrentFileCollectionFingerprint.from(roots, strategy);
+    @Override
+    public CurrentFileCollectionFingerprint fingerprint(Iterable<? extends FileSystemSnapshot> roots) {
+        return DefaultCurrentFileCollectionFingerprint.from(roots, fingerprintingStrategy);
     }
 
-    protected StringInterner getStringInterner() {
-        return stringInterner;
+    @Override
+    public String normalizePath(FileSystemLocationSnapshot root) {
+        return fingerprintingStrategy.normalizePath(root);
     }
 
-    private class FileCollectionVisitorImpl implements FileCollectionVisitor {
-        private final List<FileSystemSnapshot> roots = new ArrayList<FileSystemSnapshot>();
-
-        @Override
-        public void visitCollection(FileCollectionInternal fileCollection) {
-            for (File file : fileCollection) {
-                PhysicalSnapshot fileSnapshot = fileSystemSnapshotter.snapshotSelf(file);
-                switch (fileSnapshot.getType()) {
-                    case Missing:
-                        roots.add(fileSnapshot);
-                        break;
-                    case RegularFile:
-                        roots.add(fileSnapshot);
-                        break;
-                    case Directory:
-                        // Collect the directory and its contents
-                        visitDirectoryTree(directoryFileTreeFactory.create(file));
-                        break;
-                    default:
-                        throw new AssertionError();
-                }
-            }
-        }
-
-        @Override
-        public void visitTree(FileTreeInternal fileTree) {
-            FileSystemSnapshot treeSnapshot = fileSystemSnapshotter.snapshotTree(fileTree);
-            roots.add(treeSnapshot);
-        }
-
-        @Override
-        public void visitDirectoryTree(DirectoryFileTree directoryTree) {
-            FileSystemSnapshot treeSnapshot = fileSystemSnapshotter.snapshotDirectoryTree(directoryTree);
-            roots.add(treeSnapshot);
-        }
-
-        public List<FileSystemSnapshot> getRoots() {
-            return roots;
-        }
+    @Override
+    public CurrentFileCollectionFingerprint empty() {
+        return fingerprintingStrategy.getEmptyFingerprint();
     }
 }

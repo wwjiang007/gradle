@@ -28,6 +28,7 @@ import org.gradle.api.internal.tasks.compile.incremental.classpath.ClasspathSnap
 import org.gradle.api.internal.tasks.compile.incremental.classpath.ClasspathSnapshotProvider;
 import org.gradle.api.internal.tasks.compile.incremental.processing.AnnotationProcessingData;
 import org.gradle.api.internal.tasks.compile.incremental.processing.AnnotationProcessingResult;
+import org.gradle.api.internal.tasks.compile.incremental.processing.GeneratedResource;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.PreviousCompilationData;
 import org.gradle.api.internal.tasks.compile.processing.AnnotationProcessorDeclaration;
 import org.gradle.api.tasks.WorkResult;
@@ -40,14 +41,14 @@ import java.util.Set;
 /**
  * Stores the incremental class dependency analysis after compilation has finished.
  */
-class IncrementalResultStoringCompiler implements Compiler<JavaCompileSpec> {
+class IncrementalResultStoringCompiler<T extends JavaCompileSpec> implements Compiler<T> {
 
-    private final Compiler<JavaCompileSpec> delegate;
+    private final Compiler<T> delegate;
     private final ClasspathSnapshotProvider classpathSnapshotProvider;
     private final Stash<PreviousCompilationData> stash;
     private final StringInterner interner;
 
-    IncrementalResultStoringCompiler(Compiler<JavaCompileSpec> delegate, ClasspathSnapshotProvider classpathSnapshotProvider, Stash<PreviousCompilationData> stash, StringInterner interner) {
+    IncrementalResultStoringCompiler(Compiler<T> delegate, ClasspathSnapshotProvider classpathSnapshotProvider, Stash<PreviousCompilationData> stash, StringInterner interner) {
         this.delegate = delegate;
         this.classpathSnapshotProvider = classpathSnapshotProvider;
         this.stash = stash;
@@ -55,7 +56,7 @@ class IncrementalResultStoringCompiler implements Compiler<JavaCompileSpec> {
     }
 
     @Override
-    public WorkResult execute(JavaCompileSpec spec) {
+    public WorkResult execute(T spec) {
         WorkResult result = delegate.execute(spec);
         if (result instanceof RecompilationNotNecessary) {
             return result;
@@ -80,14 +81,16 @@ class IncrementalResultStoringCompiler implements Compiler<JavaCompileSpec> {
             AnnotationProcessingResult processingResult = ((JdkJavaCompilerResult) result).getAnnotationProcessingResult();
             return convertProcessingResult(processingResult);
         }
-        return new AnnotationProcessingData(ImmutableMap.<String, Set<String>>of(), ImmutableSet.<String>of(), ImmutableSet.<String>of(), "the chosen compiler did not support incremental annotation processing");
+        return new AnnotationProcessingData(ImmutableMap.<String, Set<String>>of(), ImmutableSet.<String>of(), ImmutableSet.<String>of(), ImmutableMap.<String, Set<GeneratedResource>>of(), ImmutableSet.<GeneratedResource>of(), "the chosen compiler did not support incremental annotation processing");
     }
 
     private AnnotationProcessingData convertProcessingResult(AnnotationProcessingResult processingResult) {
         Map<String, Set<String>> generatedTypesByOrigin = processingResult.getGeneratedTypesWithIsolatedOrigin();
+        Map<String, Set<GeneratedResource>> generatedResourcesByOrigin = processingResult.getGeneratedResourcesWithIsolatedOrigin();
         Set<String> aggregatedTypes = processingResult.getAggregatedTypes();
         Set<String> aggregatingTypes = processingResult.getGeneratedAggregatingTypes();
-        return new AnnotationProcessingData(intern(generatedTypesByOrigin), intern(aggregatedTypes), intern(aggregatingTypes), processingResult.getFullRebuildCause());
+        Set<GeneratedResource> aggregatingResources = processingResult.getGeneratedAggregatingResources();
+        return new AnnotationProcessingData(intern(generatedTypesByOrigin), intern(aggregatedTypes), intern(aggregatingTypes), generatedResourcesByOrigin, aggregatingResources, processingResult.getFullRebuildCause());
     }
 
     private Set<String> intern(Set<String> types) {

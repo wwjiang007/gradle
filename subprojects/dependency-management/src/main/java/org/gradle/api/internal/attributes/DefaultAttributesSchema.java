@@ -16,14 +16,13 @@
 
 package org.gradle.api.internal.attributes;
 
+import com.google.common.base.Objects;
 import com.google.common.collect.Maps;
 import org.gradle.api.Action;
 import org.gradle.api.attributes.Attribute;
 import org.gradle.api.attributes.AttributeMatchingStrategy;
 import org.gradle.api.attributes.AttributesSchema;
 import org.gradle.api.attributes.HasAttributes;
-import org.gradle.api.internal.InstantiatorFactory;
-import org.gradle.api.internal.changedetection.state.isolation.IsolatableFactory;
 import org.gradle.internal.Cast;
 import org.gradle.internal.component.model.AttributeMatcher;
 import org.gradle.internal.component.model.AttributeSelectionSchema;
@@ -31,6 +30,8 @@ import org.gradle.internal.component.model.AttributeSelectionUtils;
 import org.gradle.internal.component.model.ComponentAttributeMatcher;
 import org.gradle.internal.component.model.DefaultCompatibilityCheckResult;
 import org.gradle.internal.component.model.DefaultMultipleCandidateResult;
+import org.gradle.internal.instantiation.InstantiatorFactory;
+import org.gradle.internal.isolation.IsolatableFactory;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
@@ -75,7 +76,7 @@ public class DefaultAttributesSchema implements AttributesSchemaInternal, Attrib
     public <T> AttributeMatchingStrategy<T> attribute(Attribute<T> attribute, Action<? super AttributeMatchingStrategy<T>> configureAction) {
         AttributeMatchingStrategy<T> strategy = Cast.uncheckedCast(strategies.get(attribute));
         if (strategy == null) {
-            strategy = Cast.uncheckedCast(instantiatorFactory.decorate().newInstance(DefaultAttributeMatchingStrategy.class, instantiatorFactory, isolatableFactory));
+            strategy = Cast.uncheckedCast(instantiatorFactory.decorateLenient().newInstance(DefaultAttributeMatchingStrategy.class, instantiatorFactory, isolatableFactory));
             strategies.put(attribute, strategy);
             attributesByName.put(attribute.getName(), attribute);
         }
@@ -156,6 +157,7 @@ public class DefaultAttributesSchema implements AttributesSchemaInternal, Attrib
             return componentAttributeMatcher.match(effectiveSchema, candidates, requested, fallback);
         }
 
+        @Override
         public List<MatchingDescription> describeMatching(AttributeContainerInternal candidate, AttributeContainerInternal requested) {
             return componentAttributeMatcher.describeMatching(effectiveSchema, candidate, requested);
         }
@@ -265,6 +267,22 @@ public class DefaultAttributesSchema implements AttributesSchemaInternal, Attrib
             return attributes;
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            MergedSchema that = (MergedSchema) o;
+            return producerSchema.equals(that.producerSchema);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(producerSchema);
+        }
     }
 
     /**

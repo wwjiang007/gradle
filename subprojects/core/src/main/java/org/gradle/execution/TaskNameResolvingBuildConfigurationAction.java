@@ -18,6 +18,7 @@ package org.gradle.execution;
 import org.gradle.TaskExecutionRequest;
 import org.gradle.api.internal.GradleInternal;
 import org.gradle.execution.commandline.CommandLineTaskParser;
+import org.gradle.execution.taskgraph.TaskExecutionGraphInternal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +36,7 @@ public class TaskNameResolvingBuildConfigurationAction implements BuildConfigura
         this.commandLineTaskParser = commandLineTaskParser;
     }
 
+    @Override
     public void configure(BuildExecutionContext context) {
         GradleInternal gradle = context.getGradle();
         TaskExecutionGraphInternal taskGraph = gradle.getTaskGraph();
@@ -44,7 +46,7 @@ public class TaskNameResolvingBuildConfigurationAction implements BuildConfigura
             List<TaskSelector.TaskSelection> taskSelections = commandLineTaskParser.parseTasks(taskParameter);
             for (TaskSelector.TaskSelection taskSelection : taskSelections) {
                 LOGGER.info("Selected primary task '{}' from project {}", taskSelection.getTaskName(), taskSelection.getProjectPath());
-                taskGraph.addTasks(taskSelection.getTasks());
+                taskGraph.addEntryTasks(taskSelection.getTasks());
             }
         }
 

@@ -18,12 +18,11 @@ package org.gradle.jvm.tasks;
 
 import groovy.lang.Closure;
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.file.FileCopyDetails;
 import org.gradle.api.internal.file.collections.FileTreeAdapter;
-import org.gradle.api.internal.file.collections.MapFileTree;
+import org.gradle.api.internal.file.collections.GeneratedSingletonFileTree;
 import org.gradle.api.internal.file.copy.CopySpecInternal;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.java.archives.Manifest;
@@ -42,7 +41,6 @@ import java.util.concurrent.Callable;
 /**
  * Assembles a JAR archive.
  */
-@Incubating
 public class Jar extends Zip {
 
     public static final String DEFAULT_EXTENSION = "jar";
@@ -51,16 +49,17 @@ public class Jar extends Zip {
     private final CopySpecInternal metaInf;
 
     public Jar() {
-        setExtension(DEFAULT_EXTENSION);
+        getArchiveExtension().set(DEFAULT_EXTENSION);
         setMetadataCharset("UTF-8");
 
         manifest = new DefaultManifest(getFileResolver());
         // Add these as separate specs, so they are not affected by the changes to the main spec
         metaInf = (CopySpecInternal) getRootSpec().addFirst().into("META-INF");
         metaInf.addChild().from(new Callable<FileTreeAdapter>() {
+            @Override
             public FileTreeAdapter call() throws Exception {
-                MapFileTree manifestSource = new MapFileTree(getTemporaryDirFactory(), getFileSystem(), getDirectoryFileTreeFactory());
-                manifestSource.add("MANIFEST.MF", new Action<OutputStream>() {
+                GeneratedSingletonFileTree manifestSource = new GeneratedSingletonFileTree(getTemporaryDirFactory(), "MANIFEST.MF", new Action<OutputStream>() {
+                    @Override
                     public void execute(OutputStream outputStream) {
                         Manifest manifest = getManifest();
                         if (manifest == null) {
@@ -80,6 +79,7 @@ public class Jar extends Zip {
             }
         });
         getMainSpec().appendCachingSafeCopyAction(new Action<FileCopyDetails>() {
+            @Override
             public void execute(FileCopyDetails details) {
                 if (details.getPath().equalsIgnoreCase("META-INF/MANIFEST.MF")) {
                     details.exclude();
@@ -123,7 +123,6 @@ public class Jar extends Zip {
      * @since 2.14
      */
     @Input
-    @Incubating
     public String getManifestContentCharset() {
         return manifestContentCharset;
     }
@@ -135,7 +134,6 @@ public class Jar extends Zip {
      * @see #getManifestContentCharset()
      * @since 2.14
      */
-    @Incubating
     public void setManifestContentCharset(String manifestContentCharset) {
         if (manifestContentCharset == null) {
             throw new InvalidUserDataException("manifestContentCharset must not be null");

@@ -16,16 +16,16 @@
 
 package org.gradle.integtests.samples
 
-import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.AbstractSampleIntegrationTest
 import org.gradle.integtests.fixtures.Sample
 import org.gradle.integtests.fixtures.UsesSample
 import org.gradle.test.fixtures.archive.JarTestFixture
 import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.junit.Rule
 
-import static org.hamcrest.Matchers.containsString
+import static org.hamcrest.CoreMatchers.containsString
 
-class SamplesGroovyMultiProjectIntegrationTest extends AbstractIntegrationSpec {
+class SamplesGroovyMultiProjectIntegrationTest extends AbstractSampleIntegrationTest {
     @Rule public final Sample sample = new Sample(temporaryFolder)
     private final static String TEST_PROJECT_NAME = "testproject"
 

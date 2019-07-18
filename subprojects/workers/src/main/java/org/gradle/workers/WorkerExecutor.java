@@ -28,7 +28,7 @@ import org.gradle.api.Incubating;
  *     <li>Safe execution of multiple tasks in parallel</li>
  * </ul>
  *
- * Work should be submitted with a {@link Runnable} class representing the implementation of the unit of work
+ * <p>Work should be submitted with a {@link Runnable} class representing the implementation of the unit of work
  * and an action to configure the unit of work (via {@link WorkerConfiguration}).
  *
  * <pre>
@@ -41,9 +41,11 @@ import org.gradle.api.Incubating;
  *      }
  * </pre>
  *
+ * <p>
+ * An instance of the executor can be injected into a task by annotating a public constructor or property getter method with {@code javax.inject.Inject}.
+ *
  * @since 3.5
  */
-@Incubating
 public interface WorkerExecutor {
     /**
      * Submits a piece of work to be executed asynchronously.
@@ -54,7 +56,22 @@ public interface WorkerExecutor {
      * in the {@link WorkerConfiguration}.  If no idle daemons are available, a new daemon will be started.  Any errors
      * will be thrown from {@link #await()} or from the surrounding task action if {@link #await()} is not used.
      */
+    @Deprecated
     void submit(Class<? extends Runnable> actionClass, Action<? super WorkerConfiguration> configAction);
+
+    /**
+     * Submits a piece of work to be executed asynchronously.
+     *
+     * Execution of the work may begin immediately.
+     *
+     * Work configured with {@link IsolationMode#PROCESS} will execute in an idle daemon that meets the requirements set
+     * in the {@link WorkerSpec}.  If no idle daemons are available, a new daemon will be started.  Any errors
+     * will be thrown from {@link #await()} or from the surrounding task action if {@link #await()} is not used.
+     *
+     * @since 5.6
+     */
+    @Incubating
+    <T extends WorkerParameters> void execute(Class<? extends WorkerExecution<T>> workerExecutionClass, Action<? super WorkerSpec<T>> configAction);
 
     /**
      * Blocks until all work associated with the current build operation is complete.  Note that when using this method inside

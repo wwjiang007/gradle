@@ -16,6 +16,7 @@
 
 package org.gradle.smoketests
 
+import org.gradle.integtests.fixtures.android.AndroidHome
 import org.gradle.testkit.runner.TaskOutcome
 import spock.lang.Unroll
 
@@ -28,21 +29,9 @@ import spock.lang.Unroll
  *
  */
 class AndroidPluginsSmokeTest extends AbstractSmokeTest {
-    public static final ANDROID_BUILD_TOOLS_VERSION = '27.0.3'
-    public static final String STABLE_ANDROID_2X_VERSION = '2.3.3'
-    public static final String STABLE_ANDROID_3X_VERSION = '3.1.0'
-    public static final TESTED_ANDROID_PLUGIN_VERSIONS = [STABLE_ANDROID_2X_VERSION, STABLE_ANDROID_3X_VERSION]
 
     def setup() {
-        assertAndroidHomeSet()
-    }
-
-    static void assertAndroidHomeSet() {
-        assert System.getenv().containsKey('ANDROID_HOME'): '''
-            In order to run these tests the ANDROID_HOME directory must be set.
-            It is not necessary to install the whole android SDK via Android Studio - it is enough if there is a $ANDROID_HOME/licenses/android-sdk-license containing the license keys from an Android Studio installation.
-            The Gradle Android plugin will then download the SDK by itself, see https://developer.android.com/studio/intro/update.html#download-with-gradle
-        '''.stripIndent()
+        AndroidHome.assertIsSet()
     }
 
     @Unroll
@@ -95,7 +84,7 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
         result.task(':compileReleaseJavaWithJavac').outcome == TaskOutcome.SUCCESS
 
         where:
-        pluginVersion << TESTED_ANDROID_PLUGIN_VERSIONS
+        pluginVersion << TestedVersions.androidGradle
     }
 
     @Unroll
@@ -153,21 +142,26 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
             }
         """
 
-        file("${app}/build.gradle") << """
+        def appBuildFile = file("${app}/build.gradle")
+        appBuildFile << """
             apply plugin: 'com.android.application'
 
             android.defaultConfig.applicationId "org.gradle.android.myapplication"
-
-        """.stripIndent() << androidPluginConfiguration() << activityDependency() <<
         """
+        appBuildFile << androidPluginConfiguration()
+        appBuildFile << activityDependency()
+        appBuildFile << """
             dependencies {
                 compile project(':${library}')
             }
-        """.stripIndent()
+        """
 
-        file("${library}/build.gradle") << """
+        def libraryBuildFile = file("${library}/build.gradle")
+        libraryBuildFile << """
             apply plugin: 'com.android.library'
-            """.stripIndent() << androidPluginConfiguration() << activityDependency()
+        """
+        libraryBuildFile << androidPluginConfiguration()
+        libraryBuildFile << activityDependency()
 
         when:
         def result = runner('build', '-x', 'lint').build()
@@ -178,7 +172,7 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
         result.task(':app:compileReleaseJavaWithJavac').outcome == TaskOutcome.SUCCESS
 
         where:
-        pluginVersion << TESTED_ANDROID_PLUGIN_VERSIONS
+        pluginVersion << TestedVersions.androidGradle
     }
 
     private String activityDependency() {
@@ -252,11 +246,11 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
         """
             android {
                 compileSdkVersion 22
-                buildToolsVersion "${ANDROID_BUILD_TOOLS_VERSION}"
+                buildToolsVersion "${TestedVersions.androidTools}"
 
                 defaultConfig {
                     minSdkVersion 22
-                    targetSdkVersion 23
+                    targetSdkVersion 26
                     versionCode 1
                     versionName "1.0"
                 }

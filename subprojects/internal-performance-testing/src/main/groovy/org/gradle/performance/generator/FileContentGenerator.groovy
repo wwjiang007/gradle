@@ -16,7 +16,9 @@
 
 package org.gradle.performance.generator
 
-import static org.gradle.test.fixtures.dsl.GradleDsl.GROOVY
+import org.gradle.test.fixtures.dsl.GradleDsl
+import org.gradle.test.fixtures.language.Language
+
 import static org.gradle.test.fixtures.dsl.GradleDsl.KOTLIN
 
 abstract class FileContentGenerator {
@@ -25,7 +27,7 @@ abstract class FileContentGenerator {
         switch (config.dsl) {
             case KOTLIN:
                 return new KotlinDslFileContentGenerator(config)
-            case GROOVY:
+            case GradleDsl.GROOVY:
                 return new GroovyDslFileContentGenerator(config)
         }
     }
@@ -36,7 +38,7 @@ abstract class FileContentGenerator {
         this.config = config
     }
 
-    def generateBuildGradle(Integer subProjectNumber, DependencyTree dependencyTree) {
+    def generateBuildGradle(Language language, Integer subProjectNumber, DependencyTree dependencyTree) {
         def isRoot = subProjectNumber == null
         if (isRoot && config.subProjects > 0) {
             if (config.compositeBuild) {
@@ -51,6 +53,7 @@ abstract class FileContentGenerator {
         import org.gradle.util.GradleVersion
 
         ${missingJavaLibrarySupportFlag()}
+        ${noJavaLibraryPluginFlag()}
 
         ${config.plugins.collect { decideOnJavaPlugin(it, dependencyTree.hasParentProject(subProjectNumber)) }.join("\n        ")}
         
@@ -58,6 +61,15 @@ abstract class FileContentGenerator {
             ${config.repositories.join("\n            ")}
         }
         ${dependenciesBlock('api', 'implementation', 'testImplementation', subProjectNumber, dependencyTree)}             
+
+        allprojects {
+            dependencies{
+        ${
+            language == Language.GROOVY ? directDependencyDeclaration('implementation', 'org.codehaus.groovy:groovy:2.5.7') : ""
+        }
+            }
+        }
+
 
         ${tasksConfiguration()}
 
@@ -93,6 +105,8 @@ abstract class FileContentGenerator {
             }
             """ 
             ${(0..config.subProjects - 1).collect { "include(\"project$it\")" }.join("\n")}
+
+            ${config.featurePreviews.collect { "enableFeaturePreview(\"$it\")" }.join("\n")}
             """
         }
     }
@@ -108,38 +122,34 @@ abstract class FileContentGenerator {
         compilerMemory=${config.compilerMemory}
         testRunnerMemory=${config.testRunnerMemory}
         testForkEvery=${config.testForkEvery}
+        ${->
+            config.systemProperties.entrySet().collect { "systemProp.${it.key}=${it.value}" }.join("\n")
+        }
         """
     }
 
     def generatePomXML(Integer subProjectNumber, DependencyTree dependencyTree) {
-        def body
+        def body = ""
+        def isParent = subProjectNumber == null || config.subProjects == 0
         def hasSources = subProjectNumber != null || config.subProjects == 0
-        if (!hasSources) {
-            body = """
-            <modules>
-                ${(0..config.subProjects - 1).collect { "<module>project$it</module>" }.join("\n                ")}
-            </modules>
-            """
-        } else {
-            def subProjectNumbers = dependencyTree.getChildProjectIds(subProjectNumber)
-            def subProjectDependencies = ''
-            if (subProjectNumbers?.size() > 0) {
-                subProjectDependencies = subProjectNumbers.collect { convertToPomDependency("org.gradle.test.performance:project$it:1.0") }.join()
+        if (isParent) {
+            if (config.subProjects != 0) {
+                body += """
+                    <modules>
+                        ${(0..config.subProjects - 1).collect { "<module>project$it</module>" }.join("\n                ")}
+                    </modules>
+                """
             }
-            body = """
-            <dependencies>
-                ${config.externalApiDependencies.collect { convertToPomDependency(it) }.join()}
-                ${config.externalImplementationDependencies.collect { convertToPomDependency(it) }.join()}
-                ${convertToPomDependency('junit:junit:4.12', 'test')}
-                ${subProjectDependencies}
-            </dependencies>
+            body += """
             <build>
                 <plugins>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-compiler-plugin</artifactId>
-                        <version>3.6.1</version>
+                        <version>3.8.0</version>
                         <configuration>
+                            <source>1.8</source>
+                            <target>1.8</target>
                             <fork>true</fork>
                             <meminitial>${config.compilerMemory}</meminitial>
                             <maxmem>${config.compilerMemory}</maxmem>
@@ -171,6 +181,29 @@ abstract class FileContentGenerator {
                     </plugin>
                 </plugins>
             </build>
+            """
+        } else {
+            body += """
+                <parent>
+                    <groupId>org.gradle.test.performance</groupId>
+                    <artifactId>project</artifactId>
+                    <version>1.0</version>
+                </parent>
+            """
+        }
+        if (hasSources) {
+            def subProjectNumbers = dependencyTree.getChildProjectIds(subProjectNumber)
+            def subProjectDependencies = ''
+            if (subProjectNumbers?.size() > 0) {
+                subProjectDependencies = subProjectNumbers.collect { convertToPomDependency("org.gradle.test.performance:project$it:1.0") }.join()
+            }
+            body += """
+            <dependencies>
+                ${config.externalApiDependencies.collect { convertToPomDependency(it) }.join()}
+                ${config.externalImplementationDependencies.collect { convertToPomDependency(it) }.join()}
+                ${convertToPomDependency('junit:junit:4.12', 'test')}
+                ${subProjectDependencies}
+            </dependencies>
             """
         }
         """
@@ -363,7 +396,7 @@ abstract class FileContentGenerator {
         if (plugin.contains('java')) {
             if (projectHasParents) {
                 return """
-                    if(missingJavaLibrarySupport) {
+                    if (missingJavaLibrarySupport || noJavaLibraryPlugin) {
                         ${imperativelyApplyPlugin("java")}
                     } else {
                         ${imperativelyApplyPlugin("java-library")}
@@ -386,15 +419,23 @@ abstract class FileContentGenerator {
                 it == abiProjectNumber ? projectDependencyDeclaration(hasParent ? api : implementation, abiProjectNumber) : projectDependencyDeclaration(implementation, it)
             }.join("\n            ")
         }
+        def block = """
+                    ${config.externalApiDependencies.collect { directDependencyDeclaration(hasParent ? api : implementation, it) }.join("\n            ")}
+                    ${config.externalImplementationDependencies.collect { directDependencyDeclaration(implementation, it) }.join("\n            ")}
+                    ${directDependencyDeclaration(testImplementation, config.useTestNG ? 'org.testng:testng:6.4' : 'junit:junit:4.12')}
+    
+                    $subProjectDependencies
+        """
         return """
             ${configurationsIfMissingJavaLibrarySupport(hasParent)}
-
-            dependencies {
-                ${config.externalApiDependencies.collect { directDependencyDeclaration(hasParent ? api : implementation, it) }.join("\n            ")}
-                ${config.externalImplementationDependencies.collect { directDependencyDeclaration(implementation, it) }.join("\n            ")}
-                ${directDependencyDeclaration(testImplementation, config.useTestNG ? 'org.testng:testng:6.4' : 'junit:junit:4.12')}
-
-                $subProjectDependencies
+            if (hasProperty("compileConfiguration")) {
+                dependencies {
+                    ${block.replace(api, 'compile').replace(implementation, 'compile').replace(testImplementation, 'testCompile')}
+                }
+            } else {
+                dependencies {
+                    $block
+                }
             }
         """
     }
@@ -414,6 +455,8 @@ abstract class FileContentGenerator {
     }
 
     protected abstract String missingJavaLibrarySupportFlag()
+
+    protected abstract String noJavaLibraryPluginFlag()
 
     protected abstract String tasksConfiguration()
 

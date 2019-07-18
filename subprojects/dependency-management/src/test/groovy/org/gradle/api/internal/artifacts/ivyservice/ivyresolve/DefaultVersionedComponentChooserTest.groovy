@@ -17,7 +17,6 @@
 package org.gradle.api.internal.artifacts.ivyservice.ivyresolve
 
 import org.gradle.api.artifacts.ComponentSelection
-import org.gradle.api.attributes.Attribute
 import org.gradle.api.internal.artifacts.ComponentSelectionRulesInternal
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
@@ -30,6 +29,7 @@ import org.gradle.api.internal.attributes.ImmutableAttributes
 import org.gradle.api.specs.Specs
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier
 import org.gradle.internal.component.external.model.ModuleComponentResolveMetadata
+import org.gradle.internal.component.model.AttributeMatcher
 import org.gradle.internal.component.model.ComponentAttributeMatcher
 import org.gradle.internal.component.model.ComponentResolveMetadata
 import org.gradle.internal.resolve.ModuleVersionResolveException
@@ -38,6 +38,8 @@ import org.gradle.internal.resolve.result.ComponentSelectionContext
 import org.gradle.internal.resolve.result.DefaultBuildableModuleComponentMetaDataResolveResult
 import org.gradle.internal.rules.ClosureBackedRuleAction
 import org.gradle.internal.rules.SpecRuleAction
+import org.gradle.util.AttributeTestUtil
+import org.gradle.util.SnapshotTestUtil
 import org.gradle.util.TestUtil
 import spock.lang.Specification
 import spock.lang.Unroll
@@ -47,7 +49,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
     def versionSelectorScheme = new DefaultVersionSelectorScheme(new DefaultVersionComparator(), versionParser)
     def versionComparator = new DefaultVersionComparator()
     def componentSelectionRules = Mock(ComponentSelectionRulesInternal)
-    def attributesSchema = new DefaultAttributesSchema(new ComponentAttributeMatcher(), TestUtil.instantiatorFactory(), TestUtil.valueSnapshotter())
+    def attributesSchema = new DefaultAttributesSchema(new ComponentAttributeMatcher(), TestUtil.instantiatorFactory(), SnapshotTestUtil.valueSnapshotter())
     def consumerAttributes = ImmutableAttributes.EMPTY
     def cachePolicy = new DefaultCachePolicy()
 
@@ -113,6 +115,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
 
         then:
         _ * componentSelectionRules.rules >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         0 * selectedComponentResult.notMatched(a.id, _) // versions are checked latest first
         1 * selectedComponentResult.matches(b.id)
@@ -133,6 +136,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
 
         then:
         _ * componentSelectionRules.rules >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.rejectedBySelector(b.id, _)
         0 * selectedComponentResult.notMatched(d.id, _) // versions are checked latest first
@@ -153,6 +157,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
 
         then:
         _ * componentSelectionRules.rules >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.matches(b.id)
         0 * _
@@ -171,6 +176,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
 
         then:
         _ * componentSelectionRules.rules >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.rejectedBySelector(b.id, _)
         1 * selectedComponentResult.matches(a.id)
@@ -195,6 +201,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
                 selection.reject("rejected")
             }
         })
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.rejectedByRule({it.id == d.id}) // 1.2 won't be rejected because of latest first sorting
         1 * selectedComponentResult.matches(b.id)
@@ -217,6 +224,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
                 selection.reject("rejected")
             }
         })
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.rejectedByRule({it.id == b.id})
         1 * selectedComponentResult.noMatchFound()
@@ -232,41 +240,38 @@ class DefaultVersionedComponentChooserTest extends Specification {
         def c = component('1.4', 'release', [color: 'green'])
         def d = component('2.0', 'release', [color: 'blue'])
         def selectedComponentResult = Mock(ComponentSelectionContext)
-        consumerAttributes = TestUtil.attributes(color: 'red')
+        consumerAttributes = AttributeTestUtil.attributes(color: 'red')
 
         when:
         chooser.selectNewestMatchingComponent([c, a, d, b], selectedComponentResult, versionSelectorScheme.parseSelector(notation), null, consumerAttributes)
 
         then:
         1 * componentSelectionRules.getRules() >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         if (notation.indexOf('+') > 0) {
             1 * selectedComponentResult.notMatched(d.id, _)
         } else {
             1 * selectedComponentResult.doesNotMatchConsumerAttributes({
-                it.id == d.id &&
-                    it.matchingDescription.find { it.requestedAttribute == Attribute.of('color', String) }
-                        .with { match ->
-                        assert match.requestedValue.get() == 'red'
-                        assert match.found.get() == 'blue'
-                        match
-                    }
+                it.id == d.id
+                assertMatchingDescription(it.matchingDescription, 'red', 'blue')
             })
         }
         1 * selectedComponentResult.doesNotMatchConsumerAttributes({
-            it.id == c.id &&
-                it.matchingDescription.find { it.requestedAttribute == Attribute.of('color', String) }
-                    .with { match ->
-                    assert match.requestedValue.get() == 'red'
-                    assert match.found.get() == 'green'
-                    match
-                }
+            it.id == c.id
+            assertMatchingDescription(it.matchingDescription, 'red', 'green')
         })
         1 * selectedComponentResult.matches(b.id)
         0 * _
 
         where:
         notation << ["[1.0,)", "latest.release", "1.+", "1+", "+"]
+    }
 
+    def assertMatchingDescription(List<AttributeMatcher.MatchingDescription> descriptions, String expectedRequestedValue, String expectedFound) {
+        descriptions.find { it.requestedAttribute.name == 'color' }.with(true) {
+            assert requestedValue.get() == expectedRequestedValue
+            assert found.get() == expectedFound
+        }
     }
 
     def "returns no match when no versions match without metadata"() {
@@ -281,6 +286,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
 
         then:
         _ * componentSelectionRules.rules >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.notMatched(b.id, _)
         1 * selectedComponentResult.notMatched(a.id, _)
@@ -301,6 +307,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
 
         then:
         _ * componentSelectionRules.rules >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.notMatched(b.id, _)
         1 * selectedComponentResult.notMatched(a.id, _)
@@ -323,6 +330,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
         _ * componentSelectionRules.rules >> rules({ ComponentSelection selection ->
             selection.reject("Rejecting everything")
         })
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.rejectedByRule({it.id == c.id})
         1 * selectedComponentResult.rejectedByRule({it.id == b.id})
         1 * selectedComponentResult.rejectedByRule({it.id == a.id})
@@ -346,6 +354,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
         1 * b.getComponentMetadataSupplier()
 
         _ * componentSelectionRules.rules >> []
+        1 * selectedComponentResult.getContentFilter() >> null
         1 * selectedComponentResult.notMatched(c.id, _)
         1 * selectedComponentResult.failed(_ as ModuleVersionResolveException)
         0 * _
@@ -356,7 +365,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
         def meta = Stub(ModuleComponentResolveMetadata) {
             getStatusScheme() >> ["integration", "milestone", "release"]
             getStatus() >> status
-            getAttributes() >> TestUtil.attributes(attributes)
+            getAttributes() >> AttributeTestUtil.attributes(attributes)
         }
         def result = new DefaultBuildableModuleComponentMetaDataResolveResult()
         result.resolved(meta)
@@ -399,7 +408,7 @@ class DefaultVersionedComponentChooserTest extends Specification {
         Mock(ComponentMetadataSupplierRuleExecutor) {
             execute(_, _, _, _, _) >> { args ->
                 def (key, rule, converter, producer, cachePolicy) = args
-                converter.transform(producer.transform(key))
+                converter.transform(producer.transform(key, dependenciesProvider, null), dependenciesProvider, null)
             }
         }
     }

@@ -18,12 +18,10 @@
 package org.gradle.java.compile
 
 import org.gradle.api.Action
-import org.gradle.api.JavaVersion
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.test.fixtures.file.ClassFile
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
-import spock.lang.IgnoreIf
 
 abstract class BasicJavaCompilerIntegrationSpec extends AbstractIntegrationSpec {
     def setup() {
@@ -125,8 +123,8 @@ compileJava.options.debug = false
     }
 
     // JavaFx was removed in JDK 10
-    @IgnoreIf({ JavaVersion.current() < JavaVersion.VERSION_1_8 || JavaVersion.current() > JavaVersion.VERSION_1_9 })
-    @Requires(TestPrecondition.JDK8_OR_LATER)
+    // Only oracle distribution contains JavaFx
+    @Requires([TestPrecondition.JDK8_OR_LATER, TestPrecondition.JDK9_OR_EARLIER, TestPrecondition.NOT_JDK_IBM])
     def "compileJavaFx8Code"() {
         given:
         file("src/main/java/compile/test/FxApp.java") << '''
@@ -148,7 +146,7 @@ public class FxApp extends Application {
         given:
         goodCode()
         buildFile << """
-compileJava.options.compilerArgs.addAll(['--release', '7'])
+compileJava.options.compilerArgs.addAll(['--release', '8'])
 """
 
         expect:
@@ -158,27 +156,28 @@ compileJava.options.compilerArgs.addAll(['--release', '7'])
     @Requires(TestPrecondition.JDK9_OR_LATER)
     def "compile fails when using newer API with release option"() {
         given:
-        file("src/main/java/compile/test/FailsOnJava7.java") << '''
+        file("src/main/java/compile/test/FailsOnJava8.java") << '''
 package compile.test;
 
-import java.util.Optional;
+import java.util.stream.Stream;
+import java.util.function.Predicate;
 
-public class FailsOnJava7 {
-    public Optional<String> someOptional() {
-        return Optional.of("Hello");
+public class FailsOnJava8<T> {
+    public Stream<T> takeFromStream(Stream<T> stream) {
+        return stream.takeWhile(Predicate.isEqual("foo"));
     }
 }
 '''
 
         buildFile << """
-compileJava.options.compilerArgs.addAll(['--release', '7'])
+compileJava.options.compilerArgs.addAll(['--release', '8'])
 """
 
         expect:
         fails 'compileJava'
         output.contains(logStatement())
         failure.assertHasErrorOutput("cannot find symbol")
-        failure.assertHasErrorOutput("class Optional")
+        failure.assertHasErrorOutput("method takeWhile")
     }
 
     def buildScript() {
@@ -187,7 +186,7 @@ apply plugin: "java"
 ${mavenCentralRepository()}
 
 dependencies {
-    compile "org.codehaus.groovy:groovy:2.4.10"
+    implementation "org.codehaus.groovy:groovy:2.4.10"
 }
 """
     }
@@ -282,7 +281,7 @@ class Main {
 
         then:
         succeeds("compileJava")
-        javaClassFile('Java$$Generated.java').exists()
+        javaGeneratedSourceFile('Java$$Generated.java').exists()
     }
 
     def writeAnnotationProcessorProject() {

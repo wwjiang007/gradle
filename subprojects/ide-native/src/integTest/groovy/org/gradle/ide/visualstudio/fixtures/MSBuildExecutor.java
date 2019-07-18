@@ -27,9 +27,11 @@ import org.gradle.nativeplatform.fixtures.AvailableToolChains;
 import org.gradle.nativeplatform.fixtures.msvcpp.VisualStudioLocatorTestFixture;
 import org.gradle.test.fixtures.file.ExecOutput;
 import org.gradle.test.fixtures.file.TestFile;
+import org.gradle.test.fixtures.file.TestFileHelper;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -122,14 +124,18 @@ public class MSBuildExecutor {
         ExecOutput result = findMSBuild().execute(args, buildEnvironment(workingDir));
 
         System.out.println(result.getOut());
-        for (ExecutionOutput output : getOutputFiles()) {
-            String gradleStdout = fileContents(output.stdout);
-            String gradleStderr = fileContents(output.stderr);
+        if (getOutputFiles().isEmpty()) {
+            results.add(OutputScrapingExecutionResult.from(trimLines(result.getOut()), trimLines(result.getError())));
+        } else {
+            for (ExecutionOutput output : getOutputFiles()) {
+                String gradleStdout = fileContents(output.stdout);
+                String gradleStderr = fileContents(output.stderr);
 
-            System.out.println(gradleStdout);
-            System.out.println(gradleStderr);
+                System.out.println(gradleStdout);
+                System.out.println(gradleStderr);
 
-            results.add(OutputScrapingExecutionResult.from(trimLines(gradleStdout), trimLines(gradleStderr)));
+                results.add(OutputScrapingExecutionResult.from(trimLines(gradleStdout), trimLines(gradleStderr)));
+            }
         }
         System.out.println(result.getError());
 
@@ -158,9 +164,38 @@ public class MSBuildExecutor {
         return OutputScrapingExecutionFailure.from(trimLines(gradleStdout), trimLines(gradleStderr));
     }
 
+    public ExecutionResult run() {
+        return run(MSBuildAction.BUILD);
+    }
+
+    public ExecutionResult run(MSBuildAction action) {
+        cleanupOutputDir();
+
+        withArgument(toTargetArgument(action));
+        ExecOutput result = new TestFileHelper(findMSBuild()).execute(args, buildEnvironment(workingDir));
+
+        List<ExecutionOutput> outputs = getOutputFiles();
+        String gradleStdout = result.getOut();
+        String gradleStderr = result.getError();
+        if (!outputs.isEmpty()) {
+            gradleStdout = fileContents(outputs.get(0).stdout);
+            gradleStderr = fileContents(outputs.get(0).stderr);
+        }
+        System.out.println(result.getOut());
+        System.out.println(gradleStdout);
+        System.out.println(gradleStderr);
+        System.out.println(result.getError());
+
+        if (result.getExitCode() != 0) {
+            return OutputScrapingExecutionFailure.from(trimLines(gradleStdout), trimLines(gradleStderr));
+        }
+        return OutputScrapingExecutionResult.from(trimLines(gradleStdout), trimLines(gradleStderr));
+    }
+
     private static String fileContents(File file) {
         try {
-            return FileUtils.readFileToString(file);
+            // TODO this should not be using the default charset because it's not an input and might introduce flakiness
+            return FileUtils.readFileToString(file, Charset.defaultCharset());
         } catch (IOException e) {
             throw UncheckedException.throwAsUncheckedException(e);
         }

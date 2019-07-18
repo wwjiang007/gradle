@@ -26,7 +26,8 @@ import static org.gradle.testkit.runner.TaskOutcome.SUCCESS
 
 class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
 
-    @Rule final ReleasingPortAllocator portAllocator = new ReleasingPortAllocator()
+    @Rule
+    final ReleasingPortAllocator portAllocator = new ReleasingPortAllocator()
 
     @Unroll
     @Issue('https://plugins.gradle.org/plugin/com.github.johnrengelman.shadow')
@@ -62,21 +63,45 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
         result.task(':shadowJar').outcome == SUCCESS
 
         where:
-        version << ["2.0.4"]
+        version << TestedVersions.shadow
+    }
+
+    @Issue('https://github.com/asciidoctor/asciidoctor-gradle-plugin/releases')
+    def 'asciidoctor legacy plugin'() {
+        given:
+        buildFile << """
+            buildscript {
+                ${jcenterRepository()}
+                dependencies {
+                    classpath "org.asciidoctor:asciidoctor-gradle-plugin:1.5.11"
+                }
+            }
+
+            apply plugin: 'org.asciidoctor.gradle.asciidoctor'
+            """.stripIndent()
+
+        file('src/docs/asciidoc/test.adoc') << """
+            = Line Break Doc Title
+            :hardbreaks:
+
+            Rubies are red,
+            Topazes are blue.
+            """.stripIndent()
+
+        when:
+        runner('asciidoc').build()
+
+        then:
+        file('build/asciidoc').isDirectory()
     }
 
     @Issue('https://github.com/asciidoctor/asciidoctor-gradle-plugin/releases')
     def 'asciidoctor plugin'() {
         given:
         buildFile << """
-            buildscript {
-                ${jcenterRepository()}
-                dependencies {
-                    classpath "org.asciidoctor:asciidoctor-gradle-plugin:1.5.7"
-                }
+            plugins {
+                id 'org.asciidoctor.convert' version '${TestedVersions.asciidoctor}'
             }
-
-            apply plugin: 'org.asciidoctor.gradle.asciidoctor'
             """.stripIndent()
 
         file('src/docs/asciidoc/test.adoc') << """
@@ -101,7 +126,7 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
             plugins {
                 id 'java'
                 id 'application'
-                id "com.bmuschko.docker-java-application" version "3.3.6"
+                id "com.bmuschko.docker-java-application" version "${TestedVersions.docker}"
             }
 
             mainClassName = 'org.gradle.JettyMain'
@@ -109,17 +134,17 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
             docker {
                 javaApplication {
                     baseImage = 'dockerfile/java:openjdk-7-jre'
-                    port = 9090
+                    ports = [9090]
                     tag = 'jettyapp:1.115'
                 }
             }
             """.stripIndent()
 
         when:
-        def result = runner(':dockerCopyDistResources').build()
+        def result = runner('assemble').forwardOutput().build()
 
         then:
-        result.task(':dockerCopyDistResources').outcome == SUCCESS
+        result.task(':assemble').outcome == SUCCESS
     }
 
     @Issue('https://plugins.gradle.org/plugin/io.spring.dependency-management')
@@ -128,7 +153,7 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
         buildFile << """
             plugins {
                 id 'java'
-                id 'io.spring.dependency-management' version '1.0.5.RELEASE'
+                id 'io.spring.dependency-management' version '${TestedVersions.springDependencyManagement}'
             }
 
             ${mavenCentralRepository()}
@@ -141,12 +166,12 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
             }
 
             dependencies {
-                compile 'org.springframework:spring-core'
+                implementation 'org.springframework:spring-core'
             }
             """.stripIndent()
 
         when:
-        def result = runner("dependencies", "--configuration", "compile").build()
+        def result = runner("dependencies", "--configuration", "compileClasspath").build()
 
         then:
         result.output.contains('org.springframework:spring-core -> 4.0.3.RELEASE')
@@ -157,7 +182,7 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
         given:
         buildFile << """
             plugins {
-                id "org.springframework.boot" version "2.0.3.RELEASE"
+                id "org.springframework.boot" version "${TestedVersions.springBoot}"
             }
         """.stripIndent()
 
@@ -177,45 +202,6 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
         result.task(':buildEnvironment').outcome == SUCCESS
     }
 
-    @Issue(["gradle/gradle#2480", "https://plugins.gradle.org/plugin/io.spring.dependency-management"])
-    def "spring dependency management plugin and BOM"() {
-        given:
-        buildFile << """
-            buildscript {    
-                ${mavenCentralRepository()}
-            }
-            
-            plugins { 
-                id 'java'
-                id 'io.spring.dependency-management' version '1.0.5.RELEASE' 
-            }
-            
-            ${mavenCentralRepository()}
-            
-            dependencies {
-                compile('org.springframework.boot:spring-boot-starter')
-                testCompile('org.springframework.boot:spring-boot-starter-test')
-            }
-            
-            dependencyManagement {
-                imports { mavenBom("org.springframework.boot:spring-boot-dependencies:1.5.2.RELEASE") }
-            }
-            
-            task resolveDependencies {
-                doLast {
-                    configurations.compile.files
-                    configurations.testCompile.files
-                }
-            }
-        """
-
-        when:
-        runner('resolveDependencies').build()
-
-        then:
-        noExceptionThrown()
-    }
-
     @Issue('https://plugins.gradle.org/plugin/com.bmuschko.tomcat')
     def 'tomcat plugin'() {
         given:
@@ -224,7 +210,7 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
         def stopPort = portAllocator.assignPort()
         buildFile << """
             plugins {
-                id "com.bmuschko.tomcat" version "2.5"
+                id "com.bmuschko.tomcat" version "${TestedVersions.tomcat}"
             }
 
             ${mavenCentralRepository()}
@@ -272,77 +258,13 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
         runner('integrationTest').build()
     }
 
-    @Issue('https://plugins.gradle.org/plugin/org.gosu-lang.gosu')
-    def 'gosu plugin'() { // Requires JDK 8 or later
-        given:
-        buildFile << """
-            plugins {
-                id 'org.gosu-lang.gosu' version '0.3.10'
-            }
-
-            ${mavenCentralRepository()}
-
-            dependencies {
-                compile group: 'org.gosu-lang.gosu', name: 'gosu-core-api', version: '1.14.9'
-            }
-            """.stripIndent()
-
-        file('src/main/gosu/example/Foo.gs') << """
-            package example
-
-            public class Foo {
-
-              function doSomething(arg : String) : String {
-                return "Hello, got the argument '\${arg}'"
-              }
-            }
-            """.stripIndent()
-
-
-        when:
-        def result = runner('build').build()
-
-        then:
-        result.task(':compileGosu').outcome == SUCCESS
-    }
-
-    @Issue('https://plugins.gradle.org/plugin/org.xtext.xtend')
-    def 'xtend plugin'() {
-        given:
-        buildFile << """
-            plugins {
-                id "org.xtext.xtend" version "1.0.21"
-            }
-
-            ${mavenCentralRepository()}
-
-            dependencies {
-                compile 'org.eclipse.xtend:org.eclipse.xtend.lib:2.11.0'
-            }
-            """.stripIndent()
-
-        file('src/main/java/HelloWorld.xtend') << """
-            class HelloWorld {
-                def static void main(String[] args) {
-                    println("Hello World")
-                }
-            }
-            """
-
-        when:
-        def result = runner('build').build()
-
-        then:
-        result.task(':generateXtext').outcome == SUCCESS
-    }
-
     @Issue('https://plugins.gradle.org/plugin/org.ajoberstar.grgit')
     def 'org.ajoberstar.grgit plugin'() {
         given:
         GitFileRepository.init(testProjectDir.root)
         buildFile << """
             plugins {
-                id "org.ajoberstar.grgit" version "2.2.1"
+                id "org.ajoberstar.grgit" version "${TestedVersions.grgit}"
             }
 
             def sourceFile = file("sourceFile")
@@ -397,4 +319,77 @@ class ThirdPartyPluginsSmokeTest extends AbstractSmokeTest {
         result.task(':tag').outcome == SUCCESS
         result.task(':checkout').outcome == SUCCESS
     }
+
+    @Issue('https://plugins.gradle.org/plugin/com.github.spotbugs')
+    def 'spotbugs plugin'() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.github.spotbugs' version '${TestedVersions.spotbugs}'
+            }
+
+            ${jcenterRepository()}
+
+            """.stripIndent()
+
+        file('src/main/java/example/Application.java') << """
+            package example;
+
+            public class Application {
+                public static void main(String[] args) {}
+            }
+        """.stripIndent()
+
+
+        when:
+        runner('check').build()
+
+        then:
+        file('build/reports/spotbugs').isDirectory()
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/9897")
+    def 'errorprone plugin'() {
+        given:
+        buildFile << """
+            plugins {
+                id('java')
+                id("net.ltgt.errorprone") version "${TestedVersions.errorProne}"
+            }
+            
+            ${mavenCentralRepository()}
+            
+            if (JavaVersion.current().java8) {
+                dependencies {
+                    errorproneJavac("com.google.errorprone:javac:9+181-r4173-1")
+                }
+            }
+            
+            dependencies {
+                errorprone("com.google.errorprone:error_prone_core:2.3.3")
+            }
+            
+            tasks.withType(JavaCompile).configureEach {
+                options.fork = true                
+                options.errorprone {
+                    check("DoubleBraceInitialization", net.ltgt.gradle.errorprone.CheckSeverity.ERROR)
+                }
+            }
+        """
+        file("src/main/java/Test.java") << """
+            import java.util.HashSet;
+            import java.util.Set;
+            
+            public class Test {
+            
+                public static void main(String[] args) {
+                }
+            
+            }
+        """
+        expect:
+        runner('compileJava').forwardOutput().build()
+    }
+
 }

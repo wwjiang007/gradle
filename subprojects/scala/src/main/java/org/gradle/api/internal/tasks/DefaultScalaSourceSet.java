@@ -18,7 +18,7 @@ package org.gradle.api.internal.tasks;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.file.SourceDirectorySet;
-import org.gradle.api.internal.file.SourceDirectorySetFactory;
+import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.reflect.HasPublicType;
 import org.gradle.api.reflect.TypeOf;
 import org.gradle.api.tasks.ScalaSourceSet;
@@ -30,18 +30,20 @@ public class DefaultScalaSourceSet implements ScalaSourceSet, HasPublicType {
     private final SourceDirectorySet scala;
     private final SourceDirectorySet allScala;
 
-    public DefaultScalaSourceSet(String displayName, SourceDirectorySetFactory sourceDirectorySetFactory) {
-        scala = sourceDirectorySetFactory.create("scala", displayName + " Scala source");
+    public DefaultScalaSourceSet(String displayName, ObjectFactory objectFactory) {
+        scala = objectFactory.sourceDirectorySet("scala", displayName + " Scala source");
         scala.getFilter().include("**/*.java", "**/*.scala");
-        allScala = sourceDirectorySetFactory.create(displayName + " Scala source");
+        allScala = objectFactory.sourceDirectorySet("allscala", displayName + " Scala source");
         allScala.getFilter().include("**/*.scala");
         allScala.source(scala);
     }
 
+    @Override
     public SourceDirectorySet getScala() {
         return scala;
     }
 
+    @Override
     public ScalaSourceSet scala(Closure configureClosure) {
         configure(configureClosure, getScala());
         return this;
@@ -53,6 +55,7 @@ public class DefaultScalaSourceSet implements ScalaSourceSet, HasPublicType {
         return this;
     }
 
+    @Override
     public SourceDirectorySet getAllScala() {
         return allScala;
     }

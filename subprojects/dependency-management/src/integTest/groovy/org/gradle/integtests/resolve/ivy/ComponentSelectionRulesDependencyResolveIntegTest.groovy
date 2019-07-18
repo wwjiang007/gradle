@@ -22,7 +22,7 @@ import spock.lang.Issue
 import spock.lang.Unroll
 
 
-class ComponentSelectionRulesDependencyResolveIntegTest extends AbstractComponentSelectionRulesIntegrationTest {
+class  ComponentSelectionRulesDependencyResolveIntegTest extends AbstractComponentSelectionRulesIntegrationTest {
     boolean isWellBehaved(boolean mavenCompatible, boolean gradleCompatible = true) {
         (GradleMetadataResolveRunner.useIvy() || mavenCompatible) && (!GradleMetadataResolveRunner.gradleMetadataEnabled || gradleCompatible)
     }
@@ -51,7 +51,7 @@ class ComponentSelectionRulesDependencyResolveIntegTest extends AbstractComponen
 """
 
         when:
-        def chosenModule = setupInterations(selector, chosenVersion, downloadedMetadata)
+        def chosenModule = setupInteractions(selector, chosenVersion, downloadedMetadata)
 
         then:
         checkDependencies {
@@ -85,7 +85,7 @@ class ComponentSelectionRulesDependencyResolveIntegTest extends AbstractComponen
         "1.1"                | "select branch" | "1.1"         | '["1.1"]'        | ['1.1']            | false           | false            | []
     }
 
-    private String setupInterations(String selector, String chosenVersion, List<String> downloadedMetadata, Closure<Void> more = {}) {
+    private String setupInteractions(String selector, String chosenVersion, List<String> downloadedMetadata, Closure<Void> more = {}) {
         def chosenModule = chosenVersion ? (chosenVersion.contains('-lib') ? 'lib' : 'api') : null
         repositoryInteractions {
             'org.utils:api' {
@@ -143,7 +143,7 @@ class ComponentSelectionRulesDependencyResolveIntegTest extends AbstractComponen
 """
 
         when:
-        setupInterations(selector, null, downloadedMetadata)
+        setupInteractions(selector, null, downloadedMetadata)
 
         then:
         checkDependencies(':checkLenient')
@@ -204,7 +204,7 @@ class ComponentSelectionRulesDependencyResolveIntegTest extends AbstractComponen
 """
 
         when:
-        setupInterations('1.+', null, ['1.2', '1.1', '1.0'])
+        setupInteractions('1.+', null, ['1.2', '1.1', '1.0'])
 
         then:
         fails ':checkDeps'
@@ -247,7 +247,8 @@ Versions rejected by component selection rules:
   - 1.2
   - 1.1
   - 1.0
-Searched in the following locations: ${versionListingURI('org.utils', 'api')}
+Searched in the following locations:
+  - ${versionListingURI('org.utils', 'api')}
 Required by:
 """)
     }
@@ -280,7 +281,7 @@ Required by:
 """
 
         when:
-        setupInterations(selector, null, downloadedMetadata)
+        setupInteractions(selector, null, downloadedMetadata)
 
         then:
         checkDependencies(':checkLenient')
@@ -323,8 +324,9 @@ Required by:
             configurations.all {
                 resolutionStrategy {
                     componentSelection {
-                        all { ComponentSelection selection, IvyModuleDescriptor ivy ->
-                            if (ivy.branch != "other") {
+                        all { ComponentSelection selection ->
+                            def ivy = selection.getDescriptor(IvyModuleDescriptor)
+                            if (ivy != null && ivy.branch != "other") {
                                 selection.reject("looking for other")
                             }
                         }
@@ -391,9 +393,6 @@ Required by:
                         withModule("some.other:module") { ComponentSelection cs ->
                             throw new RuntimeException()
                         }
-                        withModule("some.other:module") { ComponentSelection cs, IvyModuleDescriptor descriptor, ComponentMetadata metadata ->
-                            throw new RuntimeException()
-                        }
                     }
                 }
             }
@@ -407,7 +406,7 @@ Required by:
         """
 
         when:
-        setupInterations(selector, chosen, downloadedMetadata) {
+        setupInteractions(selector, chosen, downloadedMetadata) {
             'org.utils:lib' {
                 expectVersionListing()
             }
@@ -431,7 +430,7 @@ Required by:
 
     @Issue("GRADLE-3236")
     def "can select a different component for the same selector in different configurations"() {
-        def descriptorArg = GradleMetadataResolveRunner.useIvy() ? 'IvyModuleDescriptor ivy' : 'ComponentMetadata md'
+        def descriptorArg = GradleMetadataResolveRunner.useIvy() ? 'selection.getDescriptor(IvyModuleDescriptor)' : 'selection.metadata'
         buildFile << """
             configurations {
                 modules
@@ -439,9 +438,11 @@ Required by:
                     extendsFrom modules
                     resolutionStrategy {
                         componentSelection {
-                            all { ComponentSelection selection, $descriptorArg ->
-                                println "A is evaluating \$selection.candidate"
-                                if (selection.candidate.version != "1.1") { selection.reject("Rejected by A") }
+                            all { ComponentSelection selection ->
+                                if ($descriptorArg != null) {
+                                    println "A is evaluating \$selection.candidate"
+                                    if (selection.candidate.version != "1.1") { selection.reject("Rejected by A") }
+                                }
                             }
                         }
                     }
@@ -450,9 +451,11 @@ Required by:
                     extendsFrom modules
                     resolutionStrategy {
                         componentSelection {
-                            all { ComponentSelection selection, $descriptorArg ->
-                                println "B is evaluating \$selection.candidate"
-                                if (selection.candidate.version != "1.0") { selection.reject("Rejected by B") }
+                            all { ComponentSelection selection ->
+                                if ($descriptorArg != null) {
+                                    println "B is evaluating \$selection.candidate"
+                                    if (selection.candidate.version != "1.0") { selection.reject("Rejected by B") }
+                                }
                             }
                         }
                     }

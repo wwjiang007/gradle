@@ -21,7 +21,9 @@ import groovy.lang.GroovySystem;
 import groovy.lang.MetaClass;
 import groovy.lang.MetaClassRegistry;
 import org.apache.commons.lang.StringUtils;
+import org.gradle.internal.classanalysis.AsmConstants;
 import org.gradle.internal.classloader.TransformingClassLoader;
+import org.gradle.internal.classloader.VisitableURLClassLoader;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.reflect.PropertyAccessorType;
 import org.objectweb.asm.ClassReader;
@@ -34,11 +36,13 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 import javax.annotation.Nullable;
+import java.net.URL;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -74,7 +78,6 @@ public class MixInLegacyTypesClassLoader extends TransformingClassLoader {
 
     static {
         try {
-            //noinspection Since15
             ClassLoader.registerAsParallelCapable();
         } catch (NoSuchMethodError ignore) {
             // Not supported on Java 6
@@ -82,7 +85,12 @@ public class MixInLegacyTypesClassLoader extends TransformingClassLoader {
     }
 
     public MixInLegacyTypesClassLoader(ClassLoader parent, ClassPath classPath, LegacyTypesSupport legacyTypesSupport) {
-        super(parent, classPath);
+        super("legacy-mixin-loader", parent, classPath);
+        this.legacyTypesSupport = legacyTypesSupport;
+    }
+
+    public MixInLegacyTypesClassLoader(ClassLoader parent, Collection<URL> urls, LegacyTypesSupport legacyTypesSupport) {
+        super("legacy-mixin-loader", parent, urls);
         this.legacyTypesSupport = legacyTypesSupport;
     }
 
@@ -122,7 +130,7 @@ public class MixInLegacyTypesClassLoader extends TransformingClassLoader {
         private Set<String> booleanIsGetters = new HashSet<String>();
 
         TransformingAdapter(ClassVisitor cv) {
-            super(Opcodes.ASM6, cv);
+            super(AsmConstants.ASM_LEVEL, cv);
         }
 
         @Override
@@ -333,6 +341,17 @@ public class MixInLegacyTypesClassLoader extends TransformingClassLoader {
             mv.visitLocalVariable("this", "L" + className + ";", null, l0, l1, 0);
             mv.visitMaxs(1, 1);
             mv.visitEnd();
+        }
+    }
+
+    public static class Spec extends VisitableURLClassLoader.Spec {
+        public Spec(String name, List<URL> classpath) {
+            super(name, classpath);
+        }
+
+        @Override
+        public String toString() {
+            return "{legacy-mixin-class-loader name:" + super.getName() + ", classpath:" + getClasspath() + "}";
         }
     }
 }

@@ -18,42 +18,44 @@ package org.gradle.api.internal.tasks.compile.daemon;
 import com.google.common.collect.Lists;
 import org.gradle.api.tasks.WorkResult;
 import org.gradle.api.tasks.compile.BaseForkOptions;
+import org.gradle.internal.Cast;
 import org.gradle.internal.UncheckedException;
+import org.gradle.internal.classloader.ClassLoaderUtils;
+import org.gradle.internal.reflect.Instantiator;
 import org.gradle.language.base.internal.compile.CompileSpec;
 import org.gradle.language.base.internal.compile.Compiler;
+import org.gradle.workers.WorkerExecution;
+import org.gradle.workers.WorkerParameters;
+import org.gradle.workers.internal.ActionExecutionSpecFactory;
 import org.gradle.workers.internal.DaemonForkOptions;
 import org.gradle.workers.internal.DefaultWorkResult;
-import org.gradle.workers.internal.SimpleActionExecutionSpec;
+import org.gradle.workers.internal.ProvidesWorkResult;
 import org.gradle.workers.internal.Worker;
 import org.gradle.workers.internal.WorkerFactory;
 
 import javax.inject.Inject;
-import java.io.File;
+import java.io.Serializable;
 import java.util.Set;
-import java.util.concurrent.Callable;
 
 import static org.gradle.process.internal.util.MergeOptionsUtil.mergeHeapSize;
 import static org.gradle.process.internal.util.MergeOptionsUtil.normalized;
 
 public abstract class AbstractDaemonCompiler<T extends CompileSpec> implements Compiler<T> {
-    private final Compiler<T> delegate;
     private final WorkerFactory workerFactory;
+    private final ActionExecutionSpecFactory actionExecutionSpecFactory;
 
-    public AbstractDaemonCompiler(Compiler<T> delegate, WorkerFactory workerFactory) {
-        this.delegate = delegate;
+    public AbstractDaemonCompiler(WorkerFactory workerFactory, ActionExecutionSpecFactory actionExecutionSpecFactory) {
         this.workerFactory = workerFactory;
-    }
-
-    public Compiler<T> getDelegate() {
-        return delegate;
+        this.actionExecutionSpecFactory = actionExecutionSpecFactory;
     }
 
     @Override
     public WorkResult execute(T spec) {
-        InvocationContext invocationContext = toInvocationContext(spec);
-        DaemonForkOptions daemonForkOptions = invocationContext.getDaemonForkOptions();
+        DaemonForkOptions daemonForkOptions = toDaemonForkOptions(spec);
         Worker worker = workerFactory.getWorker(daemonForkOptions);
-        DefaultWorkResult result = worker.execute(new SimpleActionExecutionSpec(CompilerCallable.class, "compiler daemon", invocationContext.getInvocationWorkingDir(), new Object[] {delegate, spec}));
+
+        CompilerParameters parameters = getCompilerParameters(spec);
+        DefaultWorkResult result = worker.execute(actionExecutionSpecFactory.newIsolatedSpec("compiler daemon", CompilerWorkerExecution.class, parameters, daemonForkOptions.getClassLoaderStructure()));
         if (result.isSuccess()) {
             return result;
         } else {
@@ -61,7 +63,9 @@ public abstract class AbstractDaemonCompiler<T extends CompileSpec> implements C
         }
     }
 
-    protected abstract InvocationContext toInvocationContext(T spec);
+    protected abstract DaemonForkOptions toDaemonForkOptions(T spec);
+
+    protected abstract CompilerParameters getCompilerParameters(T spec);
 
     protected BaseForkOptions mergeForkOptions(BaseForkOptions left, BaseForkOptions right) {
         BaseForkOptions merged = new BaseForkOptions();
@@ -73,46 +77,53 @@ public abstract class AbstractDaemonCompiler<T extends CompileSpec> implements C
         return merged;
     }
 
-    private static class CompilerCallable<T extends CompileSpec> implements Callable<WorkResult> {
-        private final Compiler<T> compiler;
-        private final T compileSpec;
+    public abstract static class CompilerParameters implements WorkerParameters, Serializable {
+        private final String compilerClassName;
+        private final Object[] compilerInstanceParameters;
+
+        public CompilerParameters(String compilerClassName, Object[] compilerInstanceParameters) {
+            this.compilerClassName = compilerClassName;
+            this.compilerInstanceParameters = compilerInstanceParameters;
+        }
+
+        public String getCompilerClassName() {
+            return compilerClassName;
+        }
+
+        public Object[] getCompilerInstanceParameters() {
+            return compilerInstanceParameters;
+        }
+
+        abstract public CompileSpec getCompileSpec();
+    }
+
+    public static abstract class CompilerWorkerExecution implements WorkerExecution<CompilerParameters>, ProvidesWorkResult {
+        private DefaultWorkResult workResult;
+        private final Instantiator instantiator;
 
         @Inject
-        public CompilerCallable(Compiler<T> compiler, T compileSpec) {
-            this.compiler = compiler;
-            this.compileSpec = compileSpec;
+        public CompilerWorkerExecution(Instantiator instantiator) {
+            this.instantiator = instantiator;
         }
 
         @Override
-        public WorkResult call() throws Exception {
-            return compiler.execute(compileSpec);
-        }
-    }
-
-    protected static class InvocationContext {
-        private File invocationWorkingDir;
-        private DaemonForkOptions daemonForkOptions;
-
-        public InvocationContext(File invocationWorkingDir, DaemonForkOptions daemonForkOptions) {
-            this.invocationWorkingDir = invocationWorkingDir;
-            this.daemonForkOptions = daemonForkOptions;
+        public void execute() {
+            Class<? extends Compiler<?>> compilerClass = Cast.uncheckedCast(ClassLoaderUtils.classFromContextLoader(getParameters().getCompilerClassName()));
+            Compiler<?> compiler = instantiator.newInstance(compilerClass, getParameters().getCompilerInstanceParameters());
+            setWorkResult(compiler.execute(Cast.uncheckedCast(getParameters().getCompileSpec())));
         }
 
-        File getInvocationWorkingDir() {
-            return invocationWorkingDir;
-        }
-
-        DaemonForkOptions getDaemonForkOptions() {
-            return daemonForkOptions;
-        }
-
-        public InvocationContext mergeWith(InvocationContext invocationContext) {
-            if (!getInvocationWorkingDir().equals(invocationContext.getInvocationWorkingDir())) {
-                throw new IllegalArgumentException("Cannot merge an InvocationContext with a different invocation working directory (this: " + getInvocationWorkingDir() + ", other: " + invocationContext.getInvocationWorkingDir() + ").");
+        private void setWorkResult(WorkResult workResult) {
+            if (workResult instanceof DefaultWorkResult) {
+                this.workResult = (DefaultWorkResult) workResult;
+            } else {
+                this.workResult = new DefaultWorkResult(workResult.getDidWork(), null);
             }
+        }
 
-            DaemonForkOptions mergedForkOptions = getDaemonForkOptions().mergeWith(invocationContext.getDaemonForkOptions());
-            return new InvocationContext(getInvocationWorkingDir(), mergedForkOptions);
+        @Override
+        public DefaultWorkResult getWorkResult() {
+            return workResult;
         }
     }
 }

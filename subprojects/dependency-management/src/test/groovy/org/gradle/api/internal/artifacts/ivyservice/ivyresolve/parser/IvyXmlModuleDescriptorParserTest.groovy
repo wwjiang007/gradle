@@ -21,6 +21,7 @@ import com.google.common.collect.SetMultimap
 import org.apache.ivy.plugins.matcher.PatternMatcher
 import org.gradle.api.internal.artifacts.DefaultImmutableModuleIdentifierFactory
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
+import org.gradle.api.internal.artifacts.DependencyManagementTestUtil
 import org.gradle.api.internal.artifacts.dependencies.DefaultMutableVersionConstraint
 import org.gradle.api.internal.artifacts.ivyservice.NamespaceId
 import org.gradle.api.internal.artifacts.repositories.metadata.IvyMutableModuleMetadataFactory
@@ -34,7 +35,6 @@ import org.gradle.internal.resource.local.FileResourceRepository
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.Resources
-import org.gradle.util.TestUtil
 import org.junit.Rule
 import spock.lang.Issue
 import spock.lang.Specification
@@ -49,7 +49,7 @@ class IvyXmlModuleDescriptorParserTest extends Specification {
 
     DefaultImmutableModuleIdentifierFactory moduleIdentifierFactory = new DefaultImmutableModuleIdentifierFactory()
     FileResourceRepository fileRepository = TestFiles.fileRepository()
-    IvyMutableModuleMetadataFactory metadataFactory = new IvyMutableModuleMetadataFactory(moduleIdentifierFactory, TestUtil.attributesFactory())
+    IvyMutableModuleMetadataFactory metadataFactory = DependencyManagementTestUtil.ivyMetadataFactory()
 
     IvyXmlModuleDescriptorParser parser = new IvyXmlModuleDescriptorParser(new IvyModuleDescriptorConverter(moduleIdentifierFactory), moduleIdentifierFactory, fileRepository, metadataFactory)
 
@@ -691,7 +691,7 @@ class IvyXmlModuleDescriptorParserTest extends Specification {
     }
 
     private void parse(DescriptorParseContext parseContext, TestFile file) {
-        metadata = parser.parseMetaData(parseContext, file)
+        metadata = parser.parseMetaData(parseContext, file).result
     }
 
     private Artifact artifact() {

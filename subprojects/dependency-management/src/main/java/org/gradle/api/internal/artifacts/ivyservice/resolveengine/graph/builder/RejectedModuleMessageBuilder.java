@@ -17,14 +17,16 @@ package org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.builder
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 import org.gradle.api.artifacts.result.ComponentSelectionDescriptor;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionDescriptorInternal;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasonInternal;
 
 import java.util.List;
+import java.util.Set;
 
-public class RejectedModuleMessageBuilder {
-    public String buildFailureMessage(ModuleResolveState module) {
+class RejectedModuleMessageBuilder {
+    String buildFailureMessage(ModuleResolveState module) {
         boolean hasRejectAll = false;
         for (SelectorState candidate : module.getSelectors()) {
             hasRejectAll |= candidate.getVersionConstraint().isRejectAll();
@@ -35,16 +37,29 @@ public class RejectedModuleMessageBuilder {
         } else {
             sb.append("Cannot find a version of '").append(module.getId()).append("' that satisfies the version constraints: \n");
         }
-        for (EdgeState incomingEdge : module.getIncomingEdges()) {
+
+        Set<EdgeState> allEdges = Sets.newLinkedHashSet();
+        allEdges.addAll(module.getIncomingEdges());
+        allEdges.addAll(module.getUnattachedDependencies());
+        renderEdges(sb, allEdges);
+        return sb.toString();
+    }
+
+    private void renderEdges(StringBuilder sb, Set<EdgeState> incomingEdges) {
+        for (EdgeState incomingEdge : incomingEdges) {
             SelectorState selector = incomingEdge.getSelector();
-            for (String path : MessageBuilderHelper.pathTo(incomingEdge)) {
+            for (String path : MessageBuilderHelper.pathTo(incomingEdge, false)) {
                 sb.append("   ").append(path);
-                sb.append(" ").append(MessageBuilderHelper.renderVersionConstraint(selector.getVersionConstraint()));
+                sb.append(" --> ");
+                renderSelector(sb, selector);
                 renderReason(sb, selector);
                 sb.append("\n");
             }
         }
-        return sb.toString();
+    }
+
+    private static void renderSelector(StringBuilder sb, SelectorState selectorState) {
+        sb.append('\'').append(selectorState.getRequested()).append('\'');
     }
 
     private static void renderReason(StringBuilder sb, SelectorState selector) {

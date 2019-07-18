@@ -16,9 +16,9 @@
 
 package org.gradle.api.plugins;
 
+import org.gradle.api.Action;
 import org.gradle.api.Incubating;
 import org.gradle.api.JavaVersion;
-import org.gradle.api.tasks.SourceSetContainer;
 
 /**
  * Common configuration for Java based projects. This is added by the {@link JavaBasePlugin}.
@@ -51,6 +51,26 @@ public interface JavaPluginExtension {
      */
     void setTargetCompatibility(JavaVersion value);
 
-    // TODO - this will be removed
-    SourceSetContainer getSourceSets();
+    /**
+     * Registers a feature.
+     * @param name the name of the feature
+     * @param configureAction the configuration for the feature
+     *
+     * @since 5.3
+     */
+    void registerFeature(String name, Action<? super FeatureSpec> configureAction);
+
+    /**
+     * If this method is called, Gradle will not automatically try to fetch
+     * dependencies which have a JVM version compatible with the target compatibility
+     * of this module. This should be used whenever the default behavior is not
+     * applicable, in particular when for some reason it's not possible to split
+     * a module and that this module only has some classes which require dependencies
+     * on higher versions.
+     *
+     * @since 5.3
+     */
+    @Incubating
+    void disableAutoTargetJvm();
+
 }

@@ -23,6 +23,7 @@ import org.gradle.api.initialization.ProjectDescriptor;
 import org.gradle.api.initialization.Settings;
 import org.gradle.api.initialization.dsl.ScriptHandler;
 import org.gradle.api.internal.FeaturePreviews;
+import org.gradle.api.internal.FeaturePreviews.Feature;
 import org.gradle.api.internal.GradleInternal;
 import org.gradle.api.internal.SettingsInternal;
 import org.gradle.api.internal.file.FileResolver;
@@ -40,6 +41,7 @@ import org.gradle.internal.resource.TextResourceLoader;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.scopes.ServiceRegistryFactory;
 import org.gradle.plugin.management.PluginManagementSpec;
+import org.gradle.util.SingleMessageLogger;
 import org.gradle.vcs.SourceControl;
 
 import javax.inject.Inject;
@@ -47,7 +49,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DefaultSettings extends AbstractPluginAware implements SettingsInternal {
+public abstract class DefaultSettings extends AbstractPluginAware implements SettingsInternal {
     public static final String DEFAULT_BUILD_SRC_DIR = "buildSrc";
     private ScriptSource settingsScript;
 
@@ -87,6 +89,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         return "settings '" + rootProjectDescriptor.getName() + "'";
     }
 
+    @Override
     public GradleInternal getGradle() {
         return gradle;
     }
@@ -96,6 +99,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         return includedBuildSpecs;
     }
 
+    @Override
     public Settings getSettings() {
         return this;
     }
@@ -109,14 +113,17 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         return new DefaultProjectDescriptor(parent, name, dir, getProjectDescriptorRegistry(), getFileResolver());
     }
 
+    @Override
     public DefaultProjectDescriptor findProject(String path) {
         return getProjectDescriptorRegistry().getProject(path);
     }
 
+    @Override
     public DefaultProjectDescriptor findProject(File projectDir) {
         return getProjectDescriptorRegistry().getProject(projectDir);
     }
 
+    @Override
     public DefaultProjectDescriptor project(String path) {
         DefaultProjectDescriptor projectDescriptor = getProjectDescriptorRegistry().getProject(path);
         if (projectDescriptor == null) {
@@ -125,6 +132,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         return projectDescriptor;
     }
 
+    @Override
     public DefaultProjectDescriptor project(File projectDir) {
         DefaultProjectDescriptor projectDescriptor = getProjectDescriptorRegistry().getProject(projectDir);
         if (projectDescriptor == null) {
@@ -133,6 +141,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         return projectDescriptor;
     }
 
+    @Override
     public void include(String... projectPaths) {
         for (String projectPath : projectPaths) {
             String subPath = "";
@@ -150,6 +159,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         }
     }
 
+    @Override
     public void includeFlat(String... projectNames) {
         for (String projectName : projectNames) {
             createProjectDescriptor(rootProjectDescriptor, projectName,
@@ -164,6 +174,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         return projectPath;
     }
 
+    @Override
     public ProjectDescriptor getRootProject() {
         return rootProjectDescriptor;
     }
@@ -172,18 +183,22 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         this.rootProjectDescriptor = rootProjectDescriptor;
     }
 
+    @Override
     public ProjectDescriptor getDefaultProject() {
         return defaultProjectDescriptor;
     }
 
+    @Override
     public void setDefaultProject(ProjectDescriptor defaultProjectDescriptor) {
         this.defaultProjectDescriptor = defaultProjectDescriptor;
     }
 
+    @Override
     public File getRootDir() {
         return rootProjectDescriptor.getProjectDir();
     }
 
+    @Override
     public StartParameter getStartParameter() {
         return startParameter;
     }
@@ -192,6 +207,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         this.startParameter = startParameter;
     }
 
+    @Override
     public File getSettingsDir() {
         return settingsDir;
     }
@@ -200,6 +216,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         this.settingsDir = settingsDir;
     }
 
+    @Override
     public ScriptSource getSettingsScript() {
         return settingsScript;
     }
@@ -213,6 +230,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         throw new UnsupportedOperationException();
     }
 
+    @Override
     public ProjectRegistry<DefaultProjectDescriptor> getProjectRegistry() {
         return getProjectDescriptorRegistry();
     }
@@ -228,10 +246,12 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
             this);
     }
 
+    @Override
     public ClassLoaderScope getRootClassLoaderScope() {
         return buildRootClassLoaderScope;
     }
 
+    @Override
     public ClassLoaderScope getClassLoaderScope() {
         return settingsClassLoaderScope;
     }
@@ -260,6 +280,7 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
         throw new UnsupportedOperationException();
     }
 
+    @Override
     @Inject
     public PluginManagerInternal getPluginManager() {
         throw new UnsupportedOperationException();
@@ -311,6 +332,11 @@ public class DefaultSettings extends AbstractPluginAware implements SettingsInte
 
     @Override
     public void enableFeaturePreview(String name) {
-        services.get(FeaturePreviews.class).enableFeature(name);
+        Feature feature = Feature.withName(name);
+        if (feature.isActive()) {
+            services.get(FeaturePreviews.class).enableFeature(feature);
+        } else {
+            SingleMessageLogger.nagUserOfDeprecated("enableFeaturePreview('" + feature.name() + "')", "The feature flag is no longer relevant, please remove it from your settings file.");
+        }
     }
 }

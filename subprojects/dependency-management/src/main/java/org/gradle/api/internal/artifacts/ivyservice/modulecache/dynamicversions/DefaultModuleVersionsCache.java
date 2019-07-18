@@ -26,7 +26,7 @@ import org.gradle.util.BuildCommencedTimeProvider;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-public class DefaultModuleVersionsCache extends InMemoryModuleVersionsCache {
+public class DefaultModuleVersionsCache extends AbstractModuleVersionsCache {
 
     private final ArtifactCacheLockingManager artifactCacheLockingManager;
     private final ImmutableModuleIdentifierFactory moduleIdentifierFactory;
@@ -52,20 +52,12 @@ public class DefaultModuleVersionsCache extends InMemoryModuleVersionsCache {
 
     @Override
     protected void store(ModuleAtRepositoryKey key, ModuleVersionsCacheEntry entry) {
-        super.store(key, entry);
         getCache().put(key, entry);
     }
 
     @Override
     protected ModuleVersionsCacheEntry get(ModuleAtRepositoryKey key) {
-        ModuleVersionsCacheEntry entry = super.get(key);
-        if (entry == null) {
-            entry = getCache().get(key);
-            if (entry != null) {
-                super.store(key, entry);
-            }
-        }
-        return entry;
+        return getCache().get(key);
     }
 
     private static class ModuleKeySerializer extends AbstractSerializer<ModuleAtRepositoryKey> {
@@ -75,12 +67,14 @@ public class DefaultModuleVersionsCache extends InMemoryModuleVersionsCache {
             this.moduleIdentifierFactory = moduleIdentifierFactory;
         }
 
+        @Override
         public void write(Encoder encoder, ModuleAtRepositoryKey value) throws Exception {
             encoder.writeString(value.repositoryId);
             encoder.writeString(value.moduleId.getGroup());
             encoder.writeString(value.moduleId.getName());
         }
 
+        @Override
         public ModuleAtRepositoryKey read(Decoder decoder) throws Exception {
             String resolverId = decoder.readString();
             String group = decoder.readString();
@@ -91,6 +85,7 @@ public class DefaultModuleVersionsCache extends InMemoryModuleVersionsCache {
 
     private static class ModuleVersionsCacheEntrySerializer extends AbstractSerializer<ModuleVersionsCacheEntry> {
 
+        @Override
         public void write(Encoder encoder, ModuleVersionsCacheEntry value) throws Exception {
             Set<String> versions = value.moduleVersionListing;
             encoder.writeInt(versions.size());
@@ -100,6 +95,7 @@ public class DefaultModuleVersionsCache extends InMemoryModuleVersionsCache {
             encoder.writeLong(value.createTimestamp);
         }
 
+        @Override
         public ModuleVersionsCacheEntry read(Decoder decoder) throws Exception {
             int size = decoder.readInt();
             Set<String> versions = new LinkedHashSet<String>();

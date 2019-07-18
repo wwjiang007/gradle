@@ -26,6 +26,7 @@ import org.gradle.internal.hash.HashValue;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.Set;
 
 public interface MutableModuleComponentResolveMetadata {
     /**
@@ -74,13 +75,6 @@ public interface MutableModuleComponentResolveMetadata {
      */
     MutableComponentVariant addVariant(String variantName, ImmutableAttributes attributes);
 
-    /**
-     * Checks if the metadata defines the given variant. Depending on the origin of the metadata, a "variant" can be backed
-     * by another concept (for example an ivy configuration). The check should be implemented in a cheap way without creating
-     * full variant/configuration metadata objects since the method only needs to check the name.
-     */
-    boolean definesVariant(String name);
-
     AttributeContainer getAttributes();
 
     void setAttributes(AttributeContainer attributes);
@@ -99,10 +93,12 @@ public interface MutableModuleComponentResolveMetadata {
 
     /**
      * Declares that this component belongs to a platform.
-     * @param platform the identifer of the platform
+     * @param platform the identifier of the platform
      */
     void belongsTo(ComponentIdentifier platform);
 
     @Nullable
-    List<? extends ComponentIdentifier> getPlatformOwners();
+    Set<? extends ComponentIdentifier> getPlatformOwners();
+
+    List<? extends MutableComponentVariant> getMutableVariants();
 }

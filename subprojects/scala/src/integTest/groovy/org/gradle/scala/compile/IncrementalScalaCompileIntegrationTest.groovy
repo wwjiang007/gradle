@@ -26,6 +26,10 @@ class IncrementalScalaCompileIntegrationTest extends AbstractIntegrationSpec {
     @Rule TestResources resources = new TestResources(temporaryFolder)
     @Rule public final ZincScalaCompileFixture zincScalaCompileFixture = new ZincScalaCompileFixture(executer, temporaryFolder)
 
+    def setup() {
+        executer.withRepositoryMirrors()
+    }
+
     def recompilesSourceWhenPropertiesChange() {
         expect:
         run('compileScala').assertTasksSkipped(':compileJava')
@@ -58,7 +62,7 @@ class IncrementalScalaCompileIntegrationTest extends AbstractIntegrationSpec {
             ${mavenCentralRepository()}
 
             dependencies {
-                compile 'org.scala-lang:scala-library:2.11.12'
+                implementation 'org.scala-lang:scala-library:2.11.12'
             }
         """
 

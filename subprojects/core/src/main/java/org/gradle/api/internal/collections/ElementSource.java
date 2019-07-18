@@ -17,11 +17,12 @@
 package org.gradle.api.internal.collections;
 
 import org.gradle.api.internal.WithEstimatedSize;
+import org.gradle.api.internal.WithMutationGuard;
 
 import java.util.Collection;
 import java.util.Iterator;
 
-public interface ElementSource<T> extends Iterable<T>, WithEstimatedSize, PendingSource<T> {
+public interface ElementSource<T> extends Iterable<T>, WithEstimatedSize, PendingSource<T>, WithMutationGuard {
     /**
      * Iterates over and realizes each of the elements of this source.
      */
@@ -38,19 +39,25 @@ public interface ElementSource<T> extends Iterable<T>, WithEstimatedSize, Pendin
      */
     boolean constantTimeIsEmpty();
 
+    @Override
     int estimatedSize();
 
     boolean contains(Object element);
 
     boolean containsAll(Collection<?> elements);
 
+    @Override
     boolean isEmpty();
 
     boolean add(T element);
 
+    boolean addRealized(T element);
+
+    @Override
     void clear();
 
     boolean remove(Object o);
 
+    @Override
     int size();
 }

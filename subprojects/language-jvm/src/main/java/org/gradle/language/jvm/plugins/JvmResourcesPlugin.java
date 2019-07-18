@@ -16,7 +16,10 @@
 
 package org.gradle.language.jvm.plugins;
 
-import org.gradle.api.*;
+import org.gradle.api.DefaultTask;
+import org.gradle.api.Plugin;
+import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.jvm.internal.JvmAssembly;
 import org.gradle.jvm.internal.WithJvmAssembly;
@@ -43,7 +46,6 @@ import static org.gradle.util.CollectionUtils.first;
  * Plugin for packaging JVM resources. Applies the {@link org.gradle.language.base.plugins.ComponentModelBasePlugin}. Registers "resources" language support with the {@link
  * org.gradle.language.jvm.JvmResourceSet}.
  */
-@Incubating
 public class JvmResourcesPlugin implements Plugin<Project> {
 
     @Override
@@ -88,14 +90,17 @@ public class JvmResourcesPlugin implements Plugin<Project> {
         @Override
         public SourceTransformTaskConfig getTransformTask() {
             return new SourceTransformTaskConfig() {
+                @Override
                 public String getTaskPrefix() {
                     return "process";
                 }
 
+                @Override
                 public Class<? extends DefaultTask> getTaskType() {
                     return ProcessResources.class;
                 }
 
+                @Override
                 public void configureTask(Task task, BinarySpec binary, LanguageSourceSet sourceSet, ServiceRegistry serviceRegistry) {
                     ProcessResources resourcesTask = (ProcessResources) task;
                     JvmResourceSet resourceSet = (JvmResourceSet) sourceSet;

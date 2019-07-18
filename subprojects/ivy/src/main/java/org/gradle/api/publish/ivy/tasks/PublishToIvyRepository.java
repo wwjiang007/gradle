@@ -20,15 +20,15 @@ import org.gradle.api.DefaultTask;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.artifacts.repositories.IvyArtifactRepository;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.artifacts.repositories.PublicationAwareRepository;
 import org.gradle.api.publish.internal.PublishOperation;
+import org.gradle.api.publish.internal.validation.DuplicatePublicationTracker;
 import org.gradle.api.publish.ivy.IvyPublication;
 import org.gradle.api.publish.ivy.internal.publication.IvyPublicationInternal;
 import org.gradle.api.publish.ivy.internal.publisher.IvyNormalizedPublication;
 import org.gradle.api.publish.ivy.internal.publisher.IvyPublisher;
 import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
-import org.gradle.internal.Cast;
 
 import javax.inject.Inject;
 import java.util.concurrent.Callable;
@@ -47,11 +47,14 @@ public class PublishToIvyRepository extends DefaultTask {
 
         // Allow the publication to participate in incremental build
         getInputs().files(new Callable<FileCollection>() {
+            @Override
             public FileCollection call() throws Exception {
                 IvyPublicationInternal publicationInternal = getPublicationInternal();
                 return publicationInternal == null ? null : publicationInternal.getPublishableArtifacts().getFiles();
             }
-        }).withPropertyName("publication.publishableFiles");
+        })
+            .withPropertyName("publication.publishableFiles")
+            .withPathSensitivity(PathSensitivity.NAME_ONLY);
 
         // Should repositories be able to participate in incremental?
         // At the least, they may be able to express themselves as output files
@@ -129,6 +132,7 @@ public class PublishToIvyRepository extends DefaultTask {
         if (repository == null) {
             throw new InvalidUserDataException("The 'repository' property is required");
         }
+        getDuplicatePublicationTracker().checkCanPublish(publicationInternal, repository.getUrl(), repository.getName());
 
         doPublish(publicationInternal, repository);
     }
@@ -144,9 +148,14 @@ public class PublishToIvyRepository extends DefaultTask {
             protected void publish() throws Exception {
                 IvyNormalizedPublication normalizedPublication = publication.asNormalisedPublication();
                 IvyPublisher publisher = getIvyPublisher();
-                publisher.publish(normalizedPublication, Cast.cast(PublicationAwareRepository.class, repository));
+                publisher.publish(normalizedPublication, repository);
             }
         }.run();
+    }
+
+    @Inject
+    protected DuplicatePublicationTracker getDuplicatePublicationTracker() {
+        throw new UnsupportedOperationException();
     }
 
 }

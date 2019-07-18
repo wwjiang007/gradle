@@ -28,7 +28,7 @@ import org.gradle.api.artifacts.component.ComponentSelector;
 import org.gradle.api.artifacts.component.ModuleComponentSelector;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.internal.artifacts.DependencySubstitutionInternal;
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.VersionSelectionReasons;
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasons;
 import org.gradle.internal.Pair;
 import org.gradle.internal.component.local.model.DefaultProjectComponentSelector;
 import org.gradle.internal.resolve.ModuleVersionResolveException;
@@ -65,7 +65,7 @@ public class CompositeBuildDependencySubstitutions implements Action<DependencyS
             if (replacement != null) {
                 dependencySubstitution.useTarget(
                     DefaultProjectComponentSelector.newSelector(replacement),
-                    VersionSelectionReasons.COMPOSITE_BUILD);
+                    ComponentSelectionReasons.COMPOSITE_BUILD);
             }
         }
     }
@@ -82,13 +82,15 @@ public class CompositeBuildDependencySubstitutions implements Action<DependencyS
             LOGGER.info("Found project '" + match + "' as substitute for module '" + candidateId + "'.");
             return match;
         }
-        SortedSet<String> sortedProjects = Sets.newTreeSet(CollectionUtils.collect(providingProjects, new Transformer<String, ProjectComponentIdentifier>() {
-            @Override
-            public String transform(ProjectComponentIdentifier projectComponentIdentifier) {
-                return projectComponentIdentifier.getDisplayName();
-            }
-        }));
-        String failureMessage = String.format("Module version '%s' is not unique in composite: can be provided by %s.", selector.getDisplayName(), sortedProjects);
-        throw new ModuleVersionResolveException(selector, failureMessage);
+        throw new ModuleVersionResolveException(selector, () -> {
+            SortedSet<String> sortedProjects = Sets.newTreeSet(CollectionUtils.collect(providingProjects, new Transformer<String, ProjectComponentIdentifier>() {
+                @Override
+                public String transform(ProjectComponentIdentifier projectComponentIdentifier) {
+                    return projectComponentIdentifier.getDisplayName();
+                }
+            }));
+
+            return String.format("Module version '%s' is not unique in composite: can be provided by %s.", selector.getDisplayName(), sortedProjects);
+        });
     }
 }

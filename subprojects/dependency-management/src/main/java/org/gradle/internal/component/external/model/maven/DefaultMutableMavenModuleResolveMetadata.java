@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.parser.GradlePomModuleDescriptorBuilder;
+import org.gradle.api.internal.attributes.AttributesSchemaInternal;
 import org.gradle.api.internal.attributes.ImmutableAttributesFactory;
 import org.gradle.api.internal.model.NamedObjectInstantiator;
 import org.gradle.internal.component.external.descriptor.Configuration;
@@ -35,7 +36,6 @@ import static org.gradle.internal.component.external.model.maven.DefaultMavenMod
 public class DefaultMutableMavenModuleResolveMetadata extends AbstractMutableModuleComponentResolveMetadata implements MutableMavenModuleResolveMetadata {
 
     private final NamedObjectInstantiator objectInstantiator;
-    private final boolean improvedPomSupportEnabled;
 
     private String packaging = "jar";
     private boolean relocated;
@@ -43,24 +43,20 @@ public class DefaultMutableMavenModuleResolveMetadata extends AbstractMutableMod
     private ImmutableList<MavenDependencyDescriptor> dependencies;
 
     public DefaultMutableMavenModuleResolveMetadata(ModuleVersionIdentifier id, ModuleComponentIdentifier componentIdentifier, Collection<MavenDependencyDescriptor> dependencies,
-                                                    ImmutableAttributesFactory attributesFactory, NamedObjectInstantiator objectInstantiator,
-                                                    boolean improvedPomSupportEnabled) {
-        super(attributesFactory, id, componentIdentifier);
+                                                    ImmutableAttributesFactory attributesFactory, NamedObjectInstantiator objectInstantiator, AttributesSchemaInternal schema) {
+        super(attributesFactory, id, componentIdentifier, schema);
         this.dependencies = ImmutableList.copyOf(dependencies);
         this.objectInstantiator = objectInstantiator;
-        this.improvedPomSupportEnabled = improvedPomSupportEnabled;
     }
 
     DefaultMutableMavenModuleResolveMetadata(MavenModuleResolveMetadata metadata,
-                                             NamedObjectInstantiator objectInstantiator,
-                                             boolean improvedPomSupportEnabled) {
+                                             NamedObjectInstantiator objectInstantiator) {
         super(metadata);
         this.packaging = metadata.getPackaging();
         this.relocated = metadata.isRelocated();
         this.snapshotTimestamp = metadata.getSnapshotTimestamp();
         this.dependencies = metadata.getDependencies();
         this.objectInstantiator = objectInstantiator;
-        this.improvedPomSupportEnabled = improvedPomSupportEnabled;
     }
 
     @Override
@@ -117,10 +113,6 @@ public class DefaultMutableMavenModuleResolveMetadata extends AbstractMutableMod
     @Override
     public ImmutableList<MavenDependencyDescriptor> getDependencies() {
         return dependencies;
-    }
-
-    boolean isImprovedPomSupportEnabled() {
-        return improvedPomSupportEnabled;
     }
 
     NamedObjectInstantiator getObjectInstantiator() {

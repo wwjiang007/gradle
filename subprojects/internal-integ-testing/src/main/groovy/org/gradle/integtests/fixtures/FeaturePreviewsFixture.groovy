@@ -24,15 +24,9 @@ enableFeaturePreview("GRADLE_METADATA")
 """
     }
 
-    static void enableImprovedPomSupport(File settings) {
+    static void enableGroovyCompilationAvoidance(File settings) {
         settings << """
-enableFeaturePreview("IMPROVED_POM_SUPPORT")
-"""
-    }
-
-    static void enableStablePublishing(File settings) {
-        settings << """
-enableFeaturePreview("STABLE_PUBLISHING")
+enableFeaturePreview('GROOVY_COMPILATION_AVOIDANCE')
 """
     }
 }

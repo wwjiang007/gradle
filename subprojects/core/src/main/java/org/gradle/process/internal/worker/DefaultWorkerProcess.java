@@ -21,6 +21,7 @@ import org.gradle.api.logging.Logging;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.concurrent.AsyncStoppable;
 import org.gradle.internal.concurrent.CompositeStoppable;
+import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.internal.remote.ConnectionAcceptor;
 import org.gradle.internal.remote.ObjectConnection;
 import org.gradle.process.ExecResult;
@@ -84,9 +85,11 @@ public class DefaultWorkerProcess implements WorkerProcess {
     public void setExecHandle(ExecHandle execHandle) {
         this.execHandle = execHandle;
         execHandle.addListener(new ExecHandleListener() {
+            @Override
             public void executionStarted(ExecHandle execHandle) {
             }
 
+            @Override
             public void executionFinished(ExecHandle execHandle, ExecResult execResult) {
                 onProcessStop(execResult);
             }
@@ -154,10 +157,12 @@ public class DefaultWorkerProcess implements WorkerProcess {
                 + '}';
     }
 
+    @Override
     public ObjectConnection getConnection() {
         return connection;
     }
 
+    @Override
     public WorkerProcess start() {
         try {
             doStart();
@@ -205,6 +210,7 @@ public class DefaultWorkerProcess implements WorkerProcess {
         }
     }
 
+    @Override
     public ExecResult waitForStop() {
         try {
             return execHandle.waitForFinish().assertNormalExitValue();
@@ -217,13 +223,17 @@ public class DefaultWorkerProcess implements WorkerProcess {
         CompositeStoppable stoppable;
         lock.lock();
         try {
-            stoppable = CompositeStoppable.stoppable(acceptor, connection);
+            stoppable = CompositeStoppable.stoppable(connection, new Stoppable() {
+                @Override
+                public void stop() {
+                    execHandle.abort();
+                }
+            }, acceptor);
         } finally {
             this.connection = null;
             this.acceptor = null;
             lock.unlock();
         }
         stoppable.stop();
-        execHandle.abort();
     }
 }

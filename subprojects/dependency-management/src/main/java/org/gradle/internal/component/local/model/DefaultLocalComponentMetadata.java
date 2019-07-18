@@ -30,10 +30,12 @@ import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.PublishArtifact;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.attributes.AttributeContainer;
+import org.gradle.api.attributes.Category;
 import org.gradle.api.capabilities.CapabilitiesMetadata;
 import org.gradle.api.internal.artifacts.configurations.ConfigurationInternal;
 import org.gradle.api.internal.artifacts.configurations.OutgoingVariant;
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.dependencies.LocalConfigurationMetadataBuilder;
+import org.gradle.api.internal.attributes.AttributeValue;
 import org.gradle.api.internal.attributes.AttributesSchemaInternal;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.internal.Describables;
@@ -50,7 +52,6 @@ import org.gradle.internal.component.model.ModuleSource;
 import org.gradle.internal.component.model.VariantResolveMetadata;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +73,7 @@ public class DefaultLocalComponentMetadata implements LocalComponentMetadata, Bu
         this.status = status;
         this.attributesSchema = attributesSchema;
     }
+
     @Override
     public ComponentIdentifier getId() {
         return componentId;
@@ -158,7 +160,7 @@ public class DefaultLocalComponentMetadata implements LocalComponentMetadata, Bu
     }
 
     @Override
-    public BuildableLocalConfigurationMetadata addConfiguration(String name, String description, Set<String> extendsFrom, Set<String> hierarchy, boolean visible, boolean transitive, ImmutableAttributes attributes, boolean canBeConsumed, boolean canBeResolved, ImmutableCapabilities capabilities) {
+    public BuildableLocalConfigurationMetadata addConfiguration(String name, String description, Set<String> extendsFrom, ImmutableSet<String> hierarchy, boolean visible, boolean transitive, ImmutableAttributes attributes, boolean canBeConsumed, boolean canBeResolved, ImmutableCapabilities capabilities) {
         assert hierarchy.contains(name);
         DefaultLocalConfigurationMetadata conf = new DefaultLocalConfigurationMetadata(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, canBeResolved, capabilities);
         addToConfigurations(name, conf);
@@ -266,7 +268,7 @@ public class DefaultLocalComponentMetadata implements LocalComponentMetadata, Bu
         private final String description;
         private final boolean transitive;
         private final boolean visible;
-        private final Set<String> hierarchy;
+        private final ImmutableSet<String> hierarchy;
         private final Set<String> extendsFrom;
         private final ImmutableAttributes attributes;
         private final boolean canBeConsumed;
@@ -291,7 +293,7 @@ public class DefaultLocalComponentMetadata implements LocalComponentMetadata, Bu
                                                     boolean visible,
                                                     boolean transitive,
                                                     Set<String> extendsFrom,
-                                                    Set<String> hierarchy,
+                                                    ImmutableSet<String> hierarchy,
                                                     ImmutableAttributes attributes,
                                                     boolean canBeConsumed,
                                                     boolean canBeResolved,
@@ -313,6 +315,7 @@ public class DefaultLocalComponentMetadata implements LocalComponentMetadata, Bu
             return componentId;
         }
 
+        @Override
         public void addDependency(LocalOriginDependencyMetadata dependency) {
             definedDependencies.add(dependency);
         }
@@ -362,7 +365,7 @@ public class DefaultLocalComponentMetadata implements LocalComponentMetadata, Bu
         }
 
         @Override
-        public Collection<String> getHierarchy() {
+        public ImmutableSet<String> getHierarchy() {
             return hierarchy;
         }
 
@@ -406,6 +409,15 @@ public class DefaultLocalComponentMetadata implements LocalComponentMetadata, Bu
                     }
                 }
                 maybeAddGeneratedDependencies(result);
+                AttributeValue<Category> attributeValue = this.getAttributes().findEntry(Category.CATEGORY_ATTRIBUTE);
+                if (attributeValue.isPresent() && attributeValue.get().getName().equals(Category.ENFORCED_PLATFORM)) {
+                    // need to wrap all dependencies to force them
+                    ImmutableList<LocalOriginDependencyMetadata> rawDependencies = result.build();
+                    result = ImmutableList.builder();
+                    for (LocalOriginDependencyMetadata rawDependency : rawDependencies) {
+                        result.add(rawDependency.forced());
+                    }
+                }
                 configurationDependencies = result.build();
             }
             return configurationDependencies;

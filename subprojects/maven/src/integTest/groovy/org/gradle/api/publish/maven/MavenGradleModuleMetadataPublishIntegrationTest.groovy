@@ -16,7 +16,9 @@
 
 package org.gradle.api.publish.maven
 
+import org.gradle.integtests.fixtures.FeaturePreviewsFixture
 import org.gradle.integtests.fixtures.publish.maven.AbstractMavenPublishIntegTest
+import spock.lang.Unroll
 
 class MavenGradleModuleMetadataPublishIntegrationTest extends AbstractMavenPublishIntegTest {
     def setup() {
@@ -86,6 +88,56 @@ class TestCapability implements Capability {
         def module = mavenRepo.module('group', 'root', '1.0')
         module.assertPublished()
         module.parsedModuleMetadata.variants.empty
+    }
+
+    @Unroll
+    def "publishes Gradle metadata redirection marker when Gradle metadata task is enabled (preview=#enableFeaturePreview, enabled=#enabled)"() {
+        publishModuleMetadata = enableFeaturePreview
+
+        given:
+        settingsFile.text = """
+            rootProject.name = 'root'
+        """
+        if (enableFeaturePreview) {
+            FeaturePreviewsFixture.enableGradleMetadata(settingsFile)
+        }
+        buildFile << """
+            apply plugin: 'maven-publish'
+
+            group = 'group'
+            version = '1.0'
+
+            def comp = new TestComponent()
+
+            publishing {
+                repositories {
+                    maven { url "${mavenRepo.uri}" }
+                }
+                publications {
+                    maven(MavenPublication) {
+                        from comp
+                    }
+                }
+            }
+            
+            generateMetadataFileForMavenPublication.enabled = $enabled
+        """
+
+        settingsFile << "rootProject.name = 'publishTest' "
+
+        when:
+        succeeds 'publish'
+
+        then:
+        def module = mavenRepo.module('group', 'publishTest', '1.0')
+        module.hasGradleMetadataRedirectionMarker() == hasMarker
+
+        where:
+        enableFeaturePreview | enabled | hasMarker
+        false                | false   | false
+        false                | true    | true       // component with variants is published independently of feature preview
+        true                 | false   | false
+        true                 | true    | true
     }
 
     def "maps project dependencies"() {
@@ -163,7 +215,7 @@ class TestCapability implements Capability {
         api.dependencies[1].coords == 'group.b:utils:0.01'
     }
 
-    def "publishes component with strict dependencies"() {
+    def "publishes component with strict and prefer dependencies"() {
         settingsFile << "rootProject.name = 'root'"
         buildFile << """
             apply plugin: 'maven-publish'
@@ -184,7 +236,12 @@ class TestCapability implements Capability {
                         strictly '1.0'
                     }
                 }
-                implementation("org:bar:2.0")
+                implementation("org:bar") {
+                    version {
+                        prefer '2.0'
+                    }
+                }
+                implementation("org:baz:3.0")
             }
 
             publishing {
@@ -207,17 +264,28 @@ class TestCapability implements Capability {
         module.assertPublished()
         module.parsedModuleMetadata.variants.size() == 1
         def variant = module.parsedModuleMetadata.variants[0]
-        variant.dependencies.size() == 2
+        variant.dependencies.size() == 3
 
         variant.dependencies[0].group == 'org'
         variant.dependencies[0].module == 'foo'
         variant.dependencies[0].version == '1.0'
-        variant.dependencies[0].rejectsVersion == ['(1.0,)']
+        variant.dependencies[0].prefers == null
+        variant.dependencies[0].strictly == '1.0'
+        variant.dependencies[0].rejectsVersion == []
 
         variant.dependencies[1].group == 'org'
         variant.dependencies[1].module == 'bar'
-        variant.dependencies[1].version == '2.0'
+        variant.dependencies[1].version == null
+        variant.dependencies[1].prefers == '2.0'
+        variant.dependencies[1].strictly == null
         variant.dependencies[1].rejectsVersion == []
+
+        variant.dependencies[2].group == 'org'
+        variant.dependencies[2].module == 'baz'
+        variant.dependencies[2].version == '3.0'
+        variant.dependencies[2].prefers == null
+        variant.dependencies[2].strictly == null
+        variant.dependencies[2].rejectsVersion == []
     }
 
     def "publishes component with dependency constraints"() {
@@ -289,7 +357,7 @@ class TestCapability implements Capability {
             dependencies {
                 implementation("org:foo") {
                     version {
-                        prefer '1.0'
+                        require '1.0'
                         reject '1.1', '[1.3,1.4]'
                     }
                 }

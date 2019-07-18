@@ -9,7 +9,7 @@ Root project
       | Type:   	Person
       | Creator: 	PersonRules#person(Person)
       | Rules:
-         ⤷ person { ... } @ build.gradle line 59, column 3
+         ⤷ person { ... } @ build.gradle line 97, column 3
          ⤷ PersonRules#setFirstName(Person)
     + age
           | Type:   	int
@@ -110,6 +110,12 @@ Root project
           | Type:   	org.gradle.api.reporting.model.ModelReport
           | Value:  	task ':model'
           | Creator: 	Project.<init>.tasks.model()
+          | Rules:
+             ⤷ copyToTaskContainer
+    + prepareKotlinBuildScriptModel
+          | Type:   	org.gradle.api.DefaultTask
+          | Value:  	task ':prepareKotlinBuildScriptModel'
+          | Creator: 	Project.<init>.tasks.prepareKotlinBuildScriptModel()
           | Rules:
              ⤷ copyToTaskContainer
     + projects

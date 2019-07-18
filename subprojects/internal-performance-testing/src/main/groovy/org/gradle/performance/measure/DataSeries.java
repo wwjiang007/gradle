@@ -17,11 +17,14 @@
 package org.gradle.performance.measure;
 
 import com.google.common.collect.Lists;
+import org.apache.commons.math3.stat.inference.MannWhitneyUTest;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * A collection of measurements of some given units.
@@ -79,7 +82,7 @@ public class DataSeries<Q> extends ArrayList<Amount<Q>> {
             sumSquares = sumSquares.add(diff);
         }
         // This isn't quite right, as we may lose precision when converting to a double
-        BigDecimal result = BigDecimal.valueOf(Math.sqrt(sumSquares.divide(BigDecimal.valueOf(size()), BigDecimal.ROUND_HALF_UP).doubleValue())).setScale(2, BigDecimal.ROUND_HALF_UP);
+        BigDecimal result = BigDecimal.valueOf(Math.sqrt(sumSquares.divide(BigDecimal.valueOf(size()), RoundingMode.HALF_UP).doubleValue())).setScale(2, RoundingMode.HALF_UP);
 
         standardError = Amount.valueOf(result, baseUnits);
     }
@@ -102,5 +105,17 @@ public class DataSeries<Q> extends ArrayList<Amount<Q>> {
 
     public Amount<Q> getStandardError() {
         return standardError;
+    }
+
+    public static double confidenceInDifference(DataSeries first, DataSeries second) {
+        return 1 - new MannWhitneyUTest().mannWhitneyUTest(first.asDoubleArray(), second.asDoubleArray());
+    }
+
+    public List<Double> asDoubleList() {
+        return stream().map(Amount::getValue).map(BigDecimal::doubleValue).collect(Collectors.toList());
+    }
+
+    private double[] asDoubleArray() {
+        return stream().map(Amount::getValue).mapToDouble(BigDecimal::doubleValue).toArray();
     }
 }

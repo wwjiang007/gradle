@@ -47,6 +47,7 @@ public class IvyArtifactNotationParserFactory implements Factory<NotationParser<
         this.publicationIdentity = publicationIdentity;
     }
 
+    @Override
     public NotationParser<Object, IvyArtifact> create() {
         FileNotationConverter fileNotationConverter = new FileNotationConverter(fileResolver);
         ArchiveTaskNotationConverter archiveTaskNotationConverter = new ArchiveTaskNotationConverter();
@@ -61,14 +62,13 @@ public class IvyArtifactNotationParserFactory implements Factory<NotationParser<
 
         IvyArtifactMapNotationConverter ivyArtifactMapNotationConverter = new IvyArtifactMapNotationConverter(sourceNotationParser);
 
-        NotationParserBuilder<IvyArtifact> parserBuilder = NotationParserBuilder
+        return NotationParserBuilder
                 .toType(IvyArtifact.class)
                 .converter(archiveTaskNotationConverter)
                 .converter(publishArtifactNotationConverter)
                 .converter(ivyArtifactMapNotationConverter)
-                .converter(fileNotationConverter);
-
-        return parserBuilder.toComposite();
+                .converter(fileNotationConverter)
+                .toComposite();
     }
 
     private class ArchiveTaskNotationConverter extends TypedNotationConverter<AbstractArchiveTask, IvyArtifact> {
@@ -100,6 +100,7 @@ public class IvyArtifactNotationParserFactory implements Factory<NotationParser<
             this.fileResolverNotationParser = fileResolver.asNotationParser();
         }
 
+        @Override
         public void convert(Object notation, NotationConvertResult<? super IvyArtifact> result) throws TypeConversionException {
             File file = fileResolverNotationParser.parseNotation(notation);
             IvyArtifact ivyArtifact = instantiator.newInstance(FileBasedIvyArtifact.class, file, publicationIdentity);

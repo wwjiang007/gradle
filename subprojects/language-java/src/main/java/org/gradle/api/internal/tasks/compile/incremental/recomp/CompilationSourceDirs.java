@@ -19,13 +19,17 @@ package org.gradle.api.internal.tasks.compile.incremental.recomp;
 import com.google.common.collect.Lists;
 import org.gradle.api.NonNullApi;
 import org.gradle.api.internal.file.FileCollectionInternal;
-import org.gradle.api.internal.file.FileCollectionVisitor;
+import org.gradle.api.internal.file.FileCollectionLeafVisitor;
 import org.gradle.api.internal.file.FileTreeInternal;
-import org.gradle.api.internal.file.collections.DirectoryFileTree;
-import org.gradle.api.logging.Logging;
+import org.gradle.api.tasks.util.PatternSet;
+import org.gradle.util.RelativePathUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Attempts to infer the source root directories for the `source` inputs to a
@@ -36,33 +40,31 @@ import java.util.List;
  */
 @NonNullApi
 public class CompilationSourceDirs {
-    private static final org.gradle.api.logging.Logger LOG = Logging.getLogger(CompilationSourceDirs.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CompilationSourceDirs.class);
+    private final List<File> sourceRoots;
 
-    private final FileTreeInternal sources;
-    private SourceRoots sourceRoots;
-
-    public CompilationSourceDirs(FileTreeInternal sources) {
-        this.sources = sources;
+    public CompilationSourceDirs(List<File> sourceRoots) {
+        this.sourceRoots = sourceRoots;
     }
 
-    public List<File> getSourceRoots() {
-        return resolveRoots().getSourceRoots();
+    public static List<File> inferSourceRoots(FileTreeInternal sources) {
+        SourceRoots visitor = new SourceRoots();
+        sources.visitLeafCollections(visitor);
+        return visitor.canInferSourceRoots ? visitor.sourceRoots : Collections.emptyList();
     }
 
-    public boolean canInferSourceRoots() {
-        return resolveRoots().isCanInferSourceRoots();
+    /**
+     * Calculate the relative path to the source root.
+     */
+    public Optional<String> relativize(File sourceFile) {
+        return sourceRoots.stream()
+            .filter(sourceDir -> sourceFile.getAbsolutePath().startsWith(sourceDir.getAbsolutePath()))
+            .map(sourceDir -> RelativePathUtil.relativePath(sourceDir, sourceFile))
+            .filter(relativePath -> !relativePath.startsWith(".."))
+            .findFirst();
     }
 
-    private SourceRoots resolveRoots() {
-        if (sourceRoots == null) {
-            SourceRoots visitor = new SourceRoots();
-            sources.visitRootElements(visitor);
-            sourceRoots = visitor;
-        }
-        return sourceRoots;
-    }
-
-    private static class SourceRoots implements FileCollectionVisitor {
+    private static class SourceRoots implements FileCollectionLeafVisitor {
         private boolean canInferSourceRoots = true;
         private List<File> sourceRoots = Lists.newArrayList();
 
@@ -72,26 +74,23 @@ public class CompilationSourceDirs {
         }
 
         @Override
-        public void visitTree(FileTreeInternal fileTree) {
+        public void visitGenericFileTree(FileTreeInternal fileTree) {
             cannotInferSourceRoots(fileTree);
         }
 
         @Override
-        public void visitDirectoryTree(DirectoryFileTree directoryTree) {
-            sourceRoots.add(directoryTree.getDir());
+        public void visitFileTree(File root, PatternSet patterns) {
+            // We need to add missing files as source roots, since the package name for deleted files provided by IncrementalTaskInputs also need to be determined.
+            if (!root.exists() || root.isDirectory()) {
+                sourceRoots.add(root);
+            } else {
+                cannotInferSourceRoots("file '" + root + "'");
+            }
         }
 
-        private void cannotInferSourceRoots(FileCollectionInternal fileCollection) {
+        private void cannotInferSourceRoots(Object fileCollection) {
             canInferSourceRoots = false;
             LOG.info("Cannot infer source root(s) for source `{}`. Supported types are `File` (directories only), `DirectoryTree` and `SourceDirectorySet`.", fileCollection);
-        }
-
-        public boolean isCanInferSourceRoots() {
-            return canInferSourceRoots;
-        }
-
-        public List<File> getSourceRoots() {
-            return sourceRoots;
         }
     }
 }

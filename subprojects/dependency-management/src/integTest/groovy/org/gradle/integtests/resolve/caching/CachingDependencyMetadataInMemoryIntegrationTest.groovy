@@ -18,10 +18,11 @@
 
 package org.gradle.integtests.resolve.caching
 
-import org.gradle.integtests.fixtures.AbstractDependencyResolutionTest
+
+import org.gradle.integtests.fixtures.AbstractHttpDependencyResolutionTest
 import org.gradle.test.fixtures.ivy.IvyFileRepository
 
-class CachingDependencyMetadataInMemoryIntegrationTest extends AbstractDependencyResolutionTest {
+class CachingDependencyMetadataInMemoryIntegrationTest extends AbstractHttpDependencyResolutionTest {
 
     def "version list, descriptor and artifact is cached in memory"() {
         given:
@@ -49,7 +50,7 @@ class CachingDependencyMetadataInMemoryIntegrationTest extends AbstractDependenc
             task purgeRepo(type: Delete, dependsOn: resolveOne) {
                 delete "${mavenRepo.uri}"
             }
-            //runs last, still works even thoug local repo is empty
+            //runs last, still works even though local repo is empty
             task resolveTwo(dependsOn: purgeRepo) {
                 doLast {
                     println "Resolved " + configurations.two.files*.name
@@ -66,24 +67,23 @@ class CachingDependencyMetadataInMemoryIntegrationTest extends AbstractDependenc
 
     def "descriptors and artifacts are cached across projects and repositories"() {
         given:
-        ivyRepo.module("org", "lib").publish()
+        def lib = ivyHttpRepo.module("org", "lib").publish()
 
         file("settings.gradle") << "include 'impl'"
 
         file("build.gradle") << """
             allprojects {
                 configurations { conf }
-                repositories { ivy { url "${ivyRepo.uri}" } }
+                repositories { ivy { url "${ivyHttpRepo.uri}" } }
                 dependencies { conf 'org:lib:1.0' }
                 task resolveConf { doLast { println path + " " + configurations.conf.files*.name } }
             }
-            task purgeRepo(type: Delete, dependsOn: ':impl:resolveConf') {
-                delete "${ivyRepo.uri}"
-            }
-            resolveConf.dependsOn purgeRepo
+            resolveConf.dependsOn(':impl:resolveConf')
         """
 
         when:
+        lib.ivy.expectGet()
+        lib.jar.expectGet()
         run "resolveConf"
 
         then:

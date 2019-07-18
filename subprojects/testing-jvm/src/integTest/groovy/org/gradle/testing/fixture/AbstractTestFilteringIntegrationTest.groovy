@@ -17,32 +17,24 @@ package org.gradle.testing.fixture
 
 import org.gradle.integtests.fixtures.DefaultTestExecutionResult
 import org.gradle.integtests.fixtures.MultiVersionIntegrationSpec
-import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
-import spock.lang.IgnoreIf
 import spock.lang.Issue
 import spock.lang.Unroll
 
-import static org.gradle.testing.fixture.JUnitMultiVersionIntegrationSpec.*
-
 abstract class AbstractTestFilteringIntegrationTest extends MultiVersionIntegrationSpec {
 
-    protected String framework
-    protected String dependency
-    protected String imports
+    abstract String getImports()
+    abstract String getFramework()
+    abstract String getDependencies()
 
-    abstract void configureFramework()
-
-    void setup() {
-        configureFramework()
+    def setup() {
         buildFile << """
             apply plugin: 'java'
             ${mavenCentralRepository()}
-            dependencies { testCompile '$dependency:${dependencyVersion}' }
+            dependencies { ${dependencies} }
             test { use${framework}() }
         """
     }
 
-    @Unroll
     def "executes single method from a test class"() {
         buildFile << """
             test {
@@ -209,7 +201,6 @@ abstract class AbstractTestFilteringIntegrationTest extends MultiVersionIntegrat
         succeeds("test", "--tests", 'FooTest.missingMethod')
     }
 
-    @IgnoreIf({GradleContextualExecuter.parallel})
     def "task is out of date when --tests argument changes"() {
         file("src/test/java/FooTest.java") << """import $imports;
             public class FooTest {
@@ -222,13 +213,13 @@ abstract class AbstractTestFilteringIntegrationTest extends MultiVersionIntegrat
         then: new DefaultTestExecutionResult(testDirectory).testClass("FooTest").assertTestsExecuted("pass")
 
         when: run("test", "--tests", "FooTest.pass")
-        then: result.skippedTasks.contains(":test") //up-to-date
+        then: skipped(":test") //up-to-date
 
         when:
         run("test", "--tests", "FooTest.pass*")
 
         then:
-        !result.skippedTasks.contains(":test")
+        executedAndNotSkipped(":test")
         new DefaultTestExecutionResult(testDirectory).testClass("FooTest").assertTestsExecuted("pass", "pass2")
     }
 

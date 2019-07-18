@@ -16,23 +16,29 @@
 
 package org.gradle.workers.internal;
 
-import org.gradle.api.internal.InstantiatorFactory;
+import org.gradle.api.internal.ClassPathRegistry;
 import org.gradle.concurrent.ParallelismConfiguration;
+import org.gradle.initialization.ClassLoaderRegistry;
 import org.gradle.initialization.GradleUserHomeDirProvider;
-import org.gradle.internal.classloader.ClassLoaderFactory;
 import org.gradle.internal.concurrent.ExecutorFactory;
 import org.gradle.internal.event.ListenerManager;
-import org.gradle.internal.file.PathToFileResolver;
+import org.gradle.internal.hash.ClassLoaderHierarchyHasher;
+import org.gradle.internal.instantiation.InstantiatorFactory;
+import org.gradle.internal.isolation.IsolatableFactory;
 import org.gradle.internal.logging.LoggingManagerInternal;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.resources.ResourceLockCoordinationService;
 import org.gradle.internal.service.ServiceRegistration;
+import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.scopes.AbstractPluginServiceRegistry;
+import org.gradle.internal.state.ManagedFactoryRegistry;
 import org.gradle.internal.work.AsyncWorkTracker;
 import org.gradle.internal.work.ConditionalExecutionQueueFactory;
 import org.gradle.internal.work.DefaultConditionalExecutionQueueFactory;
 import org.gradle.internal.work.WorkerLeaseRegistry;
+import org.gradle.process.internal.JavaForkOptionsFactory;
 import org.gradle.process.internal.health.memory.MemoryManager;
+import org.gradle.process.internal.health.memory.OsMemoryInfo;
 import org.gradle.process.internal.worker.WorkerProcessFactory;
 import org.gradle.process.internal.worker.child.DefaultWorkerDirectoryProvider;
 import org.gradle.process.internal.worker.child.WorkerDirectoryProvider;
@@ -55,13 +61,12 @@ public class WorkersServices extends AbstractPluginServiceRegistry {
     }
 
     private static class BuildSessionScopeServices {
-
-        WorkerDaemonFactory createWorkerDaemonFactory(WorkerDaemonClientsManager workerDaemonClientsManager, MemoryManager memoryManager, WorkerLeaseRegistry workerLeaseRegistry, BuildOperationExecutor buildOperationExecutor) {
+        WorkerDaemonFactory createWorkerDaemonFactory(WorkerDaemonClientsManager workerDaemonClientsManager, BuildOperationExecutor buildOperationExecutor) {
             return new WorkerDaemonFactory(workerDaemonClientsManager, buildOperationExecutor);
         }
 
-        IsolatedClassloaderWorkerFactory createIsolatedClassloaderWorkerFactory(ClassLoaderFactory classLoaderFactory, WorkerLeaseRegistry workerLeaseRegistry, BuildOperationExecutor buildOperationExecutor) {
-            return new IsolatedClassloaderWorkerFactory(classLoaderFactory, buildOperationExecutor);
+        IsolatedClassloaderWorkerFactory createIsolatedClassloaderWorkerFactory(BuildOperationExecutor buildOperationExecutor, ServiceRegistry serviceRegistry, ClassLoaderRegistry classLoaderRegistry) {
+            return new IsolatedClassloaderWorkerFactory(buildOperationExecutor, serviceRegistry, classLoaderRegistry);
         }
 
         WorkerDirectoryProvider createWorkerDirectoryProvider(GradleUserHomeDirProvider gradleUserHomeDirProvider) {
@@ -81,15 +86,41 @@ public class WorkersServices extends AbstractPluginServiceRegistry {
         WorkerDaemonClientsManager createWorkerDaemonClientsManager(WorkerProcessFactory workerFactory,
                                                                     LoggingManagerInternal loggingManager,
                                                                     ListenerManager listenerManager,
-                                                                    MemoryManager memoryManager) {
-            return new WorkerDaemonClientsManager(new WorkerDaemonStarter(workerFactory, loggingManager), listenerManager, loggingManager, memoryManager);
+                                                                    MemoryManager memoryManager,
+                                                                    OsMemoryInfo memoryInfo,
+                                                                    ClassPathRegistry classPathRegistry,
+                                                                    ActionExecutionSpecFactory actionExecutionSpecFactory) {
+            return new WorkerDaemonClientsManager(new WorkerDaemonStarter(workerFactory, loggingManager, classPathRegistry, actionExecutionSpecFactory), listenerManager, loggingManager, memoryManager, memoryInfo);
+        }
+
+        ClassLoaderStructureProvider createClassLoaderStructureProvider(ClassLoaderRegistry classLoaderRegistry) {
+            return new ClassLoaderStructureProvider(classLoaderRegistry);
+        }
+
+        IsolatableSerializerRegistry createIsolatableSerializerRegistry(ClassLoaderHierarchyHasher classLoaderHierarchyHasher, ManagedFactoryRegistry managedFactoryRegistry) {
+            return new IsolatableSerializerRegistry(classLoaderHierarchyHasher, managedFactoryRegistry);
+        }
+
+        ActionExecutionSpecFactory createActionExecutionSpecFactory(IsolatableFactory isolatableFactory, IsolatableSerializerRegistry serializerRegistry, InstantiatorFactory instantiatorFactory) {
+            return new DefaultActionExecutionSpecFactory(isolatableFactory, serializerRegistry, instantiatorFactory);
         }
     }
 
     private static class ProjectScopeServices {
-        WorkerExecutor createWorkerExecutor(InstantiatorFactory instantiatorFactory, WorkerDaemonFactory daemonWorkerFactory, IsolatedClassloaderWorkerFactory isolatedClassloaderWorkerFactory, PathToFileResolver fileResolver, WorkerLeaseRegistry workerLeaseRegistry, BuildOperationExecutor buildOperationExecutor, AsyncWorkTracker asyncWorkTracker, WorkerDirectoryProvider workerDirectoryProvider, WorkerExecutionQueueFactory workerExecutionQueueFactory) {
-            NoIsolationWorkerFactory noIsolationWorkerFactory = new NoIsolationWorkerFactory(buildOperationExecutor, asyncWorkTracker, instantiatorFactory);
-            DefaultWorkerExecutor workerExecutor = instantiatorFactory.decorate().newInstance(DefaultWorkerExecutor.class, daemonWorkerFactory, isolatedClassloaderWorkerFactory, noIsolationWorkerFactory, fileResolver, workerLeaseRegistry, buildOperationExecutor, asyncWorkTracker, workerDirectoryProvider, workerExecutionQueueFactory);
+        WorkerExecutor createWorkerExecutor(InstantiatorFactory instantiatorFactory,
+                                            WorkerDaemonFactory daemonWorkerFactory,
+                                            IsolatedClassloaderWorkerFactory isolatedClassloaderWorkerFactory,
+                                            JavaForkOptionsFactory forkOptionsFactory,
+                                            WorkerLeaseRegistry workerLeaseRegistry,
+                                            BuildOperationExecutor buildOperationExecutor,
+                                            AsyncWorkTracker asyncWorkTracker,
+                                            WorkerDirectoryProvider workerDirectoryProvider,
+                                            ClassLoaderStructureProvider classLoaderStructureProvider,
+                                            WorkerExecutionQueueFactory workerExecutionQueueFactory,
+                                            ServiceRegistry serviceRegistry,
+                                            ActionExecutionSpecFactory actionExecutionSpecFactory) {
+            NoIsolationWorkerFactory noIsolationWorkerFactory = new NoIsolationWorkerFactory(buildOperationExecutor, serviceRegistry);
+            DefaultWorkerExecutor workerExecutor = instantiatorFactory.decorateLenient().newInstance(DefaultWorkerExecutor.class, daemonWorkerFactory, isolatedClassloaderWorkerFactory, noIsolationWorkerFactory, forkOptionsFactory, workerLeaseRegistry, buildOperationExecutor, asyncWorkTracker, workerDirectoryProvider, workerExecutionQueueFactory, classLoaderStructureProvider, actionExecutionSpecFactory, instantiatorFactory.injectAndDecorateLenient(serviceRegistry));
             noIsolationWorkerFactory.setWorkerExecutor(workerExecutor);
             return workerExecutor;
         }

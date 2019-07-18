@@ -22,6 +22,7 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier
 import org.gradle.api.internal.artifacts.dsl.dependencies.DependencyLockingProvider
 import org.gradle.api.internal.artifacts.dsl.dependencies.DependencyLockingState
+import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolutionState
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.DependencyGraphComponent
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.DependencyGraphNode
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.RootGraphNode
@@ -137,29 +138,51 @@ class DependencyLockingArtifactVisitorTest extends Specification {
         notThrown(LockOutOfDateException)
     }
 
-    def 'throws when extra modules visited'() {
+    def 'generates failures when extra modules visited'() {
         given:
         startWithState([])
         addVisitedNode(newId(mid, '1.0'))
 
         when:
-        visitor.complete()
+        def failures = visitor.collectLockingFailures()
 
         then:
-        def ex = thrown(LockOutOfDateException)
-        ex.message.contains("Resolved 'org:foo:1.0' which is not part of the lock state")
+        failures.size() == 1
+        failures.each {
+            assert it.problem instanceof LockOutOfDateException
+            assert it.problem.message.contains("Resolved 'org:foo:1.0' which is not part of the dependency lock state")
+        }
     }
 
-    def 'throws when module not visited'() {
+    def 'generates failures when module not visited'() {
         given:
         startWithState([newId(mid, '1.1')])
 
         when:
-        visitor.complete()
+        def failures = visitor.collectLockingFailures()
 
         then:
-        def ex = thrown(LockOutOfDateException)
-        ex.message.contains("Did not resolve 'org:foo:1.1' which is part of the lock state")
+        failures.size() == 1
+        failures.each {
+            assert it.problem instanceof LockOutOfDateException
+            assert it.problem.message.contains("Did not resolve 'org:foo:1.1' which is part of the dependency lock state")
+        }
+    }
+
+    def 'generates failures when module visited with different version'() {
+        given:
+        startWithState([newId(mid, '1.1')])
+        addVisitedNode(newId(mid, '1.0'))
+
+        when:
+        def failures = visitor.collectLockingFailures()
+
+        then:
+        failures.size() == 1
+        failures.each {
+            assert it.problem instanceof LockOutOfDateException
+            assert it.problem.message.contains("Did not resolve 'org:foo:1.1' which has been forced / substituted to a different version: '1.0'")
+        }
     }
 
     def 'invokes locking provider on complete with visited modules'() {
@@ -193,9 +216,11 @@ class DependencyLockingArtifactVisitorTest extends Specification {
 
     private void addVisitedNode(ModuleComponentIdentifier module) {
         DependencyGraphNode node = Mock()
-        DependencyGraphComponent component = Mock()
-        node.owner >> component
-        component.componentId >> module
+        DependencyGraphComponent owner = Mock()
+        ComponentResolutionState component = Mock()
+        node.owner >> owner
+        node.component >> component
+        owner.componentId >> module
 
         visitor.visitNode(node)
     }
