@@ -38,6 +38,7 @@ import org.gradle.configuration.internal.ListenerBuildOperationDecorator;
 import org.gradle.execution.ProjectExecutionServiceRegistry;
 import org.gradle.execution.plan.DefaultExecutionPlan;
 import org.gradle.execution.plan.Node;
+import org.gradle.api.internal.tasks.NodeExecutionContext;
 import org.gradle.execution.plan.NodeExecutor;
 import org.gradle.execution.plan.PlanExecutor;
 import org.gradle.execution.plan.TaskDependencyResolver;
@@ -53,6 +54,8 @@ import org.gradle.internal.operations.CurrentBuildOperationRef;
 import org.gradle.internal.operations.RunnableBuildOperation;
 import org.gradle.internal.resources.ResourceLockCoordinationService;
 import org.gradle.internal.resources.ResourceLockState;
+import org.gradle.internal.resources.SharedResourceLeaseRegistry;
+import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.time.Time;
 import org.gradle.internal.time.Timer;
 import org.gradle.internal.work.WorkerLeaseService;
@@ -79,6 +82,7 @@ public class DefaultTaskExecutionGraph implements TaskExecutionGraphInternal {
     private final GradleInternal gradleInternal;
     private final ListenerBroadcast<TaskExecutionGraphListener> graphListeners;
     private final ListenerBroadcast<TaskExecutionListener> taskListeners;
+    private final ServiceRegistry globalServices;
     private final DefaultExecutionPlan executionPlan;
     private final BuildOperationExecutor buildOperationExecutor;
     private final ListenerBuildOperationDecorator listenerBuildOperationDecorator;
@@ -99,7 +103,9 @@ public class DefaultTaskExecutionGraph implements TaskExecutionGraphInternal {
         TaskNodeFactory taskNodeFactory,
         TaskDependencyResolver dependencyResolver,
         ListenerBroadcast<TaskExecutionGraphListener> graphListeners,
-        ListenerBroadcast<TaskExecutionListener> taskListeners
+        ListenerBroadcast<TaskExecutionListener> taskListeners,
+        SharedResourceLeaseRegistry sharedResourceLeaseRegistry,
+        ServiceRegistry globalServices
     ) {
         this.planExecutor = planExecutor;
         this.nodeExecutors = nodeExecutors;
@@ -109,7 +115,8 @@ public class DefaultTaskExecutionGraph implements TaskExecutionGraphInternal {
         this.gradleInternal = gradleInternal;
         this.graphListeners = graphListeners;
         this.taskListeners = taskListeners;
-        this.executionPlan = new DefaultExecutionPlan(workerLeaseService, gradleInternal, taskNodeFactory, dependencyResolver);
+        this.globalServices = globalServices;
+        this.executionPlan = new DefaultExecutionPlan(workerLeaseService, gradleInternal, taskNodeFactory, dependencyResolver, sharedResourceLeaseRegistry);
     }
 
     @Override
@@ -143,13 +150,19 @@ public class DefaultTaskExecutionGraph implements TaskExecutionGraphInternal {
     }
 
     @Override
+    public void addNodes(Collection<? extends Node> nodes) {
+        executionPlan.addNodes(nodes);
+        graphState = GraphState.DIRTY;
+    }
+
+    @Override
     public void populate() {
         ensurePopulated();
     }
 
     @Override
     public void execute(Collection<? super Throwable> failures) {
-        ProjectExecutionServiceRegistry projectExecutionServices = new ProjectExecutionServiceRegistry();
+        ProjectExecutionServiceRegistry projectExecutionServices = new ProjectExecutionServiceRegistry(globalServices);
         try {
             executeWithServices(projectExecutionServices, failures);
         } finally {
@@ -290,6 +303,11 @@ public class DefaultTaskExecutionGraph implements TaskExecutionGraphInternal {
     }
 
     @Override
+    public List<Node> getScheduledWork() {
+        return executionPlan.getScheduledNodes();
+    }
+
+    @Override
     public Set<Task> getDependencies(Task task) {
         ensurePopulated();
         Node node = executionPlan.getNode(task);
@@ -351,8 +369,9 @@ public class DefaultTaskExecutionGraph implements TaskExecutionGraphInternal {
 
         @Override
         public void execute(Node node) {
+            NodeExecutionContext context = projectExecutionServices.forProject((ProjectInternal) node.getOwningProject());
             for (NodeExecutor nodeExecutor : nodeExecutors) {
-                if (nodeExecutor.execute(node, projectExecutionServices)) {
+                if (nodeExecutor.execute(node, context)) {
                     return;
                 }
             }
@@ -376,11 +395,6 @@ public class DefaultTaskExecutionGraph implements TaskExecutionGraphInternal {
             was necessary, therefore the minimal change solution was implemented.
          */
         return executionPlan.getFilteredTasks();
-    }
-
-    @Override
-    public ProjectInternal getRootProject() {
-        return gradleInternal.getRootProject();
     }
 
     private static class NotifyTaskGraphWhenReady implements RunnableBuildOperation {

@@ -16,6 +16,9 @@
 
 package org.gradle.instantexecution
 
+import com.google.common.collect.ImmutableList
+import com.google.common.collect.ImmutableMap
+import com.google.common.collect.ImmutableSet
 import org.gradle.api.DefaultTask
 import org.gradle.api.Project
 import org.gradle.api.Task
@@ -33,8 +36,10 @@ import org.gradle.integtests.fixtures.BuildOperationsFixture
 import org.gradle.invocation.DefaultGradle
 import org.gradle.test.fixtures.server.http.BlockingHttpServer
 import org.gradle.tooling.provider.model.ToolingModelBuilderRegistry
+import org.gradle.workers.WorkerExecutor
 import org.junit.Rule
 import org.slf4j.Logger
+import spock.lang.Ignore
 import spock.lang.Unroll
 
 import javax.inject.Inject
@@ -318,6 +323,8 @@ class InstantExecutionIntegrationTest extends AbstractInstantExecutionIntegratio
         "SomeEnum"                       | "SomeEnum.Two"                                                | "Two"
         "SomeEnum[]"                     | "[SomeEnum.Two] as SomeEnum[]"                                | "[Two]"
         "List<String>"                   | "['a', 'b', 'c']"                                             | "[a, b, c]"
+        "ArrayList<String>"              | "['a', 'b', 'c'] as ArrayList"                                | "[a, b, c]"
+        "LinkedList<String>"             | "['a', 'b', 'c'] as LinkedList"                               | "[a, b, c]"
         "Set<String>"                    | "['a', 'b', 'c'] as Set"                                      | "[a, b, c]"
         "HashSet<String>"                | "['a', 'b', 'c'] as HashSet"                                  | "[a, b, c]"
         "LinkedHashSet<String>"          | "['a', 'b', 'c'] as LinkedHashSet"                            | "[a, b, c]"
@@ -328,6 +335,108 @@ class InstantExecutionIntegrationTest extends AbstractInstantExecutionIntegratio
         "LinkedHashMap<String, Integer>" | "new LinkedHashMap([a: 1, b: 2])"                             | "[a:1, b:2]"
         "TreeMap<String, Integer>"       | "new TreeMap([a: 1, b: 2])"                                   | "[a:1, b:2]"
         "EnumMap<SomeEnum, String>"      | "new EnumMap([(SomeEnum.One): 'one', (SomeEnum.Two): 'two'])" | "[One:one, Two:two]"
+    }
+
+    @Unroll
+    def "restores task fields whose value is instance of plugin specific version of Guava #type"() {
+        buildFile << """
+            import ${type.name}
+
+            buildscript {
+                repositories {
+                    jcenter()
+                }
+                dependencies {
+                    classpath 'com.google.guava:guava:28.0-jre' 
+                }
+            }
+
+            class SomeBean {
+                ${type.simpleName} value 
+            }
+
+            class SomeTask extends DefaultTask {
+                private final SomeBean bean = new SomeBean()
+                private final ${type.simpleName} value
+                
+                SomeTask() {
+                    value = ${reference}
+                    bean.value = ${reference}
+                }
+
+                @TaskAction
+                void run() {
+                    println "this.value = " + value
+                    println "bean.value = " + bean.value
+                }
+            }
+
+            task ok(type: SomeTask)
+        """
+
+        when:
+        instantRun "ok"
+        instantRun "ok"
+
+        then:
+        outputContains("this.value = ${output}")
+        outputContains("bean.value = ${output}")
+
+        where:
+        type          | reference                         | output
+        ImmutableList | "ImmutableList.of('a', 'b', 'c')" | "[a, b, c]"
+        ImmutableSet  | "ImmutableSet.of('a', 'b', 'c')"  | "[a, b, c]"
+        ImmutableMap  | "ImmutableMap.of(1, 'a', 2, 'b')" | "[1:a, 2:b]"
+    }
+
+    def "restores task fields whose value is Serializable and has writeReplace method"() {
+        buildFile << """
+            class Placeholder implements Serializable {
+                String value
+                
+                private Object readResolve() {
+                    return new OtherBean(prop: "[\$value]")
+                } 
+            }
+
+            class OtherBean implements Serializable {
+                String prop
+
+                private Object writeReplace() {
+                    return new Placeholder(value: prop)
+                }
+            }
+
+            class SomeBean {
+                OtherBean value 
+            }
+
+            class SomeTask extends DefaultTask {
+                private final SomeBean bean = new SomeBean()
+                private final OtherBean value
+                
+                SomeTask() {
+                    value = new OtherBean(prop: 'a')
+                    bean.value = new OtherBean(prop: 'b')
+                }
+
+                @TaskAction
+                void run() {
+                    println "this.value = " + value.prop
+                    println "bean.value = " + bean.value.prop
+                }
+            }
+
+            task ok(type: SomeTask)
+        """
+
+        when:
+        instantRun "ok"
+        instantRun "ok"
+
+        then:
+        outputContains("this.value = [a]")
+        outputContains("bean.value = [b]")
     }
 
     @Unroll
@@ -366,6 +475,7 @@ class InstantExecutionIntegrationTest extends AbstractInstantExecutionIntegratio
         Logger.name                      | "logger"                                                    | "info('hi')"
         ObjectFactory.name               | "objects"                                                   | "newInstance(SomeBean)"
         ToolingModelBuilderRegistry.name | "project.services.get(${ToolingModelBuilderRegistry.name})" | "toString()"
+        WorkerExecutor.name              | "project.services.get(${WorkerExecutor.name})"              | "noIsolation()"
     }
 
     @Unroll
@@ -408,6 +518,42 @@ class InstantExecutionIntegrationTest extends AbstractInstantExecutionIntegratio
         "Provider<String>" | "providers.provider { null }"             | "null"
         "Provider<String>" | "objects.property(String).value('value')" | "value"
         "Provider<String>" | "objects.property(String)"                | "null"
+    }
+
+    @Unroll
+    def "restores task fields whose value is broken #type"() {
+        def instantExecution = newInstantExecutionFixture()
+
+        buildFile << """
+            import ${Inject.name}
+
+            class SomeTask extends DefaultTask {
+                ${type} value = ${reference} { throw new RuntimeException("broken!") }
+
+                @TaskAction
+                void run() {
+                    println "this.value = " + value.${query}
+                }
+            }
+
+            task broken(type: SomeTask) {
+            }
+        """
+
+        when:
+        instantFails "broken"
+        instantFails "broken"
+
+        then:
+        instantExecution.assertStateLoaded()
+        failure.assertTasksExecuted(":broken")
+        failure.assertHasDescription("Execution failed for task ':broken'.")
+        failure.assertHasCause("broken!")
+
+        where:
+        type               | reference                    | query
+        "Provider<String>" | "project.providers.provider" | "get()"
+        "FileCollection"   | "project.files"              | "files"
     }
 
     @Unroll
@@ -456,15 +602,76 @@ class InstantExecutionIntegrationTest extends AbstractInstantExecutionIntegratio
         outputContains("bean.value = ${expected}")
 
         where:
-        type                   | factory                        | reference     | output
-        "Property<String>"     | "objects.property(String)"     | "'value'"     | "value"
-        "Property<String>"     | "objects.property(String)"     | "null"        | "null"
-        "DirectoryProperty"    | "objects.directoryProperty()"  | "file('abc')" | new File('abc')
-        "DirectoryProperty"    | "objects.directoryProperty()"  | "null"        | "null"
-        "RegularFileProperty"  | "objects.fileProperty()"       | "file('abc')" | new File('abc')
-        "RegularFileProperty"  | "objects.fileProperty()"       | "null"        | "null"
-        "ListProperty<String>" | "objects.listProperty(String)" | "[]"          | "[]"
-        "ListProperty<String>" | "objects.listProperty(String)" | "['abc']"     | ['abc']
+        type                          | factory                               | reference        | output
+        "Property<String>"            | "objects.property(String)"            | "'value'"        | "value"
+        "Property<String>"            | "objects.property(String)"            | "null"           | "null"
+        "DirectoryProperty"           | "objects.directoryProperty()"         | "file('abc')"    | new File('abc')
+        "DirectoryProperty"           | "objects.directoryProperty()"         | "null"           | "null"
+        "RegularFileProperty"         | "objects.fileProperty()"              | "file('abc')"    | new File('abc')
+        "RegularFileProperty"         | "objects.fileProperty()"              | "null"           | "null"
+        "ListProperty<String>"        | "objects.listProperty(String)"        | "[]"             | "[]"
+        "ListProperty<String>"        | "objects.listProperty(String)"        | "['abc']"        | ['abc']
+        "MapProperty<String, String>" | "objects.mapProperty(String, String)" | "[:]"            | [:]
+        "MapProperty<String, String>" | "objects.mapProperty(String, String)" | "['abc': 'def']" | ['abc': 'def']
+    }
+
+    @Unroll
+    def "restores task fields whose value is a serializable #kind Java lambda"() {
+        given:
+        file("buildSrc/src/main/java/my/LambdaTask.java").tap {
+            parentFile.mkdirs()
+            text = """
+                package my;
+
+                import org.gradle.api.*;
+                import org.gradle.api.tasks.*;
+
+                public class LambdaTask extends DefaultTask {
+
+                    public interface SerializableSupplier<T> extends java.io.Serializable {
+                        T get();
+                    }
+
+                    private SerializableSupplier<Integer> supplier;
+
+                    public void setSupplier(SerializableSupplier<Integer> supplier) {
+                        this.supplier = supplier;
+                    }
+
+                    public void setNonInstanceCapturingLambda() {
+                        final int i = getName().length();
+                        setSupplier(() -> i);
+                    }
+
+                    public void setInstanceCapturingLambda() {
+                        setSupplier(() -> getName().length());
+                    }
+
+                    @TaskAction
+                    void printValue() {
+                        System.out.println("this.supplier.get() -> " + this.supplier.get());
+                    }
+                }
+            """
+        }
+
+        buildFile << """
+            task ok(type: my.LambdaTask) {
+                $expression
+            }
+        """
+
+        when:
+        instantRun "ok"
+        instantRun "ok"
+
+        then:
+        outputContains("this.supplier.get() -> 2")
+
+        where:
+        kind                     | expression
+        "instance capturing"     | "setInstanceCapturingLambda()"
+        "non-instance capturing" | "setNonInstanceCapturingLambda()"
     }
 
     @Unroll
@@ -517,6 +724,32 @@ class InstantExecutionIntegrationTest extends AbstractInstantExecutionIntegratio
         DefaultConfigurationContainer.name | ConfigurationContainer.name | "project.configurations"
     }
 
+    def "restores task abstract properties"() {
+        buildFile << """
+
+            abstract class SomeTask extends DefaultTask {
+
+                abstract Property<String> getValue()
+
+                @TaskAction
+                void run() {
+                    println "this.value = " + value.getOrNull()
+                }
+            }
+
+            task ok(type: SomeTask) {
+                value = "42"
+            }
+        """
+
+        when:
+        instantRun "ok"
+        instantRun "ok"
+
+        then:
+        outputContains("this.value = 42")
+    }
+
     def "task can reference itself"() {
         buildFile << """
             class SomeBean {
@@ -550,4 +783,83 @@ class InstantExecutionIntegrationTest extends AbstractInstantExecutionIntegratio
         outputContains("thisTask = true")
         outputContains("bean.owner = true")
     }
+
+    @Ignore("wip")
+    def "reuses cached ClassLoaders"() {
+
+        given: 'a Task that holds some static data'
+        def staticDataLib = file("lib/StaticData.jar").tap {
+            parentFile.mkdirs()
+        }
+        jarWithClasses(
+            staticDataLib,
+            StaticData: """
+                import org.gradle.api.*;
+                import org.gradle.api.tasks.*;
+                import java.util.concurrent.atomic.AtomicInteger;
+
+                public class StaticData extends DefaultTask {
+
+                    private static final AtomicInteger value = new AtomicInteger(0);
+
+                    @TaskAction
+                    void printValue() {
+                        // When ClassLoaders are reused
+                        // the 1st run should print `<project name>.value = 1`
+                        // the 2nd run should print `<project name>.value = 2`
+                        // and so on.
+                        System.out.println(getProject().getName() + ".value = " + value.incrementAndGet());
+                    }
+                }
+            """
+        )
+
+        and: "multiple sub-projects"
+        settingsFile << """
+            include 'foo:foo'
+            include 'bar:bar'
+        """
+
+        // Make the classpath of :foo differ from :bar's
+        // thus causing :foo:foo and :bar:bar to have separate ClassLoaders.
+        def someLib = file('lib/someLib.jar')
+        jarWithClasses(someLib, SomeClass: 'class SomeClass {}')
+
+        file("foo/build.gradle") << """
+            buildscript { dependencies { classpath(files('${someLib.toURI()}')) } }
+        """
+
+        // Load the StaticData class in the different sub-sub-projects
+        // for a more interesting ClassLoader hierarchy.
+        for (projectDir in ['foo/foo', 'bar/bar']) {
+            file("$projectDir/build.gradle") << """
+                buildscript { dependencies { classpath(files('${staticDataLib.toURI()}')) } }
+
+                task ok(type: StaticData)
+            """
+        }
+
+        when:
+        instantRun ":foo:foo:ok", ":bar:bar:ok"
+
+        then:
+        outputContains("foo.value = 1")
+        outputContains("bar.value = 1")
+
+        when:
+        instantRun ":foo:foo:ok", ":bar:bar:ok"
+
+        then:
+        outputContains("foo.value = 2")
+        // TODO:instant-execution currently, when loading from the instant execution cache,
+        //  a single CachingClassLoader is used to serve all the classes,
+        // see `DefaultInstantExecution.classLoaderFor(List<ClassLoaderScopeSpec>): ClassLoader` for details,
+        // and because of that, :bar:bar:ok ends up using the same class as :foo:foo:ok and the final value is
+        // `3` instead of `2` as it would be the case with classic execution.
+        // Once the original ClassLoader structure is honoured the expection should be:
+        // outputContains("bar.value = 2")
+        // In the meantime:
+        outputContains("bar.value = 3")
+    }
+
 }

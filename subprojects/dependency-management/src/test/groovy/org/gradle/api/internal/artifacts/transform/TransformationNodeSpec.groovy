@@ -72,19 +72,24 @@ class TransformationNodeSpec extends Specification {
         node.resolveDependencies(dependencyResolver, hardSuccessor)
 
         then:
-        1 * hardSuccessor.execute(initialNode)
-        1 * graphDependenciesResolver.computeDependencyNodes(transformationStep) >> container
-        1 * dependencyResolver.resolveDependenciesFor(null, container) >> [additionalNode]
-        1 * hardSuccessor.execute(additionalNode)
         1 * transformationStep.dependencies >> transformerDependencies
         1 * dependencyResolver.resolveDependenciesFor(null, transformerDependencies) >> [isolationNode]
         1 * hardSuccessor.execute(isolationNode)
+        1 * graphDependenciesResolver.computeDependencyNodes(transformationStep) >> container
+        1 * dependencyResolver.resolveDependenciesFor(null, container) >> [additionalNode]
+        1 * hardSuccessor.execute(additionalNode)
+        1 * hardSuccessor.execute(initialNode)
         0 * hardSuccessor._
     }
 
     class TestNode extends Node {
         @Override
-        Project getProject() {
+        Project getProjectToLock() {
+            return null
+        }
+
+        @Override
+        Project getOwningProject() {
             return null
         }
 
@@ -116,6 +121,11 @@ class TransformationNodeSpec extends Specification {
         @Override
         boolean isPublicNode() {
             return true
+        }
+
+        @Override
+        boolean requiresMonitoring() {
+            return false
         }
 
         @Override

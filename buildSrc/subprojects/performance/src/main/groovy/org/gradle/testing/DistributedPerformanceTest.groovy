@@ -23,6 +23,7 @@ import groovy.transform.CompileStatic
 import groovy.transform.TypeChecked
 import groovy.transform.TypeCheckingMode
 import groovyx.net.http.ContentType
+import groovyx.net.http.HttpResponseDecorator
 import groovyx.net.http.HttpResponseException
 import groovyx.net.http.RESTClient
 import org.apache.commons.io.input.CloseShieldInputStream
@@ -39,14 +40,13 @@ import org.gradle.api.tasks.testing.TestResult
 import org.gradle.initialization.BuildCancellationToken
 import org.gradle.process.CommandLineArgumentProvider
 import org.openmbee.junit.JUnitMarshalling
-import org.openmbee.junit.model.JUnitFailure
-import org.openmbee.junit.model.JUnitTestCase
 import org.openmbee.junit.model.JUnitTestSuite
 
 import javax.inject.Inject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.ZipInputStream
+
 /**
  * Runs each performance test scenario in a dedicated TeamCity job.
  *
@@ -143,12 +143,12 @@ class DistributedPerformanceTest extends ReportGenerationPerformanceTest {
             new ScenarioBuildResultData(
                 teamCityBuildId: workerBuildId,
                 scenarioName: scheduledBuilds.get(workerBuildId).id,
-                scenarioClass: scenarioResult.testSuite.name,
-                webUrl: scenarioResult.buildResult.webUrl,
-                status: scenarioResult.buildResult.status,
-                agentName: scenarioResult.buildResult.agent.name,
-                agentUrl: scenarioResult.buildResult.agent.webUrl,
-                testFailure: collectFailures(scenarioResult.testSuite))
+                scenarioClass: scenarioResult.testClassFullName,
+                webUrl: scenarioResult.buildResponse.webUrl,
+                status: scenarioResult.buildResponse.status,
+                agentName: scenarioResult.buildResponse.agent.name,
+                agentUrl: scenarioResult.buildResponse.agent.webUrl,
+                testFailure: scenarioResult.failureText)
         }
     }
 
@@ -269,7 +269,20 @@ class DistributedPerformanceTest extends ReportGenerationPerformanceTest {
     @TypeChecked(TypeCheckingMode.SKIP)
     private Map httpGet(Map params) {
         try {
-            return client.get(params).data
+            HttpResponseDecorator resp = client.get(params)
+            if (ContentType.JSON.toString() == resp.getContentType()) {
+                return resp.data
+            } else {
+                // Sometimes, TC returns text/html page
+                // https://github.com/gradle/gradle-private/issues/1359
+                System.err.println("""
+                |Got TeamCity HTML response when accepting application/json:
+
+                |${resp.getStatusLine()}
+                |${resp.data}
+                """.stripMargin())
+                return [state: 'unknown']
+            }
         } catch (HttpResponseException ex) {
             println("Get response ${ex.response.status}\n${ex.response.data}")
             throw ex
@@ -323,16 +336,12 @@ class DistributedPerformanceTest extends ReportGenerationPerformanceTest {
     private void collectPerformanceTestResults(Map response, String jobId) {
         try {
             JUnitTestSuite testSuite = fetchTestResult(response)
-            finishedBuilds.put(jobId, new ScenarioResult(name: scheduledBuilds.get(jobId).id, buildResult: response, testSuite: testSuite))
+            finishedBuilds.put(jobId, new ScenarioResult(name: scheduledBuilds.get(jobId).id, testClassFullName: scheduledBuilds.get(jobId).className, testSuite: testSuite, buildResponse: response))
             fireTestListener(testSuite, response)
         } catch (e) {
             e.printStackTrace(System.err)
-            finishedBuilds.put(jobId, new ScenarioResult(name: scheduledBuilds.get(jobId).id, buildResult: response, testSuite: testSuiteWithFailureText(response.statusText)))
+            finishedBuilds.put(jobId, new ScenarioResult(name: scheduledBuilds.get(jobId).id, testClassFullName: scheduledBuilds.get(jobId).className, buildResponse: response))
         }
-    }
-
-    private static JUnitTestSuite testSuiteWithFailureText(String failureText) {
-        new JUnitTestSuite(testCases: [new JUnitTestCase(failures: [new JUnitFailure(value: failureText)])])
     }
 
     void cancel(String buildId) {
@@ -418,7 +427,7 @@ class DistributedPerformanceTest extends ReportGenerationPerformanceTest {
 
     @TypeChecked(TypeCheckingMode.SKIP)
     private void checkForErrors() {
-        def failedBuilds = finishedBuilds.values().findAll { it.buildResult.status != "SUCCESS" }
+        def failedBuilds = finishedBuilds.values().findAll { it.buildResponse.status != "SUCCESS" }
         if (failedBuilds) {
             throw new GradleException("${failedBuilds.size()} performance tests failed. See $reportDir for details.")
         }
@@ -433,29 +442,37 @@ class DistributedPerformanceTest extends ReportGenerationPerformanceTest {
     }
 
     private static class Scenario {
+        String className
         String id
         long estimatedRuntime
         List<String> templates
 
         Scenario(String scenarioLine) {
             def parts = Splitter.on(';').split(scenarioLine).toList()
-            this.id = parts[0]
-            this.estimatedRuntime = parts[1].toLong()
-            this.templates = parts[2..-1]
+            this.className = parts[0]
+            this.id = parts[1]
+            this.estimatedRuntime = parts[2].toLong()
+            this.templates = parts[3..-1]
         }
     }
 
     static class ScenarioResult {
         String name
-        Map buildResult
+        String testClassFullName
         JUnitTestSuite testSuite
-
-        String getTestClassFullName() {
-            return testSuite.name
-        }
+        Map buildResponse
 
         boolean isSuccessful() {
-            return buildResult.status == 'SUCCESS'
+            return buildResponse.status == 'SUCCESS'
+        }
+
+        @TypeChecked(TypeCheckingMode.SKIP)
+        String getFailureText() {
+            if (testSuite) {
+                collectFailures(testSuite)
+            } else {
+                return buildResponse.statusText
+            }
         }
 
         TestMethodResult toMethodResult(AtomicLong counter) {

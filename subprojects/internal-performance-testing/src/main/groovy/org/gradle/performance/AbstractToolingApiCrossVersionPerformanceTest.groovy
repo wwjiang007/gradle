@@ -34,8 +34,8 @@ import org.gradle.internal.os.OperatingSystem
 import org.gradle.internal.time.Clock
 import org.gradle.internal.time.Time
 import org.gradle.performance.categories.PerformanceRegressionTest
+import org.gradle.performance.fixture.AbstractCrossVersionPerformanceTestRunner
 import org.gradle.performance.fixture.BuildExperimentSpec
-import org.gradle.performance.fixture.CrossVersionPerformanceTestRunner
 import org.gradle.performance.fixture.InvocationSpec
 import org.gradle.performance.fixture.OperationTimer
 import org.gradle.performance.fixture.PerformanceTestConditions
@@ -130,6 +130,7 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
     public class ToolingApiExperiment {
         final String projectName
         String displayName
+        String testClassName
         List<String> targetVersions = []
         String minimumVersion
         List<File> extraTestClassPath = []
@@ -168,8 +169,7 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
 
         private CrossVersionPerformanceResults run() {
             def testId = experiment.displayName
-            def scenarioSelector = new TestScenarioSelector()
-            Assume.assumeTrue(scenarioSelector.shouldRun(testId, [experiment.projectName].toSet(), resultStore))
+            Assume.assumeTrue(TestScenarioSelector.shouldRun(experiment.testClassName, testId, [experiment.projectName].toSet(), resultStore))
             profiler = Profiler.create()
             try {
                 doRun(testId)
@@ -203,7 +203,7 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
             )
             def resolver = new ToolingApiDistributionResolver().withDefaultRepository()
             try {
-                List<String> baselines = CrossVersionPerformanceTestRunner.toBaselineVersions(RELEASES, experiment.targetVersions, experiment.minimumVersion).toList()
+                List<String> baselines = AbstractCrossVersionPerformanceTestRunner.toBaselineVersions(RELEASES, experiment.targetVersions, experiment.minimumVersion).toList()
                 [*baselines, 'current'].each { String version ->
                     def experimentSpec = new ToolingApiBuildExperimentSpec(version, temporaryFolder.testDirectory, experiment)
                     def workingDirProvider = copyTemplateTo(projectDir, experimentSpec.workingDirectory, version)

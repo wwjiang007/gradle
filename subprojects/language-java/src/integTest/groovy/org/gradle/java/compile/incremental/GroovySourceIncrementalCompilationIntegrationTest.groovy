@@ -142,18 +142,44 @@ class A2{}
         def textFile = file('text-file.txt')
         textFile.text = "text file as root"
 
-        executer.expectDeprecationWarning()
-        outputs.snapshot { run language.compileTaskName }
+        expect:
+        fails language.compileTaskName
+        failure.assertHasCause(
+            'Unable to infer source roots. ' +
+                'Incremental Groovy compilation requires the source roots. ' +
+                'Change the configuration of your sources or disable incremental Groovy compilation.')
+    }
+
+    def 'clear class source mapping file on full recompilation'() {
+        given:
+        source('class A { }')
+        run 'compileGroovy'
 
         when:
-        file("extra/B.${language.name}").text = "class B { String change; }"
-        executer.withArgument "--info"
-        executer.expectDeprecationWarning()
-        run language.compileTaskName
+        file('src/main/groovy/B.java') << 'class B {}'
+        // slightly modify the mapping file
+        file('build/tmp/compileGroovy/source-classes-mapping.txt') << '''org/gradle/MyClass.groovy
+ org.gradle.MyClass'''
+        run 'compileGroovy', '--info'
 
         then:
-        outputs.recompiledClasses("A", "B", "C")
-        output.contains('Unable to infer source roots. Incremental Groovy compilation requires the source roots and has been disabled. Change the configuration of your sources or disable incremental Groovy compilation.')
-        output.contains("Cannot infer source root(s) for source `file '${textFile.absolutePath}'`. Supported types are `File` (directories only), `DirectoryTree` and `SourceDirectorySet`.")
+        outputContains('changes to non-Groovy files are not supported by incremental compilation')
+        !file('build/tmp/compileGroovy/source-classes-mapping.txt').text.contains('MyClass')
+    }
+
+    def 'merge old class source mappings if no recompilation required'() {
+        given:
+        File a =source('class A { }')
+        source('class B { }')
+        run 'compileGroovy'
+
+        when:
+        a.delete()
+        run 'compileGroovy'
+
+        then:
+        skipped(':compileGroovy')
+        !file('build/tmp/compileGroovy/source-classes-mapping.txt').text.contains('A.groovy')
+        file('build/tmp/compileGroovy/source-classes-mapping.txt').text.contains('B.groovy')
     }
 }

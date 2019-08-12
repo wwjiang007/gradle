@@ -23,20 +23,17 @@ import org.gradle.api.Project;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.project.ProjectStateRegistry;
+import org.gradle.api.internal.tasks.NodeExecutionContext;
 import org.gradle.api.internal.tasks.TaskDependencyContainer;
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext;
 import org.gradle.api.internal.tasks.WorkNodeAction;
-import org.gradle.execution.ProjectExecutionServiceRegistry;
-import org.gradle.internal.Cast;
 import org.gradle.internal.Try;
 import org.gradle.internal.fingerprint.FileCollectionFingerprinterRegistry;
-import org.gradle.internal.service.ServiceRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.io.File;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A single transformation step.
@@ -48,17 +45,16 @@ public class TransformationStep implements Transformation, TaskDependencyContain
     public static final Equivalence<? super TransformationStep> FOR_SCHEDULING = Equivalence.identity();
 
     private final Transformer transformer;
-    private final TransformerInvoker transformerInvoker;
+    private final TransformerInvocationFactory transformerInvocationFactory;
     private final DomainObjectProjectStateHandler projectStateHandler;
     private final ProjectStateRegistry.SafeExclusiveLock isolationLock;
     private final WorkNodeAction isolateAction;
     private final ProjectInternal owningProject;
     private final FileCollectionFingerprinterRegistry globalFingerprinterRegistry;
-    private final AtomicReference<FileCollectionFingerprinterRegistry> usedFingerprinterRegistry = new AtomicReference<>();
 
-    public TransformationStep(Transformer transformer, TransformerInvoker transformerInvoker, DomainObjectProjectStateHandler projectStateHandler, FileCollectionFingerprinterRegistry globalFingerprinterRegistry) {
+    public TransformationStep(Transformer transformer, TransformerInvocationFactory transformerInvocationFactory, DomainObjectProjectStateHandler projectStateHandler, FileCollectionFingerprinterRegistry globalFingerprinterRegistry) {
         this.transformer = transformer;
-        this.transformerInvoker = transformerInvoker;
+        this.transformerInvocationFactory = transformerInvocationFactory;
         this.projectStateHandler = projectStateHandler;
         this.globalFingerprinterRegistry = globalFingerprinterRegistry;
         this.isolationLock = projectStateHandler.newExclusiveOperationLock();
@@ -71,11 +67,20 @@ public class TransformationStep implements Transformation, TaskDependencyContain
             }
 
             @Override
-            public void run(ServiceRegistry registry) {
-                FileCollectionFingerprinterRegistry fingerprinterRegistry = getFingerprinterRegistry(Cast.uncheckedCast(registry.find(FileCollectionFingerprinterRegistry.class)));
+            public void run(NodeExecutionContext context) {
+                FileCollectionFingerprinterRegistry fingerprinterRegistry = context.getService(FileCollectionFingerprinterRegistry.class);
                 isolateExclusively(fingerprinterRegistry);
             }
         };
+    }
+
+    public Transformer getTransformer() {
+        return transformer;
+    }
+
+    @Nullable
+    public ProjectInternal getOwningProject() {
+        return owningProject;
     }
 
     @Override
@@ -89,36 +94,37 @@ public class TransformationStep implements Transformation, TaskDependencyContain
     }
 
     @Override
-    public CacheableInvocation<TransformationSubject> createInvocation(TransformationSubject subjectToTransform, ExecutionGraphDependenciesResolver dependenciesResolver, @Nullable ProjectExecutionServiceRegistry services) {
+    public CacheableInvocation<TransformationSubject> createInvocation(TransformationSubject subjectToTransform, ExecutionGraphDependenciesResolver dependenciesResolver, @Nullable NodeExecutionContext context) {
         if (LOGGER.isInfoEnabled()) {
             LOGGER.info("Transforming {} with {}", subjectToTransform.getDisplayName(), transformer.getDisplayName());
         }
-        FileCollectionFingerprinterRegistry fingerprinterRegistry = getFingerprinterRegistry(
-            owningProject != null && services != null ? services.getProjectService(owningProject, FileCollectionFingerprinterRegistry.class) : null
-        );
+
+        FileCollectionFingerprinterRegistry fingerprinterRegistry = context != null ? context.getService(FileCollectionFingerprinterRegistry.class) : globalFingerprinterRegistry;
         isolateTransformerParameters(fingerprinterRegistry);
 
         Try<ArtifactTransformDependencies> resolvedDependencies = dependenciesResolver.forTransformer(transformer);
-        return resolvedDependencies.getSuccessfulOrElse(dependencies -> {
-            ImmutableList<File> inputArtifacts = subjectToTransform.getFiles();
-            if (inputArtifacts.isEmpty()) {
-                return CacheableInvocation.cached(Try.successful(subjectToTransform.createSubjectFromResult(ImmutableList.of())));
-            } else if (inputArtifacts.size() > 1) {
-                return CacheableInvocation.nonCached(() ->
+        return resolvedDependencies
+            .map(dependencies -> {
+                ImmutableList<File> inputArtifacts = subjectToTransform.getFiles();
+                if (inputArtifacts.isEmpty()) {
+                    return CacheableInvocation.cached(Try.successful(subjectToTransform.createSubjectFromResult(ImmutableList.of())));
+                } else if (inputArtifacts.size() > 1) {
+                    return CacheableInvocation.nonCached(() ->
                         doTransform(subjectToTransform, fingerprinterRegistry, dependencies, inputArtifacts)
-                );
-            } else {
-                File inputArtifact = inputArtifacts.iterator().next();
-                return transformerInvoker.createInvocation(transformer, inputArtifact, dependencies, subjectToTransform, fingerprinterRegistry)
-                    .map(subjectToTransform::createSubjectFromResult);
-            }
-        }, failure -> CacheableInvocation.cached(Try.failure(failure)));
+                    );
+                } else {
+                    File inputArtifact = inputArtifacts.iterator().next();
+                    return transformerInvocationFactory.createInvocation(transformer, inputArtifact, dependencies, subjectToTransform, fingerprinterRegistry)
+                        .map(subjectToTransform::createSubjectFromResult);
+                }
+            })
+            .getOrMapFailure(failure -> CacheableInvocation.cached(Try.failure(failure)));
     }
 
     private Try<TransformationSubject> doTransform(TransformationSubject subjectToTransform, FileCollectionFingerprinterRegistry fingerprinterRegistry, ArtifactTransformDependencies dependencies, ImmutableList<File> inputArtifacts) {
         ImmutableList.Builder<File> builder = ImmutableList.builder();
         for (File inputArtifact : inputArtifacts) {
-            Try<ImmutableList<File>> result = transformerInvoker.createInvocation(transformer, inputArtifact, dependencies, subjectToTransform, fingerprinterRegistry).invoke();
+            Try<ImmutableList<File>> result = transformerInvocationFactory.createInvocation(transformer, inputArtifact, dependencies, subjectToTransform, fingerprinterRegistry).invoke();
 
             if (result.getFailure().isPresent()) {
                 return Try.failure(result.getFailure().get());
@@ -126,11 +132,6 @@ public class TransformationStep implements Transformation, TaskDependencyContain
             builder.addAll(result.get());
         }
         return Try.successful(subjectToTransform.createSubjectFromResult(builder.build()));
-    }
-
-    public FileCollectionFingerprinterRegistry getFingerprinterRegistry(@Nullable FileCollectionFingerprinterRegistry candidate) {
-        usedFingerprinterRegistry.compareAndSet(null, candidate == null ? globalFingerprinterRegistry : candidate);
-        return usedFingerprinterRegistry.get();
     }
 
     private void isolateTransformerParameters(FileCollectionFingerprinterRegistry fingerprinterRegistry) {
