@@ -190,18 +190,18 @@ class DefaultMutableVersionConstraintTest extends Specification {
         version.getRejectedVersions() == ['+']
     }
 
-    def "calling forSubgraph modifies only the isForSubgraph detail"() {
-        when:
+
+    def "strict version does not clear preferred version"() {
+        given:
         def version = new DefaultMutableVersionConstraint('1.0')
-        version.reject('1.0.1', '1.0.2')
-        version.forSubgraph()
+
+        when:
+        version.prefer('1.5')
+        version.strictly('[1,2)')
 
         then:
-        version.requiredVersion == '1.0'
-        version.preferredVersion == ''
-        version.strictVersion == ''
-        version.rejectedVersions == ['1.0.1', '1.0.2']
-        version.forSubgraph
+        version.requiredVersion == '[1,2)'
+        version.preferredVersion == '1.5'
+        version.strictVersion == '[1,2)'
     }
-
 }

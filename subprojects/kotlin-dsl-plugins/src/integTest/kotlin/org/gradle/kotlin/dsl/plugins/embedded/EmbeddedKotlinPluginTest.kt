@@ -24,16 +24,18 @@ import org.gradle.api.logging.Logger
 
 import com.nhaarman.mockito_kotlin.inOrder
 import com.nhaarman.mockito_kotlin.mock
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 
 import org.hamcrest.CoreMatchers.containsString
 
-import org.junit.Assert.assertThat
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Test
 
 
 class EmbeddedKotlinPluginTest : AbstractPluginTest() {
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `applies the kotlin plugin`() {
 
         withBuildScript("""
@@ -41,6 +43,8 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
             plugins {
                 `embedded-kotlin`
             }
+
+            $repositoriesBlock
 
         """)
 
@@ -50,6 +54,7 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `adds stdlib and reflect as compile only dependencies`() {
 
         withBuildScript("""
@@ -61,6 +66,8 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
             configurations {
                 create("compileOnlyClasspath") { extendsFrom(configurations["compileOnly"]) }
             }
+
+            $repositoriesBlock
 
             tasks {
                 register("assertions") {
@@ -81,13 +88,16 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
     }
 
     @Test
-    fun `all embedded kotlin dependencies are resolvable without any added repository`() {
+    @ToBeFixedForConfigurationCache
+    fun `all embedded kotlin dependencies are resolvable`() {
 
         withBuildScript("""
 
             plugins {
                 `embedded-kotlin`
             }
+
+            $repositoriesBlock
 
             dependencies {
                 ${dependencyDeclarationsFor(
@@ -96,21 +106,20 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
                 )}
             }
 
-            println(repositories.map { it.name })
             configurations["compileClasspath"].files.map { println(it) }
 
         """)
 
         val result = build("dependencies")
 
-        assertThat(result.output, containsString("Embedded Kotlin Repository"))
         listOf("stdlib", "reflect", "compiler-embeddable", "scripting-compiler-embeddable", "scripting-compiler-impl-embeddable").forEach {
             assertThat(result.output, containsString("kotlin-$it-$embeddedKotlinVersion.jar"))
         }
     }
 
     @Test
-    fun `sources and javadoc of all embedded kotlin dependencies are resolvable with an added repository`() {
+    @ToBeFixedForConfigurationCache
+    fun `sources and javadoc of all embedded kotlin dependencies are resolvable`() {
 
         withBuildScript("""
 
@@ -167,6 +176,7 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `can add embedded dependencies to custom configuration`() {
 
         withBuildScript("""
@@ -174,6 +184,8 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
             plugins {
                 `embedded-kotlin`
             }
+
+            $repositoriesBlock
 
             val customConfiguration by configurations.creating
             customConfiguration.extendsFrom(configurations["embeddedKotlin"])
@@ -191,11 +203,10 @@ class EmbeddedKotlinPluginTest : AbstractPluginTest() {
 
     @Test
     @LeaksFileHandles("Kotlin Compiler Daemon working directory")
-    fun `can be used with GRADLE_METADATA feature preview enabled`() {
+    @ToBeFixedForConfigurationCache
+    fun `can be used with embedded artifact-only repository`() {
 
-        withDefaultSettings().appendText("""
-            enableFeaturePreview("GRADLE_METADATA")
-        """)
+        withDefaultSettings()
 
         withBuildScript("""
 

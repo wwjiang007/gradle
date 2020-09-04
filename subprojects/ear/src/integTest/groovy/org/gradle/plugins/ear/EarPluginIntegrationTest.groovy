@@ -145,6 +145,22 @@ ear {
         "in specified metaInf folder" | "customMetaInf" | "metaInf { from 'customMetaInf' }"
     }
 
+    void "skips creating application xml"() {
+        buildFile << """
+apply plugin: 'ear'
+ear {
+    generateDeploymentDescriptor = false
+}
+"""
+
+        when:
+        run 'assemble'
+
+        then:
+        def ear = new JarTestFixture(file('build/libs/root.ear'))
+        ear.assertNotContainsFile("META-INF/application.xml")
+    }
+
     @Unroll
     void "uses content found in #location app folder, ignoring descriptor modification"() {
         def applicationXml = """<?xml version="1.0"?>
@@ -411,8 +427,8 @@ ear {
                 lib {
                     from("rootLib.jar")
                 }
-                archiveName = "test.ear"
-                destinationDir = temporaryDir
+                archiveFileName = "test.ear"
+                destinationDirectory = temporaryDir
             }
         """
         when:

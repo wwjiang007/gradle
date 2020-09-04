@@ -24,13 +24,13 @@ import org.gradle.tooling.BuildActionExecuter
  * This is the base class for performance tests aimed at simulating what happens in Android Studio. In particular, it will
  * use the Tooling API to synchronize project or run builds.
  *
- * Those tests support custom models, which are found in the internalAndroidPerformanceTesting project. Individual tests
+ * Those tests support custom models, which are found in the internal-android-performance-testing project. Individual tests
  * need to extend this class and tell what is the name of the class that will query the model and the name of the method.
  * This method will be passed a {@link org.gradle.tooling.ProjectConnection} instance.
  *
  */
 @CompileStatic
-public abstract class AbstractAndroidStudioMockupCrossVersionPerformanceTest extends AbstractToolingApiCrossVersionPerformanceTest {
+abstract class AbstractAndroidStudioMockupCrossVersionPerformanceTest extends AbstractToolingApiCrossVersionPerformanceTest {
 
     @Override
     void experiment(String projectName, @DelegatesTo(AndroidStudioExperiment) Closure<?> spec) {
@@ -41,7 +41,7 @@ public abstract class AbstractAndroidStudioMockupCrossVersionPerformanceTest ext
         clone.call(experiment)
     }
 
-    public class AndroidStudioExperiment extends AbstractToolingApiCrossVersionPerformanceTest.ToolingApiExperiment {
+    class AndroidStudioExperiment extends AbstractToolingApiCrossVersionPerformanceTest.ToolingApiExperiment {
 
         AndroidStudioExperiment(String projectName) {
             super(projectName)
@@ -53,13 +53,13 @@ public abstract class AbstractAndroidStudioMockupCrossVersionPerformanceTest ext
 
         void action(String className, @DelegatesTo(value = BuildActionExecuter, strategy = Closure.DELEGATE_FIRST) Closure config) {
             action {
-                tapiClassLoader.loadClass("org.gradle.tooling.BuildAction") //make sure BuildAction is available in the Gradle version we are currently running
+                AbstractAndroidStudioMockupCrossVersionPerformanceTest.this.tapiClassLoader.loadClass("org.gradle.tooling.BuildAction") //make sure BuildAction is available in the Gradle version we are currently running
                 def proxy = { exec ->
                     config.delegate = exec
                     config.resolveStrategy = Closure.DELEGATE_FIRST
                     config.call()
                 }.asType(it.class.classLoader.loadClass(Action.name))
-                tapiClassLoader.loadClass(className).invokeMethod('withProjectConnection', [it, proxy] as Object[])
+                AbstractAndroidStudioMockupCrossVersionPerformanceTest.this.tapiClassLoader.loadClass(className).invokeMethod('withProjectConnection', [it, proxy] as Object[])
             }
         }
 

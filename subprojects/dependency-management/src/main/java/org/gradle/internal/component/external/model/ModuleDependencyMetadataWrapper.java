@@ -57,8 +57,21 @@ public class ModuleDependencyMetadataWrapper implements ModuleDependencyMetadata
     }
 
     @Override
+    public ModuleDependencyMetadata withEndorseStrictVersions(boolean endorse) {
+        if (delegate instanceof ModuleDependencyMetadata) {
+            return new ModuleDependencyMetadataWrapper(((ModuleDependencyMetadata) delegate).withEndorseStrictVersions(endorse));
+        }
+        return this;
+    }
+
+    @Override
     public DependencyMetadata withTarget(ComponentSelector target) {
         return delegate.withTarget(target);
+    }
+
+    @Override
+    public DependencyMetadata withTargetAndArtifacts(ComponentSelector target, List<IvyArtifactName> artifacts) {
+        return delegate.withTargetAndArtifacts(target, artifacts);
     }
 
     @Override
@@ -89,6 +102,11 @@ public class ModuleDependencyMetadataWrapper implements ModuleDependencyMetadata
     @Override
     public boolean isConstraint() {
         return delegate.isConstraint();
+    }
+
+    @Override
+    public boolean isEndorsingStrictVersions() {
+        return delegate.isEndorsingStrictVersions();
     }
 
     @Override

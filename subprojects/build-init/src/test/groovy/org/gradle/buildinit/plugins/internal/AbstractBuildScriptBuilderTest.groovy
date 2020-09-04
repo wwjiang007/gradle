@@ -16,8 +16,8 @@
 
 package org.gradle.buildinit.plugins.internal
 
-import org.gradle.api.internal.file.BaseDirFileResolver
-import org.gradle.api.internal.file.TestFiles
+import org.gradle.api.file.Directory
+import org.gradle.api.file.RegularFile
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
@@ -25,12 +25,17 @@ import spock.lang.Specification
 
 import static org.gradle.util.TextUtil.toPlatformLineSeparators
 
-
 abstract class AbstractBuildScriptBuilderTest extends Specification {
     @Rule
-    TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
+    TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider(getClass())
 
-    def fileResolver = new BaseDirFileResolver(tmpDir.testDirectory, TestFiles.patternSetFactory)
+    Directory target = Mock() {
+        _ * file(_) >> { String path ->
+            Mock(RegularFile) {
+                _ * getAsFile() >> tmpDir.file(path)
+            }
+        }
+    }
 
     abstract TestFile getOutputFile()
 

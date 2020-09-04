@@ -17,7 +17,9 @@
 package org.gradle.jvm.test
 
 import org.gradle.integtests.fixtures.DefaultTestExecutionResult
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 
+@UnsupportedWithConfigurationCache(because = "software model")
 class JUnitComponentUnderTestIntegrationTest extends AbstractJUnitTestExecutionIntegrationSpec {
 
     def "can test a JVM library that declares an external dependency"() {
@@ -98,6 +100,7 @@ class JUnitComponentUnderTestIntegrationTest extends AbstractJUnitTestExecutionI
             .assertTestsExecuted('testGreeting')
 
         when:
+        expectDeprecationWarnings()
         succeeds ':myTestGreeterJarBinaryTest'
 
         then:
@@ -128,6 +131,7 @@ class JUnitComponentUnderTestIntegrationTest extends AbstractJUnitTestExecutionI
         '''
 
         then:
+        expectDeprecationWarnings()
         fails ':myTestGreeterJarBinaryTest'
         def result = new DefaultTestExecutionResult(testDirectory, 'build', 'myTest', 'greeterJar')
         result.assertTestClassesExecuted('com.acme.GreeterTest')
@@ -170,6 +174,7 @@ class JUnitComponentUnderTestIntegrationTest extends AbstractJUnitTestExecutionI
             .assertTestsExecuted('testGreeting')
 
         when:
+        expectDeprecationWarnings()
         succeeds ':myTestGreeterJava8JarBinaryTest'
         result = new DefaultTestExecutionResult(testDirectory, 'build', 'myTest', 'greeterJava8Jar')
 
@@ -207,11 +212,13 @@ class JUnitComponentUnderTestIntegrationTest extends AbstractJUnitTestExecutionI
         executed ':customGreeterCheck', ':checkGreeterJar', ':checkMyTestGreeterJarBinary', ':myTestGreeterJarBinaryTest'
 
         when:
+        expectDeprecationWarnings()
         run 'checkMyTestGreeterJarBinary'
         then:
         executed ':myTestGreeterJarBinaryTest'
 
         when:
+        expectDeprecationWarnings()
         run 'checkGreeterJar'
         then:
         executed ':customGreeterCheck', ':myTestGreeterJarBinaryTest'

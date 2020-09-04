@@ -84,6 +84,19 @@ public class DefaultConfigurationPublications implements ConfigurationPublicatio
         this.attributes = attributesFactory.mutable(parentAttributes);
     }
 
+    public void collectVariants(ConfigurationInternal.VariantVisitor visitor) {
+        visitor.visitArtifacts(artifacts);
+        PublishArtifactSet allArtifactSet = allArtifacts.getPublishArtifactSet();
+        if (variants == null || variants.isEmpty() || !allArtifactSet.isEmpty()) {
+            visitor.visitOwnVariant(displayName, attributes.asImmutable(), allArtifactSet);
+        }
+        if (variants != null) {
+            for (DefaultVariant variant : variants.withType(DefaultVariant.class)) {
+                variant.visit(visitor);
+            }
+        }
+    }
+
     public OutgoingVariant convertToOutgoingVariant() {
         return new OutgoingVariant() {
             @Override
@@ -173,20 +186,20 @@ public class DefaultConfigurationPublications implements ConfigurationPublicatio
             }
             capabilities.add(descriptor);
         } else {
-            throw new InvalidUserCodeException("Cannot declare capability '" + notation + "' after " + displayName + " has been resolved");
+            throw new InvalidUserCodeException("Cannot declare capability '" + notation + "' after dependency " + displayName + " has been resolved");
         }
     }
 
     @Override
     public Collection<? extends Capability> getCapabilities() {
-        return capabilities == null ? Collections.<Capability>emptyList() : ImmutableList.copyOf(capabilities);
+        return capabilities == null ? Collections.emptyList() : ImmutableList.copyOf(capabilities);
     }
 
     void preventFromFurtherMutation() {
         canCreate = false;
         if (variants != null) {
             for (ConfigurationVariant variant : variants) {
-                ((ConfigurationVariantInternal)variant).preventFurtherMutation();
+                ((ConfigurationVariantInternal) variant).preventFurtherMutation();
             }
         }
     }
@@ -197,7 +210,7 @@ public class DefaultConfigurationPublications implements ConfigurationPublicatio
             if (canCreate) {
                 return instantiator.newInstance(DefaultVariant.class, displayName, name, parentAttributes, artifactNotationParser, fileCollectionFactory, attributesFactory, domainObjectCollectionFactory);
             } else {
-                throw new InvalidUserCodeException("Cannot create variant '" + name + "' after " + displayName + " has been resolved");
+                throw new InvalidUserCodeException("Cannot create variant '" + name + "' after dependency " + displayName + " has been resolved");
             }
         }
     }

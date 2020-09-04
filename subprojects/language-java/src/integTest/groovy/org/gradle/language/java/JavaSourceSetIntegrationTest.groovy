@@ -16,17 +16,19 @@
 package org.gradle.language.java
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.integtests.fixtures.archives.TestReproducibleArchives
 import org.gradle.test.fixtures.archive.JarTestFixture
 
 import static org.gradle.language.java.JavaIntegrationTesting.applyJavaPlugin
 
 @TestReproducibleArchives
+@UnsupportedWithConfigurationCache(because = "software model")
 class JavaSourceSetIntegrationTest extends AbstractIntegrationSpec {
 
     def "can define dependencies on Java source set"() {
         given:
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, executer)
         buildFile << '''
 model {
     components {
@@ -67,7 +69,7 @@ model {
 
     def "dependencies returned by the container are immutable"() {
         given:
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, executer)
         buildFile << '''
 model {
     components {
@@ -109,7 +111,7 @@ model {
 
     def "reports failure for invalid dependency notation"() {
         given:
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, executer)
         buildFile << """
 model {
     components {
@@ -152,7 +154,7 @@ model {
         file("src/main/java8/Java8.java") << "public class Java8 {}"
         file("src/main/java8-resources/java8.properties") << "java=8"
 
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, executer)
         buildFile << '''
 model {
     components {

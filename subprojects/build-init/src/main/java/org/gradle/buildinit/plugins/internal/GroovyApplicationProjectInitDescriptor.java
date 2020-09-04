@@ -38,11 +38,9 @@ public class GroovyApplicationProjectInitDescriptor extends GroovyProjectInitDes
     protected void configureBuildScript(InitSettings settings, BuildScriptBuilder buildScriptBuilder) {
         buildScriptBuilder
             .plugin(
-                "Apply the application plugin to add support for building a CLI application",
+                "Apply the application plugin to add support for building a CLI application.",
                 "application")
-            .block(null, "application", b -> {
-                b.propertyAssignment("Define the main class for the application", "mainClassName", withPackage(settings, "App"));
-            });
+            .block(null, "application", b -> b.propertyAssignment("Define the main class for the application.", "mainClass", withPackage(settings, "App"), false));
     }
 
     @Override

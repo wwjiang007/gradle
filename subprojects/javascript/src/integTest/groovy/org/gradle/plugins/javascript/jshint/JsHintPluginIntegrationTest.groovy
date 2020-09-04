@@ -33,6 +33,12 @@ class JsHintPluginIntegrationTest extends WellBehavedPluginTest {
         buildFile << """
             ${mavenCentralRepository()}
         """
+        executer.expectDocumentedDeprecationWarning("The org.gradle.jshint plugin has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_5.html#deprecated_plugins")
+        executer.expectDocumentedDeprecationWarning("The org.gradle.rhino plugin has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_5.html#deprecated_plugins")
+        executer.expectDocumentedDeprecationWarning("The org.gradle.javascript-base plugin has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_5.html#deprecated_plugins")
     }
 
     def taskForFileTree(String path = "src/main/js", File file = buildFile) {
@@ -100,6 +106,7 @@ class JsHintPluginIntegrationTest extends WellBehavedPluginTest {
         json[file("src/main/js/dir1/f1.js").absolutePath] instanceof Map
 
         when:
+        executer.noDeprecationChecks()
         run "jsHint"
 
         then:

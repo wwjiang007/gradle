@@ -31,10 +31,8 @@ import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 import org.gradle.api.logging.LoggingManager
 import org.gradle.api.plugins.ObjectConfigurationAction
-import org.gradle.api.plugins.PluginAware
 import org.gradle.api.resources.ResourceHandler
 import org.gradle.api.tasks.WorkResult
-
 import org.gradle.kotlin.dsl.resolver.KotlinBuildScriptDependenciesResolver
 import org.gradle.kotlin.dsl.support.KotlinScriptHost
 import org.gradle.kotlin.dsl.support.delegates.GradleDelegate
@@ -55,22 +53,23 @@ import kotlin.script.templates.ScriptTemplateDefinition
 
 
 /**
- * Base class for Kotlin init scripts.
+ * Script template for Kotlin init scripts.
  */
-@KotlinScriptTemplate
 @ScriptTemplateDefinition(
     resolver = KotlinBuildScriptDependenciesResolver::class,
     scriptFilePattern = ".+\\.init\\.gradle\\.kts")
 @ScriptTemplateAdditionalCompilerArguments([
+    "-language-version", "1.3",
     "-jvm-target", "1.8",
     "-Xjsr305=strict",
     "-XXLanguage:+NewInference",
-    "-XXLanguage:+SamConversionForKotlinFunctions"
+    "-XXLanguage:+SamConversionForKotlinFunctions",
+    "-XXLanguage:+ReferencesToSyntheticJavaProperties"
 ])
 @SamWithReceiverAnnotations("org.gradle.api.HasImplicitReceiver")
 abstract class KotlinInitScript(
     private val host: KotlinScriptHost<Gradle>
-) : InitScriptApi(host.target) {
+) : @Suppress("deprecation") InitScriptApi(host.target) /* TODO:kotlin-dsl configure implicit receiver */ {
 
     /**
      * The [ScriptHandler] for this script.
@@ -101,6 +100,10 @@ abstract class KotlinInitScript(
  * Standard implementation of the API exposed to all types of [Gradle] scripts,
  * precompiled and otherwise.
  */
+@Deprecated(
+    "Kept for compatibility with precompiled script plugins published with Gradle versions prior to 6.0",
+    replaceWith = ReplaceWith("Gradle", "org.gradle.api.invocation.Gradle")
+)
 abstract class InitScriptApi(
     override val delegate: Gradle
 ) : GradleDelegate() {

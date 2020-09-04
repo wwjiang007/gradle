@@ -72,9 +72,13 @@ abstract class AbstractIncrementalTasksIntegrationTest extends AbstractIntegrati
         def createOutputsNonIncremental() {
         }
 
+        @Internal
         def addedFiles = []
+        @Internal
         def modifiedFiles = []
+        @Internal
         def removedFiles = []
+        @Internal
         def incrementalExecution
     }
         """
@@ -117,11 +121,12 @@ abstract class AbstractIncrementalTasksIntegrationTest extends AbstractIntegrati
     }
 
     task incrementalCheck(dependsOn: "incremental") {
+        def ext = project.ext
         doLast {
-            assert incremental.incrementalExecution == project.ext.incrementalExecution
-            assert incremental.addedFiles.collect({ it.name }).sort() == project.ext.added
-            assert incremental.modifiedFiles.collect({ it.name }).sort() == project.ext.modified
-            assert incremental.removedFiles.collect({ it.name }).sort() == project.ext.removed
+            assert incremental.incrementalExecution == ext.incrementalExecution
+            assert incremental.addedFiles.collect({ it.name }).sort() == ext.added
+            assert incremental.modifiedFiles.collect({ it.name }).sort() == ext.modified
+            assert incremental.removedFiles.collect({ it.name }).sort() == ext.removed
         }
     }
 """
@@ -364,7 +369,7 @@ abstract class AbstractIncrementalTasksIntegrationTest extends AbstractIntegrati
     }
 
     def failedExecution() {
-        executer.withArgument("-PforceFail=yep")
+        executer.withArgument("-DforceFail=yep")
         assert fails("incremental")
         executer.withArguments()
     }

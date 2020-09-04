@@ -360,7 +360,7 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         output.text == "${[MODIFIED]}"
     }
 
-    def "broken symlink in #inputType fails validation"() {
+    def "broken symlink in #inputType.simpleName fails validation"() {
         def brokenInputFile = file('brokenInput').createLink("brokenInputFileTarget")
         buildFile << """
             class CustomTask extends DefaultTask {
@@ -392,9 +392,9 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         buildFile << """
             class CustomTask extends DefaultTask {
                 @${classpathType.name} File classpath
-    
+
                 @OutputFile File output
-    
+
                 @TaskAction execute() {}
             }
             task brokenClasspathInput(type: CustomTask) {
@@ -422,9 +422,9 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         buildFile << """
             class CustomTask extends DefaultTask {
                 @${classpathType.name} File classpath
-    
+
                 @OutputFile File output
-    
+
                 @TaskAction execute() {}
             }
             task brokenClasspathInput(type: CustomTask) {
@@ -451,7 +451,7 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
         buildFile << """
             class CustomTask extends DefaultTask {
                 @InputDirectory @SkipWhenEmpty File directoryWithBrokenLink
-    
+
                 @TaskAction execute() {}
             }
             task brokenDirectoryWithSkipWhenEmpty(type: CustomTask) {
@@ -468,7 +468,7 @@ class FileCollectionSymlinkIntegrationTest extends AbstractIntegrationSpec {
 
     void maybeDeprecated(String expression) {
         if (expression.contains("configurableFiles")) {
-            executer.expectDeprecationWarning()
+            executer.expectDocumentedDeprecationWarning("The ProjectLayout.configurableFiles() method has been deprecated. This is scheduled to be removed in Gradle 7.0. Please use the ObjectFactory.fileCollection() method instead. See https://docs.gradle.org/current/userguide/lazy_configuration.html#property_files_api_reference for more details.")
         }
     }
 }

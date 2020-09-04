@@ -16,10 +16,14 @@
 
 package org.gradle.play.integtest
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.play.integtest.fixtures.PlayMultiVersionRunApplicationIntegrationTest
+
+import java.util.concurrent.TimeUnit
 
 abstract class PlayBinaryApplicationIntegrationTest extends PlayMultiVersionRunApplicationIntegrationTest {
 
+    @ToBeFixedForConfigurationCache(bottomSpecs = "PlayCompositeBuildIntegrationTest")
     def "can build play app binary"() {
         when:
         succeeds("assemble")
@@ -38,6 +42,7 @@ abstract class PlayBinaryApplicationIntegrationTest extends PlayMultiVersionRunA
         skipped(":createPlayBinaryJar", ":compilePlayBinaryPlayTwirlTemplates")
     }
 
+    @ToBeFixedForConfigurationCache
     def "can run play app"() {
         setup:
         run "assemble"
@@ -62,6 +67,7 @@ abstract class PlayBinaryApplicationIntegrationTest extends PlayMultiVersionRunA
 
         when: "stopping gradle"
         build.cancelWithEOT().waitForFinish()
+        TimeUnit.SECONDS.sleep(10)
 
         then: "play server is stopped too"
         runningApp.verifyStopped()

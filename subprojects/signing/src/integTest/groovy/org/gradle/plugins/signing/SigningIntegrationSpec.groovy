@@ -108,26 +108,21 @@ abstract class SigningIntegrationSpec extends AbstractIntegrationSpec {
     }
 
     String getJavadocAndSourceJarsScript(String configurationName = null) {
-        def tasks = """
-            task("sourcesJar", type: Jar, dependsOn: classes) { 
-                classifier = 'sources' 
-                from sourceSets.main.allSource
-            } 
-
-            task("javadocJar", type: Jar, dependsOn: javadoc) { 
-                classifier = 'javadoc' 
-                from javadoc.destinationDir 
-            } 
+        def javaPluginConfig = """
+            java {
+                withJavadocJar()
+                withSourcesJar()
+            }
         """
 
         if (configurationName == null) {
-            tasks
+            javaPluginConfig
         } else {
-            tasks + """
+            javaPluginConfig + """
                 configurations {
                     $configurationName
                 }
-                
+
                 artifacts {
                     $configurationName sourcesJar, javadocJar
                 }
@@ -212,6 +207,14 @@ abstract class SigningIntegrationSpec extends AbstractIntegrationSpec {
 
     TestFile pomSignature(String name = "sign-1.0") {
         m2RepoFile("${name}.pom.asc")
+    }
+
+    TestFile module(String name = "sign-1.0") {
+        m2RepoFile("${name}.module")
+    }
+
+    TestFile moduleSignature(String name = "sign-1.0") {
+        m2RepoFile("${name}.module.asc")
     }
 
     SignMethod getSignMethod() {

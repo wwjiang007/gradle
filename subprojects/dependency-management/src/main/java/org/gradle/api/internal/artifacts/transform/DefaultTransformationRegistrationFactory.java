@@ -16,18 +16,19 @@
 
 package org.gradle.api.internal.artifacts.transform;
 
+import com.google.common.collect.ImmutableMap;
 import org.gradle.api.InvalidUserDataException;
-import org.gradle.api.artifacts.transform.ArtifactTransform;
 import org.gradle.api.artifacts.transform.CacheableTransform;
 import org.gradle.api.artifacts.transform.InputArtifact;
 import org.gradle.api.artifacts.transform.InputArtifactDependencies;
 import org.gradle.api.artifacts.transform.TransformAction;
 import org.gradle.api.artifacts.transform.TransformParameters;
+import org.gradle.api.internal.DomainObjectContext;
 import org.gradle.api.internal.artifacts.ArtifactTransformRegistration;
 import org.gradle.api.internal.attributes.AttributeContainerInternal;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.api.internal.file.FileCollectionFactory;
-import org.gradle.api.internal.tasks.properties.DefaultParameterValidationContext;
+import org.gradle.api.internal.file.FileLookup;
 import org.gradle.api.internal.tasks.properties.FileParameterUtils;
 import org.gradle.api.internal.tasks.properties.InputFilePropertyType;
 import org.gradle.api.internal.tasks.properties.PropertyValue;
@@ -42,14 +43,15 @@ import org.gradle.internal.hash.ClassLoaderHierarchyHasher;
 import org.gradle.internal.instantiation.InstantiationScheme;
 import org.gradle.internal.isolation.IsolatableFactory;
 import org.gradle.internal.operations.BuildOperationExecutor;
+import org.gradle.internal.reflect.DefaultTypeValidationContext;
 import org.gradle.internal.reflect.PropertyMetadata;
+import org.gradle.internal.reflect.TypeValidationContext;
+import org.gradle.internal.service.ServiceLookup;
 import org.gradle.internal.snapshot.ValueSnapshotter;
 import org.gradle.model.internal.type.ModelType;
 
 import javax.annotation.Nullable;
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.Collectors;
 
 public class DefaultTransformationRegistrationFactory implements TransformationRegistrationFactory {
@@ -60,10 +62,12 @@ public class DefaultTransformationRegistrationFactory implements TransformationR
     private final TransformerInvocationFactory transformerInvocationFactory;
     private final ValueSnapshotter valueSnapshotter;
     private final PropertyWalker parametersPropertyWalker;
-    private final DomainObjectProjectStateHandler domainObjectProjectStateHandler;
+    private final ServiceLookup internalServices;
     private final TypeMetadataStore actionMetadataStore;
     private final FileCollectionFactory fileCollectionFactory;
+    private final FileLookup fileLookup;
     private final FileCollectionFingerprinterRegistry fileCollectionFingerprinterRegistry;
+    private final DomainObjectContext owner;
     private final InstantiationScheme actionInstantiationScheme;
     private final InstantiationScheme legacyActionInstantiationScheme;
 
@@ -74,10 +78,12 @@ public class DefaultTransformationRegistrationFactory implements TransformationR
         TransformerInvocationFactory transformerInvocationFactory,
         ValueSnapshotter valueSnapshotter,
         FileCollectionFactory fileCollectionFactory,
+        FileLookup fileLookup,
         FileCollectionFingerprinterRegistry fileCollectionFingerprinterRegistry,
-        DomainObjectProjectStateHandler domainObjectProjectStateHandler,
+        DomainObjectContext owner,
         ArtifactTransformParameterScheme parameterScheme,
-        ArtifactTransformActionScheme actionScheme
+        ArtifactTransformActionScheme actionScheme,
+        ServiceLookup internalServices
     ) {
         this.buildOperationExecutor = buildOperationExecutor;
         this.isolatableFactory = isolatableFactory;
@@ -85,21 +91,22 @@ public class DefaultTransformationRegistrationFactory implements TransformationR
         this.transformerInvocationFactory = transformerInvocationFactory;
         this.valueSnapshotter = valueSnapshotter;
         this.fileCollectionFactory = fileCollectionFactory;
+        this.fileLookup = fileLookup;
         this.fileCollectionFingerprinterRegistry = fileCollectionFingerprinterRegistry;
+        this.owner = owner;
         this.actionInstantiationScheme = actionScheme.getInstantiationScheme();
         this.actionMetadataStore = actionScheme.getInspectionScheme().getMetadataStore();
         this.legacyActionInstantiationScheme = actionScheme.getLegacyInstantiationScheme();
         this.parametersPropertyWalker = parameterScheme.getInspectionScheme().getPropertyWalker();
-        this.domainObjectProjectStateHandler = domainObjectProjectStateHandler;
+        this.internalServices = internalServices;
     }
 
     @Override
-    public ArtifactTransformRegistration create(ImmutableAttributes from, ImmutableAttributes to, Class<? extends TransformAction> implementation, @Nullable TransformParameters parameterObject) {
-        List<String> validationMessages = new ArrayList<>();
+    public ArtifactTransformRegistration create(ImmutableAttributes from, ImmutableAttributes to, Class<? extends TransformAction<?>> implementation, @Nullable TransformParameters parameterObject) {
         TypeMetadata actionMetadata = actionMetadataStore.getTypeMetadata(implementation);
-        DefaultParameterValidationContext parameterValidationContext = new DefaultParameterValidationContext(validationMessages);
-        actionMetadata.collectValidationFailures(null, parameterValidationContext);
         boolean cacheable = implementation.isAnnotationPresent(CacheableTransform.class);
+        DefaultTypeValidationContext validationContext = DefaultTypeValidationContext.withoutRootType(cacheable);
+        actionMetadata.visitValidationFailures(null, validationContext);
 
         // Should retain this on the metadata rather than calculate on each invocation
         Class<? extends FileNormalizer> inputArtifactNormalizer = null;
@@ -111,18 +118,26 @@ public class DefaultTransformationRegistrationFactory implements TransformationR
                 NormalizerCollectingVisitor visitor = new NormalizerCollectingVisitor();
                 actionMetadata.getAnnotationHandlerFor(propertyMetadata).visitPropertyValue(propertyMetadata.getPropertyName(), null, propertyMetadata, visitor, null);
                 inputArtifactNormalizer = visitor.normalizer;
-                DefaultTransformer.validateInputFileNormalizer(propertyMetadata.getPropertyName(), inputArtifactNormalizer, cacheable, parameterValidationContext);
+                DefaultTransformer.validateInputFileNormalizer(propertyMetadata.getPropertyName(), inputArtifactNormalizer, cacheable, validationContext);
             } else if (propertyType.equals(InputArtifactDependencies.class)) {
                 NormalizerCollectingVisitor visitor = new NormalizerCollectingVisitor();
                 actionMetadata.getAnnotationHandlerFor(propertyMetadata).visitPropertyValue(propertyMetadata.getPropertyName(), null, propertyMetadata, visitor, null);
                 dependenciesNormalizer = visitor.normalizer;
-                DefaultTransformer.validateInputFileNormalizer(propertyMetadata.getPropertyName(), dependenciesNormalizer, cacheable, parameterValidationContext);
+                DefaultTransformer.validateInputFileNormalizer(propertyMetadata.getPropertyName(), dependenciesNormalizer, cacheable, validationContext);
             }
         }
+        ImmutableMap<String, TypeValidationContext.Severity> validationMessages = validationContext.getProblems();
         if (!validationMessages.isEmpty()) {
+            String formatString = validationMessages.size() == 1
+                ? "A problem was found with the configuration of %s."
+                : "Some problems were found with the configuration of %s.";
             throw new DefaultMultiCauseException(
-                String.format(validationMessages.size() == 1 ? "A problem was found with the configuration of %s." : "Some problems were found with the configuration of %s.", ModelType.of(implementation).getDisplayName()),
-                validationMessages.stream().sorted().map(InvalidUserDataException::new).collect(Collectors.toList()));
+                String.format(formatString, ModelType.of(implementation).getDisplayName()),
+                validationMessages.keySet().stream()
+                    .sorted()
+                    .map(InvalidUserDataException::new)
+                    .collect(Collectors.toList())
+            );
         }
         Transformer transformer = new DefaultTransformer(
             implementation,
@@ -137,17 +152,20 @@ public class DefaultTransformationRegistrationFactory implements TransformationR
             isolatableFactory,
             valueSnapshotter,
             fileCollectionFactory,
+            fileLookup,
             parametersPropertyWalker,
-            actionInstantiationScheme);
+            actionInstantiationScheme,
+            owner.getModel(),
+            internalServices);
 
-        return new DefaultArtifactTransformRegistration(from, to, new TransformationStep(transformer, transformerInvocationFactory, domainObjectProjectStateHandler, fileCollectionFingerprinterRegistry));
+        return new DefaultArtifactTransformRegistration(from, to, new TransformationStep(transformer, transformerInvocationFactory, owner, fileCollectionFingerprinterRegistry));
     }
 
     @Override
     @SuppressWarnings("deprecation")
-    public ArtifactTransformRegistration create(ImmutableAttributes from, ImmutableAttributes to, Class<? extends ArtifactTransform> implementation, Object[] params) {
+    public ArtifactTransformRegistration create(ImmutableAttributes from, ImmutableAttributes to, Class<? extends org.gradle.api.artifacts.transform.ArtifactTransform> implementation, Object[] params) {
         Transformer transformer = new LegacyTransformer(implementation, params, legacyActionInstantiationScheme, from, classLoaderHierarchyHasher, isolatableFactory);
-        return new DefaultArtifactTransformRegistration(from, to, new TransformationStep(transformer, transformerInvocationFactory, domainObjectProjectStateHandler, fileCollectionFingerprinterRegistry));
+        return new DefaultArtifactTransformRegistration(from, to, new TransformationStep(transformer, transformerInvocationFactory, owner, fileCollectionFingerprinterRegistry));
     }
 
     private static class DefaultArtifactTransformRegistration implements ArtifactTransformRegistration {

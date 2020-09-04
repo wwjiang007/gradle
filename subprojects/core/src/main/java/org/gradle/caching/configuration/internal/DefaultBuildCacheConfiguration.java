@@ -22,13 +22,16 @@ import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.caching.BuildCacheServiceFactory;
 import org.gradle.caching.configuration.BuildCache;
+import org.gradle.caching.configuration.BuildCacheConfiguration;
 import org.gradle.caching.local.DirectoryBuildCache;
 import org.gradle.internal.Actions;
 import org.gradle.internal.Cast;
+import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.reflect.Instantiator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Set;
 
@@ -37,7 +40,7 @@ public class DefaultBuildCacheConfiguration implements BuildCacheConfigurationIn
 
     private final Instantiator instantiator;
 
-    private final DirectoryBuildCache local;
+    private DirectoryBuildCache local;
     private BuildCache remote;
 
     private final Set<BuildCacheServiceRegistration> registrations;
@@ -54,12 +57,31 @@ public class DefaultBuildCacheConfiguration implements BuildCacheConfigurationIn
     }
 
     @Override
-    public <T extends DirectoryBuildCache> T local(Class<T> type) {
-        return local(type, Actions.doNothing());
+    public void setLocal(DirectoryBuildCache local) {
+        this.local = local;
     }
 
     @Override
+    @Deprecated
+    public <T extends DirectoryBuildCache> T local(Class<T> type) {
+        DeprecationLogger.deprecateMethod(BuildCacheConfiguration.class, "local(Class)").replaceWith("getLocal()")
+            .willBeRemovedInGradle7()
+            .withUpgradeGuideSection(5, "local_build_cache_is_always_a_directory_cache")
+            .nagUser();
+        return localInternal(type, Actions.doNothing());
+    }
+
+    @Override
+    @Deprecated
     public <T extends DirectoryBuildCache> T local(Class<T> type, Action<? super T> configuration) {
+        DeprecationLogger.deprecateMethod(BuildCacheConfiguration.class, "local(Class, Action)").replaceWith("local(Action)")
+            .willBeRemovedInGradle7()
+            .withUpgradeGuideSection(5, "local_build_cache_is_always_a_directory_cache")
+            .nagUser();
+        return localInternal(type, configuration);
+    }
+
+    private <T extends DirectoryBuildCache> T localInternal(Class<T> type, Action<? super T> configuration) {
         if (!type.equals(DirectoryBuildCache.class)) {
             throw new IllegalArgumentException("Using a local build cache type other than " + DirectoryBuildCache.class.getSimpleName() + " is not allowed");
         }
@@ -73,9 +95,15 @@ public class DefaultBuildCacheConfiguration implements BuildCacheConfigurationIn
         configuration.execute(local);
     }
 
+    @Nullable
     @Override
     public BuildCache getRemote() {
         return remote;
+    }
+
+    @Override
+    public void setRemote(@Nullable BuildCache remote) {
+        this.remote = remote;
     }
 
     @Override

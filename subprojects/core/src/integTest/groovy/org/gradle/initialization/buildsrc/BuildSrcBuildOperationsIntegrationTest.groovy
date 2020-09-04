@@ -59,6 +59,9 @@ class BuildSrcBuildOperationsIntegrationTest extends AbstractIntegrationSpec {
         loadOps[1].details.buildPath == ':buildSrc'
         loadOps[1].parentId == buildSrcOps[0].id
 
+        def buildTreeOp = ops.only(/Prepare build tree/)
+        buildTreeOp.parentId == root.id
+
         def configureOps = ops.all(ConfigureBuildBuildOperationType)
         configureOps.size() == 2
         configureOps[0].displayName == "Configure build (:buildSrc)"
@@ -66,7 +69,7 @@ class BuildSrcBuildOperationsIntegrationTest extends AbstractIntegrationSpec {
         configureOps[0].parentId == buildSrcOps[0].id
         configureOps[1].displayName == "Configure build"
         configureOps[1].details.buildPath == ":"
-        configureOps[1].parentId == root.id
+        configureOps[1].parentId == buildTreeOp.id
 
         def taskGraphOps = ops.all(CalculateTaskGraphBuildOperationType)
         taskGraphOps.size() == 2
@@ -88,10 +91,10 @@ class BuildSrcBuildOperationsIntegrationTest extends AbstractIntegrationSpec {
         graphNotifyOps.size() == 2
         graphNotifyOps[0].displayName == 'Notify task graph whenReady listeners (:buildSrc)'
         graphNotifyOps[0].details.buildPath == ':buildSrc'
-        graphNotifyOps[0].parentId == runTasksOps[0].id
+        graphNotifyOps[0].parentId == taskGraphOps[0].id
         graphNotifyOps[1].displayName == "Notify task graph whenReady listeners"
         graphNotifyOps[1].details.buildPath == ":"
-        graphNotifyOps[1].parentId == runTasksOps[1].id
+        graphNotifyOps[1].parentId == taskGraphOps[1].id
 
         def taskOps = ops.all(ExecuteTaskBuildOperationType)
         taskOps.size() > 1

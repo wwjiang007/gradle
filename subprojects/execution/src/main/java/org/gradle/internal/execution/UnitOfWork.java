@@ -17,6 +17,7 @@
 package org.gradle.internal.execution;
 
 import com.google.common.collect.ImmutableSortedMap;
+import org.gradle.api.Describable;
 import org.gradle.caching.internal.CacheableEntity;
 import org.gradle.internal.execution.caching.CachingDisabledReason;
 import org.gradle.internal.execution.caching.CachingState;
@@ -26,6 +27,7 @@ import org.gradle.internal.file.TreeType;
 import org.gradle.internal.fingerprint.CurrentFileCollectionFingerprint;
 import org.gradle.internal.fingerprint.FileCollectionFingerprint;
 import org.gradle.internal.fingerprint.overlap.OverlappingOutputs;
+import org.gradle.internal.reflect.TypeValidationContext;
 import org.gradle.internal.snapshot.FileSystemSnapshot;
 import org.gradle.internal.snapshot.impl.ImplementationSnapshot;
 
@@ -35,16 +37,20 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-public interface UnitOfWork extends CacheableEntity {
+public interface UnitOfWork extends CacheableEntity, Describable {
 
     /**
      * Executes the work synchronously.
      */
     WorkResult execute(@Nullable InputChangesInternal inputChanges, InputChangesContext context);
 
-    Optional<Duration> getTimeout();
+    default Optional<Duration> getTimeout() {
+        return Optional.empty();
+    }
 
-    InputChangeTrackingStrategy getInputChangeTrackingStrategy();
+    default InputChangeTrackingStrategy getInputChangeTrackingStrategy() {
+        return InputChangeTrackingStrategy.NONE;
+    }
 
     void visitImplementations(ImplementationVisitor visitor);
 
@@ -69,10 +75,10 @@ public interface UnitOfWork extends CacheableEntity {
     void visitOutputProperties(OutputPropertyVisitor visitor);
 
     interface OutputPropertyVisitor {
-        void visitOutputProperty(String propertyName, TreeType type, Iterable<File> roots);
+        void visitOutputProperty(String propertyName, TreeType type, File root);
     }
 
-    void visitLocalState(LocalStateVisitor visitor);
+    default void visitLocalState(LocalStateVisitor visitor) {}
 
     interface LocalStateVisitor {
         void visitLocalStateRoot(File localStateRoot);
@@ -81,15 +87,21 @@ public interface UnitOfWork extends CacheableEntity {
     long markExecutionTime();
 
     /**
-     * Validate the work's inputs and outputs, and throws an exception if violations are found.
+     * Validate the work definition and configuration.
      */
-    void validate();
+    void validate(WorkValidationContext validationContext);
+
+    interface WorkValidationContext {
+        TypeValidationContext createContextFor(Class<?> type, boolean cacheable);
+    }
 
     /**
      * Return a reason to disable caching for this work.
      * When returning {@link Optional#empty()} if caching can still be disabled further down the pipeline.
      */
-    Optional<CachingDisabledReason> shouldDisableCaching(@Nullable OverlappingOutputs detectedOverlappingOutputs);
+    default Optional<CachingDisabledReason> shouldDisableCaching(@Nullable OverlappingOutputs detectedOverlappingOutputs) {
+        return Optional.empty();
+    }
 
     /**
      * Checks if this work has empty inputs. If the work cannot be skipped, {@link Optional#empty()} is returned.
@@ -104,7 +116,9 @@ public interface UnitOfWork extends CacheableEntity {
      * Is this work item allowed to load from the cache, or if we only allow it to be stored.
      */
     // TODO Make this part of CachingState instead
-    boolean isAllowedToLoadFromCache();
+    default boolean isAllowedToLoadFromCache() {
+        return true;
+    }
 
     /**
      * Paths to locations changed by the unit of work.
@@ -116,7 +130,7 @@ public interface UnitOfWork extends CacheableEntity {
      *
      * @return {@link Optional#empty()} if the unit of work cannot guarantee that only some files have been changed or an iterable of the paths which were changed by the unit of work.
      */
-    Optional<? extends Iterable<String>> getChangingOutputs();
+    Iterable<String> getChangingOutputs();
 
     /**
      * Whether overlapping outputs should be allowed or ignored.
@@ -140,7 +154,9 @@ public interface UnitOfWork extends CacheableEntity {
     /**
      * Whether the outputs should be cleanup up when the work is executed non-incrementally.
      */
-    boolean shouldCleanupOutputsOnNonIncrementalExecution();
+    default boolean shouldCleanupOutputsOnNonIncrementalExecution() {
+        return true;
+    }
 
     /**
      * Takes a snapshot of the outputs before execution.

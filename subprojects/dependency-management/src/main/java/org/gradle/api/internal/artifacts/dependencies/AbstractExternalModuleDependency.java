@@ -15,6 +15,7 @@
  */
 package org.gradle.api.internal.artifacts.dependencies;
 
+import com.google.common.base.Objects;
 import com.google.common.base.Strings;
 import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
@@ -25,6 +26,9 @@ import org.gradle.api.artifacts.MutableVersionConstraint;
 import org.gradle.api.artifacts.VersionConstraint;
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
 import org.gradle.api.internal.artifacts.ModuleVersionSelectorStrictSpec;
+import org.gradle.internal.deprecation.DeprecationLogger;
+
+import javax.annotation.Nullable;
 
 public abstract class AbstractExternalModuleDependency extends AbstractModuleDependency implements ExternalModuleDependency {
     private final ModuleIdentifier moduleIdentifier;
@@ -32,7 +36,7 @@ public abstract class AbstractExternalModuleDependency extends AbstractModuleDep
     private boolean force;
     private final DefaultMutableVersionConstraint versionConstraint;
 
-    public AbstractExternalModuleDependency(ModuleIdentifier module, String version, String configuration) {
+    public AbstractExternalModuleDependency(ModuleIdentifier module, String version, @Nullable String configuration) {
         super(configuration);
         if (module == null) {
             throw new InvalidUserDataException("Module must not be null!");
@@ -43,15 +47,16 @@ public abstract class AbstractExternalModuleDependency extends AbstractModuleDep
 
     protected void copyTo(AbstractExternalModuleDependency target) {
         super.copyTo(target);
-        target.setForce(isForce());
+        DeprecationLogger.whileDisabled(() -> target.setForce(isForce()));
         target.setChanging(isChanging());
     }
 
     protected boolean isContentEqualsFor(ExternalModuleDependency dependencyRhs) {
-        if (!isKeyEquals(dependencyRhs) || !isCommonContentEquals(dependencyRhs)) {
+        if (!isCommonContentEquals(dependencyRhs)) {
             return false;
         }
-        return force == dependencyRhs.isForce() && changing == dependencyRhs.isChanging();
+        return force == dependencyRhs.isForce() && changing == dependencyRhs.isChanging() &&
+            Objects.equal(getVersionConstraint(), dependencyRhs.getVersionConstraint());
     }
 
     @Override
@@ -80,8 +85,16 @@ public abstract class AbstractExternalModuleDependency extends AbstractModuleDep
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public ExternalModuleDependency setForce(boolean force) {
         validateMutation(this.force, force);
+        if (force) {
+            DeprecationLogger.deprecate("Using force on a dependency")
+                .withAdvice("Consider using strict version constraints instead (version { strictly ... } }).")
+                .willBeRemovedInGradle7()
+                .withUpgradeGuideSection(5, "forced_dependencies")
+                .nagUser();
+        }
         this.force = force;
         return this;
     }
@@ -114,7 +127,7 @@ public abstract class AbstractExternalModuleDependency extends AbstractModuleDep
         return moduleIdentifier;
     }
 
-    static ModuleIdentifier assertModuleId(String group, String name) {
+    static ModuleIdentifier assertModuleId(@Nullable String group, @Nullable String name) {
         if (name == null) {
             throw new InvalidUserDataException("Name must not be null!");
         }

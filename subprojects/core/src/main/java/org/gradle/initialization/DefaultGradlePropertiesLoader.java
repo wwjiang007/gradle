@@ -17,6 +17,8 @@ package org.gradle.initialization;
 
 import org.gradle.api.Project;
 import org.gradle.api.internal.StartParameterInternal;
+import org.gradle.api.internal.properties.GradleProperties;
+import org.gradle.internal.Cast;
 import org.gradle.util.GUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +28,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.gradle.api.Project.GRADLE_PROPERTIES;
+
 public class DefaultGradlePropertiesLoader implements IGradlePropertiesLoader {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultGradlePropertiesLoader.class);
 
-    private Map<String, String> defaultProperties = new HashMap<String, String>();
-    private Map<String, String> overrideProperties = new HashMap<String, String>();
     private final StartParameterInternal startParameter;
 
     public DefaultGradlePropertiesLoader(StartParameterInternal startParameter) {
@@ -38,24 +40,31 @@ public class DefaultGradlePropertiesLoader implements IGradlePropertiesLoader {
     }
 
     @Override
-    public void loadProperties(File settingsDir) {
-        loadProperties(settingsDir, startParameter, getAllSystemProperties(), getAllEnvProperties());
+    public GradleProperties loadGradleProperties(File rootDir) {
+        return loadProperties(rootDir, startParameter, getAllSystemProperties(), getAllEnvProperties());
     }
 
-    void loadProperties(File settingsDir, StartParameterInternal startParameter, Map<String, String> systemProperties, Map<String, String> envProperties) {
-        defaultProperties.clear();
-        overrideProperties.clear();
-        addGradleProperties(defaultProperties, new File(startParameter.getGradleHomeDir(), Project.GRADLE_PROPERTIES));
-        addGradleProperties(defaultProperties, new File(settingsDir, Project.GRADLE_PROPERTIES));
-        addGradleProperties(overrideProperties, new File(startParameter.getGradleUserHomeDir(), Project.GRADLE_PROPERTIES));
-        setSystemProperties(startParameter.getSystemPropertiesArgs());
+    GradleProperties loadProperties(File rootDir, StartParameterInternal startParameter, Map<String, String> systemProperties, Map<String, String> envProperties) {
+        Map<String, String> defaultProperties = new HashMap<>();
+        Map<String, String> overrideProperties = new HashMap<>();
+
+        addGradleProperties(defaultProperties, new File(startParameter.getGradleHomeDir(), GRADLE_PROPERTIES));
+        addGradleProperties(defaultProperties, new File(rootDir, GRADLE_PROPERTIES));
+        addGradleProperties(overrideProperties, new File(startParameter.getGradleUserHomeDir(), GRADLE_PROPERTIES));
+
+        addSystemPropertiesFromGradleProperties(defaultProperties);
+        addSystemPropertiesFromGradleProperties(overrideProperties);
+        System.getProperties().putAll(startParameter.getSystemPropertiesArgs());
+
         overrideProperties.putAll(getEnvProjectProperties(envProperties));
         overrideProperties.putAll(getSystemProjectProperties(systemProperties));
         overrideProperties.putAll(startParameter.getProjectProperties());
+
+        return new DefaultGradleProperties(defaultProperties, overrideProperties);
     }
 
-    Map getAllSystemProperties() {
-        return System.getProperties();
+    Map<String, String> getAllSystemProperties() {
+        return Cast.uncheckedNonnullCast(System.getProperties());
     }
 
     Map<String, String> getAllEnvProperties() {
@@ -66,22 +75,13 @@ public class DefaultGradlePropertiesLoader implements IGradlePropertiesLoader {
         for (File propertyFile : files) {
             if (propertyFile != null && propertyFile.isFile()) {
                 Properties properties = GUtil.loadProperties(propertyFile);
-                target.putAll(new HashMap(properties));
+                target.putAll(Cast.uncheckedNonnullCast(properties));
             }
         }
     }
 
-    @Override
-    public Map<String, String> mergeProperties(Map<String, String> properties) {
-        Map<String, String> result = new HashMap<String, String>();
-        result.putAll(defaultProperties);
-        result.putAll(properties);
-        result.putAll(overrideProperties);
-        return result;
-    }
-
     private Map<String, String> getSystemProjectProperties(Map<String, String> systemProperties) {
-        Map<String, String> systemProjectProperties = new HashMap<String, String>();
+        Map<String, String> systemProjectProperties = new HashMap<>();
         for (Map.Entry<String, String> entry : systemProperties.entrySet()) {
             if (entry.getKey().startsWith(SYSTEM_PROJECT_PROPERTIES_PREFIX) && entry.getKey().length() > SYSTEM_PROJECT_PROPERTIES_PREFIX.length()) {
                 systemProjectProperties.put(entry.getKey().substring(SYSTEM_PROJECT_PROPERTIES_PREFIX.length()), entry.getValue());
@@ -92,7 +92,7 @@ public class DefaultGradlePropertiesLoader implements IGradlePropertiesLoader {
     }
 
     private Map<String, String> getEnvProjectProperties(Map<String, String> envProperties) {
-        Map<String, String> envProjectProperties = new HashMap<String, String>();
+        Map<String, String> envProjectProperties = new HashMap<>();
         for (Map.Entry<String, String> entry : envProperties.entrySet()) {
             if (entry.getKey().startsWith(ENV_PROJECT_PROPERTIES_PREFIX) && entry.getKey().length() > ENV_PROJECT_PROPERTIES_PREFIX.length()) {
                 envProjectProperties.put(entry.getKey().substring(ENV_PROJECT_PROPERTIES_PREFIX.length()), entry.getValue());
@@ -100,12 +100,6 @@ public class DefaultGradlePropertiesLoader implements IGradlePropertiesLoader {
         }
         LOGGER.debug("Found env project properties: {}", envProjectProperties.keySet());
         return envProjectProperties;
-    }
-
-    private void setSystemProperties(Map<String, String> properties) {
-        addSystemPropertiesFromGradleProperties(defaultProperties);
-        addSystemPropertiesFromGradleProperties(overrideProperties);
-        System.getProperties().putAll(properties);
     }
 
     private void addSystemPropertiesFromGradleProperties(Map<String, String> properties) {

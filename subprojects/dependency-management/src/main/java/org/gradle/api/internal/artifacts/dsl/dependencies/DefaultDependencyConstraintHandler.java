@@ -74,20 +74,6 @@ public class DefaultDependencyConstraintHandler implements DependencyConstraintH
     }
 
     @Override
-    public DependencyConstraint platform(Object notation) {
-        DependencyConstraint dependencyConstraint = create(notation);
-        platformSupport.addPlatformAttribute(dependencyConstraint, platform);
-        return dependencyConstraint;
-    }
-
-    @Override
-    public DependencyConstraint platform(Object notation, Action<? super DependencyConstraint> configureAction) {
-        DependencyConstraint dep = platform(notation);
-        configureAction.execute(dep);
-        return dep;
-    }
-
-    @Override
     public DependencyConstraint enforcedPlatform(Object notation) {
         DependencyConstraintInternal platformDependency = (DependencyConstraintInternal) create(notation);
         platformDependency.setForce(true);
@@ -127,6 +113,7 @@ public class DefaultDependencyConstraintHandler implements DependencyConstraintH
 
     private class DependencyConstraintAdder implements DynamicAddDependencyMethods.DependencyAdder<DependencyConstraint> {
         @Override
+        @SuppressWarnings("rawtypes")
         public DependencyConstraint add(Configuration configuration, Object dependencyNotation, Closure configureClosure) {
             DependencyConstraint dependencyConstraint = ConfigureUtil.configure(configureClosure, dependencyFactory.createDependencyConstraint(dependencyNotation));
             configuration.getDependencyConstraints().add(dependencyConstraint);

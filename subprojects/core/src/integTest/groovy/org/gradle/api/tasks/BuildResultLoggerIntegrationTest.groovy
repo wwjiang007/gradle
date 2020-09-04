@@ -30,7 +30,7 @@ class BuildResultLoggerIntegrationTest extends AbstractIntegrationSpec implement
                 inputs.file(file("input.txt"))
                 outputs.file(outputFile)
                 doLast {
-                    project.mkdir outputFile.parentFile
+                    outputFile.parentFile.mkdirs()
                     outputFile.text = file("input.txt").text
                 }
             }

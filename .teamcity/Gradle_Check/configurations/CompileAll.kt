@@ -1,6 +1,7 @@
 package configurations
 
-import jetbrains.buildServer.configs.kotlin.v2018_2.AbsoluteId
+import common.Os.LINUX
+import jetbrains.buildServer.configs.kotlin.v2019_2.AbsoluteId
 import model.CIBuildModel
 import model.Stage
 
@@ -11,13 +12,11 @@ class CompileAll(model: CIBuildModel, stage: Stage) : BaseGradleBuildType(model,
     description = "Compiles all the source code and warms up the build cache"
 
     params {
-        param("env.JAVA_HOME", buildJavaHome)
+        param("env.JAVA_HOME", LINUX.buildJavaHome())
     }
 
-    if (model.publishStatusToGitHub) {
-        features {
-            publishBuildStatusToGithub()
-        }
+    features {
+        publishBuildStatusToGithub(model)
     }
 
     applyDefaults(
@@ -28,7 +27,7 @@ class CompileAll(model: CIBuildModel, stage: Stage) : BaseGradleBuildType(model,
     )
 
     artifactRules = """$artifactRules
-        build/build-receipt.properties
+        subprojects/base-services/build/generated-resources/build-receipt/org/gradle/build-receipt.properties
     """.trimIndent()
 }) {
     companion object {

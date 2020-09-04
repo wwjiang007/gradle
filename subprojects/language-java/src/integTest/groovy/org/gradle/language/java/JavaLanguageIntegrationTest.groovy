@@ -17,6 +17,7 @@
 package org.gradle.language.java
 
 import org.gradle.api.JavaVersion
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.integtests.fixtures.jvm.TestJvmComponent
 import org.gradle.integtests.language.AbstractJvmLanguageIntegrationTest
 import org.gradle.jvm.platform.internal.DefaultJavaPlatform
@@ -25,6 +26,7 @@ import org.gradle.language.fixtures.TestJavaComponent
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 
+@UnsupportedWithConfigurationCache(because = "software model")
 class JavaLanguageIntegrationTest extends AbstractJvmLanguageIntegrationTest {
     TestJvmComponent app = new TestJavaComponent()
 

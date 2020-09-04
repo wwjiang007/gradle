@@ -16,79 +16,29 @@
 
 package org.gradle.performance.regression.android
 
-import org.gradle.performance.AbstractCrossVersionGradleProfilerPerformanceTest
-import org.gradle.performance.categories.PerformanceExperiment
-import org.gradle.performance.fixture.GradleProfilerCrossVersionPerformanceTestRunner
-import org.gradle.profiler.InvocationSettings
-import org.gradle.profiler.mutations.AbstractCleanupMutator
-import org.gradle.profiler.mutations.ApplyAbiChangeToJavaSourceFileMutator
-import org.gradle.profiler.mutations.ApplyNonAbiChangeToJavaSourceFileMutator
-import org.gradle.profiler.mutations.ClearArtifactTransformCacheMutator
-import org.junit.experimental.categories.Category
+
 import spock.lang.Unroll
 
-class RealLifeAndroidBuildPerformanceTest extends AbstractCrossVersionGradleProfilerPerformanceTest {
-    private static final SANTA_TRACKER = new AndroidTestProject(
-        templateName: 'santaTrackerAndroidBuild',
-        memory: '1g',
-    )
-    private static final LARGE_ANDROID_BUILD = new AndroidTestProject(
-        templateName: 'largeAndroidBuild',
-        memory: '5g',
-    )
-    private static final K9_ANDROID = new AndroidTestProject(
-        templateName: 'k9AndroidBuild',
-        memory: '1g',
-    )
-    private static final String SANTA_TRACKER_ASSEMBLE_DEBUG = ':santa-tracker:assembleDebug'
-    private static final String SANTA_TRACKER_JAVA_FILE_TO_CHANGE = 'snowballrun/src/main/java/com/google/android/apps/santatracker/doodles/snowballrun/BackgroundActor.java'
+import static org.gradle.performance.regression.android.AndroidTestProject.K9_ANDROID
+import static org.gradle.performance.regression.android.AndroidTestProject.LARGE_ANDROID_BUILD
+import static org.gradle.performance.regression.android.IncrementalAndroidTestProject.SANTA_TRACKER_KOTLIN
 
-    def setup() {
-        runner.args = ['-Dcom.android.build.gradle.overrideVersionCheck=true']
-    }
-
+class RealLifeAndroidBuildPerformanceTest extends AbstractRealLifeAndroidBuildPerformanceTest {
     @Unroll
     def "#tasks on #testProject"() {
         given:
         testProject.configure(runner)
         runner.tasksToRun = tasks.split(' ')
-        runner.args = parallel ? ['-Dorg.gradle.parallel=true'] : []
+        if (parallel) {
+            runner.args.add('-Dorg.gradle.parallel=true')
+        }
         runner.warmUpRuns = warmUpRuns
         runner.runs = runs
-        runner.minimumVersion = "5.1.1"
-        runner.targetVersions = ["5.7-20190722220035+0000"]
+        applyEnterprisePlugin()
 
-        when:
-        def result = runner.run()
-
-        then:
-        result.assertCurrentVersionHasNotRegressed()
-
-        where:
-        testProject         | parallel | warmUpRuns | runs | tasks
-        K9_ANDROID          | false    | null       | null | 'help'
-        K9_ANDROID          | false    | null       | null | 'assembleDebug'
-//        K9_ANDROID    | false    | null       | null | 'clean k9mail:assembleDebug'
-        LARGE_ANDROID_BUILD | true     | null       | null | 'help'
-        LARGE_ANDROID_BUILD | true     | null       | null | 'assembleDebug'
-        LARGE_ANDROID_BUILD | true     | 2          | 8    | 'clean phthalic:assembleDebug'
-        SANTA_TRACKER       | true     | null       | null | 'assembleDebug'
-    }
-
-    @Category(PerformanceExperiment)
-    @Unroll
-    def "clean #tasks on #testProject with clean transforms cache"() {
-        given:
-        testProject.configure(runner)
-        runner.tasksToRun = tasks.split(' ')
-        runner.args = ['-Dorg.gradle.parallel=true']
-        runner.warmUpRuns = warmUpRuns
-        runner.cleanTasks = ["clean"]
-        runner.runs = runs
-        runner.minimumVersion = "5.4"
-        runner.targetVersions = ["5.7-20190722220035+0000"]
-        runner.addBuildMutator { invocationSettings ->
-            new ClearArtifactTransformCacheMutator(invocationSettings.getGradleUserHome(), AbstractCleanupMutator.CleanupSchedule.BUILD)
+        and:
+        if (testProject == SANTA_TRACKER_KOTLIN) {
+            (testProject as IncrementalAndroidTestProject).configureForLatestAgpVersionOfMinor(runner, SANTA_AGP_TARGET_VERSION)
         }
 
         when:
@@ -98,23 +48,23 @@ class RealLifeAndroidBuildPerformanceTest extends AbstractCrossVersionGradleProf
         result.assertCurrentVersionHasNotRegressed()
 
         where:
-        testProject         | warmUpRuns | runs | tasks
-        LARGE_ANDROID_BUILD | 2          | 8    | 'phthalic:assembleDebug'
-        LARGE_ANDROID_BUILD | 2          | 8    | 'assembleDebug'
-        SANTA_TRACKER       | null       | null | 'assembleDebug'
+        testProject          | parallel | warmUpRuns | runs | tasks
+        K9_ANDROID           | false    | null       | null | 'help'
+        K9_ANDROID           | false    | null       | null | 'assembleDebug'
+//        K9_ANDROID    | false    | null       | null | 'clean k9mail:assembleDebug'
+        LARGE_ANDROID_BUILD  | true     | null       | null | 'help'
+        LARGE_ANDROID_BUILD  | true     | null       | null | 'assembleDebug'
+        LARGE_ANDROID_BUILD  | true     | 2          | 8    | 'clean phthalic:assembleDebug'
+        SANTA_TRACKER_KOTLIN | true     | null       | null | 'assembleDebug'
     }
 
     @Unroll
     def "abi change on #testProject"() {
         given:
-        testProject.configure(runner)
-        runner.tasksToRun = [SANTA_TRACKER_ASSEMBLE_DEBUG]
-        runner.args = ['-Dorg.gradle.parallel=true']
-        runner.minimumVersion = "5.4"
-        runner.targetVersions = ["5.7-20190722220035+0000"]
-        runner.addBuildMutator { invocationSettings ->
-            new ApplyAbiChangeToJavaSourceFileMutator(getSantaTrackerFileToChange(invocationSettings))
-        }
+        testProject.configureForAbiChange(runner)
+        testProject.configureForLatestAgpVersionOfMinor(runner, SANTA_AGP_TARGET_VERSION)
+        runner.args.add('-Dorg.gradle.parallel=true')
+        applyEnterprisePlugin()
 
         when:
         def result = runner.run()
@@ -123,20 +73,16 @@ class RealLifeAndroidBuildPerformanceTest extends AbstractCrossVersionGradleProf
         result.assertCurrentVersionHasNotRegressed()
 
         where:
-        testProject << [SANTA_TRACKER]
+        testProject << [SANTA_TRACKER_KOTLIN]
     }
 
     @Unroll
     def "non-abi change on #testProject"() {
         given:
-        testProject.configure(runner)
-        runner.tasksToRun = [SANTA_TRACKER_ASSEMBLE_DEBUG]
-        runner.args = ['-Dorg.gradle.parallel=true']
-        runner.minimumVersion = "5.4"
-        runner.targetVersions = ["5.7-20190722220035+0000"]
-        runner.addBuildMutator { invocationSettings ->
-            new ApplyNonAbiChangeToJavaSourceFileMutator(getSantaTrackerFileToChange(invocationSettings))
-        }
+        testProject.configureForNonAbiChange(runner)
+        testProject.configureForLatestAgpVersionOfMinor(runner, SANTA_AGP_TARGET_VERSION)
+        runner.args.add('-Dorg.gradle.parallel=true')
+        applyEnterprisePlugin()
 
         when:
         def result = runner.run()
@@ -145,25 +91,6 @@ class RealLifeAndroidBuildPerformanceTest extends AbstractCrossVersionGradleProf
         result.assertCurrentVersionHasNotRegressed()
 
         where:
-        testProject << [SANTA_TRACKER]
-    }
-
-    private static File getSantaTrackerFileToChange(InvocationSettings invocationSettings) {
-        new File(invocationSettings.getProjectDir(), SANTA_TRACKER_JAVA_FILE_TO_CHANGE)
-    }
-
-    static class AndroidTestProject {
-        String templateName
-        String memory
-
-        void configure(GradleProfilerCrossVersionPerformanceTestRunner runner) {
-            runner.testProject = templateName
-            runner.gradleOpts = ["-Xms$memory", "-Xmx$memory"]
-        }
-
-        @Override
-        String toString() {
-            templateName
-        }
+        testProject << [SANTA_TRACKER_KOTLIN]
     }
 }

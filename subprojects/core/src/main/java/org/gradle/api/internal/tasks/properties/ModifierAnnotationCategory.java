@@ -27,26 +27,27 @@ import org.gradle.internal.reflect.AnnotationCategory;
 import org.gradle.work.Incremental;
 
 import java.lang.annotation.Annotation;
+import java.util.Collection;
 import java.util.Map;
 
 public enum ModifierAnnotationCategory implements AnnotationCategory {
-    INCREMENTAL(
+    INCREMENTAL(ImmutableSet.of(
         Incremental.class,
         SkipWhenEmpty.class
-    ),
-    NORMALIZATION(
+    )),
+    NORMALIZATION(ImmutableSet.of(
         Classpath.class,
         CompileClasspath.class,
         PathSensitive.class
-    ),
-    OPTIONAL(
+    )),
+    OPTIONAL(ImmutableSet.of(
         Optional.class
-    );
+    ));
 
     private final ImmutableSet<Class<? extends Annotation>> annotations;
 
-    ModifierAnnotationCategory(Class<? extends Annotation>... annotations) {
-        this.annotations = ImmutableSet.copyOf(annotations);
+    ModifierAnnotationCategory(ImmutableSet<Class<? extends Annotation>> annotations) {
+        this.annotations = annotations;
     }
 
     @Override
@@ -54,8 +55,7 @@ public enum ModifierAnnotationCategory implements AnnotationCategory {
         return name().toLowerCase();
     }
 
-    @SafeVarargs
-    public static Map<Class<? extends Annotation>, AnnotationCategory> asMap(Class<? extends Annotation>... typeAnnotations) {
+    public static Map<Class<? extends Annotation>, AnnotationCategory> asMap(Collection<Class<? extends Annotation>> typeAnnotations) {
         ImmutableMap.Builder<Class<? extends Annotation>, AnnotationCategory> builder = ImmutableMap.builder();
         for (Class<? extends Annotation> typeAnnotation : typeAnnotations) {
             builder.put(typeAnnotation, TYPE);

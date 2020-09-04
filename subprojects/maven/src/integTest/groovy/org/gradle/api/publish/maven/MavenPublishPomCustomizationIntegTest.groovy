@@ -16,7 +16,7 @@
 
 package org.gradle.api.publish.maven
 
-import org.gradle.integtests.fixtures.FeaturePreviewsFixture
+
 import org.gradle.integtests.fixtures.publish.maven.AbstractMavenPublishIntegTest
 import org.gradle.util.SetSystemProperties
 import org.junit.Rule
@@ -25,7 +25,8 @@ import org.junit.Rule
  * Tests maven POM customization
  */
 class MavenPublishPomCustomizationIntegTest extends AbstractMavenPublishIntegTest {
-    @Rule SetSystemProperties sysProp = new SetSystemProperties()
+    @Rule
+    SetSystemProperties sysProp = new SetSystemProperties()
 
     def "can customize pom xml"() {
         given:
@@ -135,7 +136,7 @@ class MavenPublishPomCustomizationIntegTest extends AbstractMavenPublishIntegTes
                                 def dependency = asNode().appendNode('dependencies').appendNode('dependency')
                                 dependency.appendNode('groupId', 'junit')
                                 dependency.appendNode('artifactId', 'junit')
-                                dependency.appendNode('version', '4.12')
+                                dependency.appendNode('version', '4.13')
                                 dependency.appendNode('scope', 'runtime')
                             }
                         }
@@ -151,7 +152,7 @@ class MavenPublishPomCustomizationIntegTest extends AbstractMavenPublishIntegTes
         module.assertPublished()
         def parsedPom = module.parsedPom
         parsedPom.packaging == 'custom-packaging'
-        parsedPom.scopes.runtime.assertDependsOn("junit:junit:4.12")
+        parsedPom.scopes.runtime.assertDependsOn("junit:junit:4.13")
 
         and:
         parsedPom.name == 'custom-name'
@@ -378,7 +379,6 @@ class MavenPublishPomCustomizationIntegTest extends AbstractMavenPublishIntegTes
         settingsFile << """
             rootProject.name = 'customizePom'
         """
-        FeaturePreviewsFixture.enableGradleMetadata(settingsFile)
         buildFile << """
             apply plugin: 'java-library'
             apply plugin: 'maven-publish'
@@ -397,7 +397,7 @@ class MavenPublishPomCustomizationIntegTest extends AbstractMavenPublishIntegTes
                             def dependency = asNode().appendNode('dependencies').appendNode('dependency')
                             dependency.appendNode('groupId', 'junit')
                             dependency.appendNode('artifactId', 'junit')
-                            dependency.appendNode('version', '4.12')
+                            dependency.appendNode('version', '4.13')
                             dependency.appendNode('scope', 'runtime')
                         }
                     }
@@ -413,7 +413,7 @@ class MavenPublishPomCustomizationIntegTest extends AbstractMavenPublishIntegTes
         module.hasGradleMetadataRedirectionMarker()
         def parsedPom = module.parsedPom
         parsedPom.scope("runtime") {
-            assertDependsOn("junit:junit:4.12")
+            assertDependsOn("junit:junit:4.13")
         }
     }
 }

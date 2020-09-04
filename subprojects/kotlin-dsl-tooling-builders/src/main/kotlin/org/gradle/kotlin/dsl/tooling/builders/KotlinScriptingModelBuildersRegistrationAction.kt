@@ -19,21 +19,23 @@ import org.gradle.api.internal.project.ProjectInternal
 
 import org.gradle.configuration.project.ProjectConfigureAction
 
-import org.gradle.kotlin.dsl.resolver.kotlinBuildScriptModelTask
 import org.gradle.kotlin.dsl.support.serviceOf
 
+import org.gradle.tooling.model.kotlin.dsl.KotlinDslModelsParameters
 import org.gradle.tooling.provider.model.ToolingModelBuilderRegistry
 
 
 class KotlinScriptingModelBuildersRegistrationAction : ProjectConfigureAction {
 
     override fun execute(project: ProjectInternal) {
-        project.serviceOf<ToolingModelBuilderRegistry>().apply {
-            register(KotlinBuildScriptModelBuilder)
-            register(KotlinBuildScriptTemplateModelBuilder)
-        }
-        project.tasks.apply {
-            register(kotlinBuildScriptModelTask)
+
+        val builders = project.serviceOf<ToolingModelBuilderRegistry>()
+        builders.register(KotlinBuildScriptModelBuilder)
+        builders.register(KotlinBuildScriptTemplateModelBuilder)
+
+        if (project.parent == null) {
+            builders.register(KotlinDslScriptsModelBuilder)
+            project.tasks.register(KotlinDslModelsParameters.PREPARATION_TASK_NAME)
         }
     }
 }

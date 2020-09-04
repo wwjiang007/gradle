@@ -17,6 +17,7 @@
 
 package org.gradle.play.tasks
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.MultiVersionIntegrationSpec
 import org.gradle.test.fixtures.archive.JarTestFixture
 import org.gradle.test.fixtures.file.TestFile
@@ -112,6 +113,7 @@ object Application extends Controller {
         destinationDir.assertHasDescendants(createRouteFileList() as String[])
     }
 
+    @ToBeFixedForConfigurationCache
     def "recompiles on changed routes file input"() {
         given:
         TestFile templateFile = withRoutesTemplate()
@@ -163,6 +165,7 @@ GET     /newroute                          ${controllers()}.Application.index()
         file(destinationDirPath, getReverseRoutesFileName('', ''))
     }
 
+    @ToBeFixedForConfigurationCache
     def "compiles additional routes file and cleans up output on removal"() {
         when:
         withRoutesTemplate()
@@ -216,6 +219,7 @@ GET     /newroute                          ${controllers()}.Application.index()
         jar("build/playBinary/lib/routes-play-app.jar").containsDescendants("controllers/other/routes.class")
     }
 
+    @ToBeFixedForConfigurationCache(because = ":components")
     def "extra route sources appear in the components report"() {
         withExtraSourceSets()
 

@@ -35,12 +35,12 @@ class KotlinDslVsGroovyDslPerformanceTest extends AbstractCrossBuildPerformanceT
 
         given:
         runner.testGroup = 'Kotlin DSL vs Groovy DSL'
-        def groovyDslBuildName = 'Groovy DSL build'
-        def kotlinDslBuildName = 'Kotlin DSL build'
+        def groovyDslBuildName = 'Groovy_DSL_build'
+        def kotlinDslBuildName = 'Kotlin_DSL_build'
 
         and:
-        def warmupBuilds = 20
-        def measuredBuilds = 40
+        def warmupBuilds = 1
+        def measuredBuilds = 1
 
         and:
         runner.baseline {
@@ -51,7 +51,6 @@ class KotlinDslVsGroovyDslPerformanceTest extends AbstractCrossBuildPerformanceT
             invocation {
                 gradleOptions = ["-Xms${groovyProject.daemonMemory}", "-Xmx${groovyProject.daemonMemory}"]
                 tasksToRun("help")
-                useDaemon()
             }
         }
 
@@ -64,7 +63,6 @@ class KotlinDslVsGroovyDslPerformanceTest extends AbstractCrossBuildPerformanceT
             invocation {
                 gradleOptions = ["-Xms${kotlinProject.daemonMemory}", "-Xmx${kotlinProject.daemonMemory}"]
                 tasksToRun("help")
-                useDaemon()
             }
         }
 

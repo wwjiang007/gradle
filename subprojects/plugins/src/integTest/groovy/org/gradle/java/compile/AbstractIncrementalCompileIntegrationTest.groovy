@@ -98,7 +98,7 @@ abstract class AbstractIncrementalCompileIntegrationTest extends AbstractIntegra
             subprojects {
                 apply plugin: '${language.name}'
                 ${language.compileTaskName}.options.incremental = true
-            }            
+            }
             project(':app') {
                 dependencies {
                     implementation project(':lib')

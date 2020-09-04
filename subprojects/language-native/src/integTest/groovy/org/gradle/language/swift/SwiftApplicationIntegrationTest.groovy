@@ -16,6 +16,7 @@
 
 package org.gradle.language.swift
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
 import org.gradle.nativeplatform.fixtures.ToolChainRequirement
 import org.gradle.nativeplatform.fixtures.app.SwiftApp
@@ -61,6 +62,7 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest imple
         return "application"
     }
 
+    @ToBeFixedForConfigurationCache
     def "relinks when an upstream dependency changes in ABI compatible way"() {
         settingsFile << "include 'app', 'greeter'"
         def app = new SwiftAppWithLibrary()
@@ -95,6 +97,7 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest imple
         installation("app/build/install/main/debug").exec().out == app.expectedOutput.replace("Hello", "Goodbye")
     }
 
+    @ToBeFixedForConfigurationCache
     def "recompiles when an upstream dependency changes in non-ABI compatible way"() {
         settingsFile << "include 'app', 'greeter'"
         def app = new SwiftAppWithLibrary()
@@ -201,7 +204,7 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest imple
             apply plugin: 'swift-application'
 
             task compileDebug {
-                dependsOn application.binaries.get { it.debuggable && !it.optimized }.map { it.objects } 
+                dependsOn application.binaries.get { it.debuggable && !it.optimized }.map { it.objects }
             }
          """
 
@@ -483,7 +486,7 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest imple
 
         and:
         failure.assertHasCause("Could not resolve project :greeter.")
-        failure.assertHasCause("Unable to find a matching configuration of project :greeter")
+        failure.assertHasCause("No matching configuration of project :greeter was found. The consumer was configured to find attribute 'org.gradle.usage' with value 'native-runtime', attribute 'org.gradle.native.debuggable' with value 'true', attribute 'org.gradle.native.optimized' with value 'false', attribute 'org.gradle.native.operatingSystem' with value '${currentOsFamilyName}', attribute 'org.gradle.native.architecture' with value '${currentArchitecture}' but:")
     }
 
     def "can compile and link against a static library"() {
@@ -940,6 +943,7 @@ class SwiftApplicationIntegrationTest extends AbstractSwiftIntegrationTest imple
         sharedLibrary("app/build/install/main/debug/lib/Log").file.assertExists()
     }
 
+    @ToBeFixedForConfigurationCache
     def "can compile and link against libraries in included builds"() {
         settingsFile << """
             rootProject.name = 'app'

@@ -19,9 +19,11 @@ import groovy.lang.Script;
 import org.codehaus.groovy.ast.ClassNode;
 import org.gradle.api.Action;
 import org.gradle.api.internal.initialization.ClassLoaderScope;
-import org.gradle.api.internal.initialization.loadercache.ClassLoaderId;
 import org.gradle.groovy.scripts.ScriptSource;
+import org.gradle.internal.service.scopes.Scopes;
+import org.gradle.internal.service.scopes.ServiceScope;
 
+@ServiceScope(Scopes.Build.class)
 public interface ScriptClassCompiler {
-    <T extends Script, M> CompiledScript<T, M> compile(ScriptSource source, ClassLoaderScope targetScope, ClassLoaderId classLoaderId, CompileOperation<M> transformer, Class<T> scriptBaseClass, Action<? super ClassNode> verifier);
+    <T extends Script, M> CompiledScript<T, M> compile(ScriptSource source, ClassLoaderScope targetScope, CompileOperation<M> transformer, Class<T> scriptBaseClass, Action<? super ClassNode> verifier);
 }

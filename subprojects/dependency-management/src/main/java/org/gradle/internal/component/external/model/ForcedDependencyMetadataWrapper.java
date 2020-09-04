@@ -54,6 +54,11 @@ public class ForcedDependencyMetadataWrapper implements ForcingDependencyMetadat
     }
 
     @Override
+    public ModuleDependencyMetadata withEndorseStrictVersions(boolean endorse) {
+        return new ForcedDependencyMetadataWrapper(delegate.withEndorseStrictVersions(endorse));
+    }
+
+    @Override
     public List<ConfigurationMetadata> selectConfigurations(ImmutableAttributes consumerAttributes, ComponentResolveMetadata targetComponent, AttributesSchemaInternal consumerSchema, Collection<? extends Capability> explicitRequestedCapabilities) {
         return delegate.selectConfigurations(consumerAttributes, targetComponent, consumerSchema, explicitRequestedCapabilities);
     }
@@ -74,6 +79,11 @@ public class ForcedDependencyMetadataWrapper implements ForcingDependencyMetadat
     }
 
     @Override
+    public DependencyMetadata withTargetAndArtifacts(ComponentSelector target, List<IvyArtifactName> artifacts) {
+        return new ForcedDependencyMetadataWrapper((ModuleDependencyMetadata) delegate.withTargetAndArtifacts(target, artifacts));
+    }
+
+    @Override
     public boolean isChanging() {
         return delegate.isChanging();
     }
@@ -86,6 +96,11 @@ public class ForcedDependencyMetadataWrapper implements ForcingDependencyMetadat
     @Override
     public boolean isConstraint() {
         return delegate.isConstraint();
+    }
+
+    @Override
+    public boolean isEndorsingStrictVersions() {
+        return delegate.isEndorsingStrictVersions();
     }
 
     @Override

@@ -23,10 +23,11 @@ import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
 import org.gradle.test.fixtures.server.http.BlockingHttpServer
 import org.gradle.tooling.BuildCancelledException
 import org.gradle.util.GradleVersion
+import org.hamcrest.CoreMatchers
+import org.hamcrest.Matcher
 import org.junit.Rule
 
 import java.util.concurrent.CountDownLatch
-
 
 abstract class CancellationSpec extends ToolingApiSpecification {
     @Rule
@@ -70,7 +71,7 @@ latch.await()
 
     }
 
-    void buildWasCancelled(TestResultHandler resultHandler, String failureMessage = 'Could not execute build using Gradle') {
+    void buildWasCancelled(TestResultHandler resultHandler, String failureMessage = 'Could not execute build using') {
         resultHandler.assertFailedWith(BuildCancelledException)
         assert resultHandler.failure.message.startsWith(failureMessage)
 
@@ -113,7 +114,7 @@ latch.await()
 
     void taskWasCancelled(TestResultHandler resultHandler, String taskPath) {
         resultHandler.assertFailedWith(BuildCancelledException)
-        assert resultHandler.failure.message.startsWith("Could not execute build using Gradle")
+        assert resultHandler.failure.message.startsWith("Could not execute build using")
 
         if (targetDist.toolingApiRetainsOriginalFailureOnCancel) {
             if (targetDist.toolingApiDoesNotAddCausesOnTaskCancel) {
@@ -121,18 +122,22 @@ latch.await()
                 // Some versions either do not included this, or provide a pointless wrapper, or include multiple 'build cancelled' failures
                 assert resultHandler.failure.cause.message == "Execution failed for task '${taskPath}'." // wrapper exception, could probably suppress this
                 assert resultHandler.failure.cause.cause.message == "Execution failed for task '${taskPath}'."
-                assert resultHandler.failure.cause.cause.cause.message == "Build cancelled during executing task '${taskPath}'"
+                assert cancelledMessageMatcher(taskPath).matches(resultHandler.failure.cause.cause.cause.message)
             }
 
             // Verify that there is some logging output that explains that the build was cancelled
             def failure = OutputScrapingExecutionFailure.from(stdout.toString(), stderr.toString())
             failure.assertHasDescription("Execution failed for task '${taskPath}'.")
-            failure.assertHasCause("Build cancelled during executing task '${taskPath}'")
+            failure.assertThatCause(cancelledMessageMatcher(taskPath))
         } else {
             // Verify that there is some logging output that explains that the build was cancelled, for versions that do not include any context in the message
             def failure = OutputScrapingExecutionFailure.from(stdout.toString(), stderr.toString())
             failure.assertHasDescription("Build cancelled")
         }
         assertHasBuildFailedLogging()
+    }
+
+    private Matcher<String> cancelledMessageMatcher(String taskPath) {
+        CoreMatchers.anyOf(CoreMatchers.startsWith("Build cancelled while executing task '${taskPath}'"), CoreMatchers.startsWith("Build cancelled during executing task '${taskPath}'"))
     }
 }

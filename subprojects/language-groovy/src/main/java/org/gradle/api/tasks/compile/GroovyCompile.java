@@ -25,32 +25,32 @@ import org.gradle.api.JavaVersion;
 import org.gradle.api.file.ConfigurableFileCollection;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileTree;
-import org.gradle.api.internal.ClassPathRegistry;
+import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.internal.FeaturePreviews;
+import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.internal.file.FileTreeInternal;
 import org.gradle.api.internal.file.TemporaryFileProvider;
-import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.tasks.JavaToolChainFactory;
-import org.gradle.api.internal.tasks.compile.CleaningGroovyCompiler;
+import org.gradle.api.internal.tasks.compile.CleaningJavaCompiler;
+import org.gradle.api.internal.tasks.compile.CompilationSourceDirs;
 import org.gradle.api.internal.tasks.compile.CompilerForkUtils;
 import org.gradle.api.internal.tasks.compile.DefaultGroovyJavaJointCompileSpec;
 import org.gradle.api.internal.tasks.compile.DefaultGroovyJavaJointCompileSpecFactory;
 import org.gradle.api.internal.tasks.compile.GroovyCompilerFactory;
 import org.gradle.api.internal.tasks.compile.GroovyJavaJointCompileSpec;
+import org.gradle.api.internal.tasks.compile.HasCompileOptions;
 import org.gradle.api.internal.tasks.compile.incremental.IncrementalCompilerFactory;
-import org.gradle.api.internal.tasks.compile.incremental.recomp.CompilationSourceDirs;
+import org.gradle.api.internal.tasks.compile.incremental.recomp.DefaultSourceFileClassNameConverter;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.GroovyRecompilationSpecProvider;
-import org.gradle.api.internal.tasks.compile.incremental.recomp.GroovySourceFileClassNameConverter;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.IncrementalCompilationResult;
 import org.gradle.api.internal.tasks.compile.incremental.recomp.RecompilationSpecProvider;
-import org.gradle.api.internal.tasks.compile.processing.AnnotationProcessorDetector;
 import org.gradle.api.model.ObjectFactory;
+import org.gradle.api.model.ReplacedBy;
 import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.CompileClasspath;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
-import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.LocalState;
 import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.PathSensitive;
@@ -58,39 +58,30 @@ import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SkipWhenEmpty;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.WorkResult;
-import org.gradle.initialization.ClassLoaderRegistry;
-import org.gradle.internal.jvm.inspection.JvmVersionDetector;
-import org.gradle.jvm.toolchain.JavaToolChain;
+import org.gradle.internal.file.Deleter;
+import org.gradle.internal.jvm.Jvm;
 import org.gradle.language.base.internal.compile.Compiler;
-import org.gradle.process.internal.JavaForkOptionsFactory;
-import org.gradle.process.internal.worker.child.WorkerDirectoryProvider;
-import org.gradle.util.DeprecationLogger;
 import org.gradle.util.GFileUtils;
-import org.gradle.work.ChangeType;
-import org.gradle.work.FileChange;
+import org.gradle.util.IncubationLogger;
 import org.gradle.work.Incremental;
 import org.gradle.work.InputChanges;
-import org.gradle.workers.internal.ActionExecutionSpecFactory;
-import org.gradle.workers.internal.IsolatedClassloaderWorkerFactory;
-import org.gradle.workers.internal.WorkerDaemonFactory;
 
 import javax.inject.Inject;
 import java.io.File;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.stream.StreamSupport;
 
 import static org.gradle.api.internal.FeaturePreviews.Feature.GROOVY_COMPILATION_AVOIDANCE;
+import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.mergeIncrementalMappingsIntoOldMappings;
 import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.readSourceClassesMappingFile;
-import static org.gradle.api.internal.tasks.compile.SourceClassesMappingFileAccessor.writeSourceClassesMappingFile;
 
 /**
  * Compiles Groovy source files, and optionally, Java source files.
  */
 @CacheableTask
-public class GroovyCompile extends AbstractCompile {
+public class GroovyCompile extends AbstractCompile implements HasCompileOptions {
     private FileCollection groovyClasspath;
-    private ConfigurableFileCollection astTransformationClasspath;
+    private final ConfigurableFileCollection astTransformationClasspath;
     private final CompileOptions compileOptions;
     private final GroovyCompileOptions groovyCompileOptions = new GroovyCompileOptions();
     private final FileCollection stableSources = getProject().files(new Callable<FileTree>() {
@@ -102,7 +93,7 @@ public class GroovyCompile extends AbstractCompile {
     private File sourceClassesMappingFile;
 
     public GroovyCompile() {
-        ObjectFactory objectFactory = getServices().get(ObjectFactory.class);
+        ObjectFactory objectFactory = getObjectFactory();
         CompileOptions compileOptions = objectFactory.newInstance(CompileOptions.class);
         compileOptions.setIncremental(false);
         this.compileOptions = compileOptions;
@@ -142,11 +133,6 @@ public class GroovyCompile extends AbstractCompile {
         return getFeaturePreviews().isFeatureEnabled(GROOVY_COMPILATION_AVOIDANCE);
     }
 
-    @Override
-    protected void compile() {
-        throw new UnsupportedOperationException("This method has been superseded by compile(InputChanges inputChanges)!");
-    }
-
     @TaskAction
     protected void compile(InputChanges inputChanges) {
         checkGroovyClasspathIsNonEmpty();
@@ -170,7 +156,7 @@ public class GroovyCompile extends AbstractCompile {
         if (result instanceof IncrementalCompilationResult) {
             // The compilation will generate the new mapping file
             // Only merge old mappings into new mapping on incremental recompilation
-            mergeIncrementalMappingsIntoOldMappings(inputChanges, oldMappings);
+            mergeIncrementalMappingsIntoOldMappings(getSourceClassesMappingFile(), getStableSources(), inputChanges, oldMappings);
         }
     }
 
@@ -195,39 +181,16 @@ public class GroovyCompile extends AbstractCompile {
         return sourceClassesMappingFile;
     }
 
-    private void mergeIncrementalMappingsIntoOldMappings(InputChanges inputChanges, Multimap<String, String> oldMappings) {
-        Multimap<String, String> mappingsDuringIncrementalCompilation = readSourceClassesMappingFile(getSourceClassesMappingFile());
-
-        StreamSupport.stream(inputChanges.getFileChanges(getStableSources()).spliterator(), false)
-            .filter(fileChange -> fileChange.getChangeType() == ChangeType.REMOVED)
-            .map(FileChange::getNormalizedPath)
-            .forEach(oldMappings::removeAll);
-        mappingsDuringIncrementalCompilation.keySet().forEach(oldMappings::removeAll);
-
-        oldMappings.putAll(mappingsDuringIncrementalCompilation);
-
-        writeSourceClassesMappingFile(getSourceClassesMappingFile(), oldMappings);
-    }
-
     private void warnIfCompileAvoidanceEnabled() {
         if (experimentalCompilationAvoidanceEnabled()) {
-            DeprecationLogger.incubatingFeatureUsed("Groovy compilation avoidance");
+            IncubationLogger.incubatingFeatureUsed("Groovy compilation avoidance");
         }
     }
 
     private Compiler<GroovyJavaJointCompileSpec> getCompiler(GroovyJavaJointCompileSpec spec, InputChanges inputChanges, Multimap<String, String> sourceClassesMapping) {
-        WorkerDaemonFactory workerDaemonFactory = getServices().get(WorkerDaemonFactory.class);
-        IsolatedClassloaderWorkerFactory inProcessWorkerFactory = getServices().get(IsolatedClassloaderWorkerFactory.class);
-        JavaForkOptionsFactory forkOptionsFactory = getServices().get(JavaForkOptionsFactory.class);
-        AnnotationProcessorDetector processorDetector = getServices().get(AnnotationProcessorDetector.class);
-        JvmVersionDetector jvmVersionDetector = getServices().get(JvmVersionDetector.class);
-        WorkerDirectoryProvider workerDirectoryProvider = getServices().get(WorkerDirectoryProvider.class);
-        ClassPathRegistry classPathRegistry = getServices().get(ClassPathRegistry.class);
-        ClassLoaderRegistry classLoaderRegistry = getServices().get(ClassLoaderRegistry.class);
-        ActionExecutionSpecFactory actionExecutionSpecFactory = getServices().get(ActionExecutionSpecFactory.class);
-        GroovyCompilerFactory groovyCompilerFactory = new GroovyCompilerFactory(workerDaemonFactory, inProcessWorkerFactory, forkOptionsFactory, processorDetector, jvmVersionDetector, workerDirectoryProvider, classPathRegistry, classLoaderRegistry, actionExecutionSpecFactory);
+        GroovyCompilerFactory groovyCompilerFactory = getGroovyCompilerFactory();
         Compiler<GroovyJavaJointCompileSpec> delegatingCompiler = groovyCompilerFactory.newCompiler(spec);
-        CleaningGroovyCompiler cleaningGroovyCompiler = new CleaningGroovyCompiler(delegatingCompiler, getOutputs());
+        CleaningJavaCompiler<GroovyJavaJointCompileSpec> cleaningGroovyCompiler = new CleaningJavaCompiler<>(delegatingCompiler, getOutputs(), getDeleter());
         if (spec.incrementalCompilationEnabled()) {
             IncrementalCompilerFactory factory = getIncrementalCompilerFactory();
             return factory.makeIncremental(
@@ -241,13 +204,20 @@ public class GroovyCompile extends AbstractCompile {
         }
     }
 
+    @Inject
+    protected GroovyCompilerFactory getGroovyCompilerFactory() {
+        throw new UnsupportedOperationException();
+    }
+
     private RecompilationSpecProvider createRecompilationSpecProvider(InputChanges inputChanges, Multimap<String, String> sourceClassesMapping) {
+        FileCollection stableSources = getStableSources();
         return new GroovyRecompilationSpecProvider(
-            ((ProjectInternal) getProject()).getFileOperations(),
-            getSource(),
-            inputChanges,
-            inputChanges.getFileChanges(getStableSources()),
-            new GroovySourceFileClassNameConverter(sourceClassesMapping));
+            getDeleter(),
+            getServices().get(FileOperations.class),
+            stableSources.getAsFileTree(),
+            inputChanges.isIncremental(),
+            () -> inputChanges.getFileChanges(stableSources).iterator(),
+            new DefaultSourceFileClassNameConverter(sourceClassesMapping));
     }
 
     /**
@@ -273,6 +243,21 @@ public class GroovyCompile extends AbstractCompile {
         throw new UnsupportedOperationException();
     }
 
+    @Inject
+    protected Deleter getDeleter() {
+        throw new UnsupportedOperationException("Decorator takes care of injection");
+    }
+
+    @Inject
+    protected ProjectLayout getProjectLayout() {
+        throw new UnsupportedOperationException();
+    }
+
+    @Inject
+    protected ObjectFactory getObjectFactory() {
+        throw new UnsupportedOperationException();
+    }
+
     private FileCollection determineGroovyCompileClasspath() {
         if (experimentalCompilationAvoidanceEnabled()) {
             return astTransformationClasspath.plus(getClasspath());
@@ -294,17 +279,18 @@ public class GroovyCompile extends AbstractCompile {
     private GroovyJavaJointCompileSpec createSpec() {
         DefaultGroovyJavaJointCompileSpec spec = new DefaultGroovyJavaJointCompileSpecFactory(compileOptions).create();
 
-        List<File> sourceRoots = CompilationSourceDirs.inferSourceRoots((FileTreeInternal) getSource());
+        FileTreeInternal stableSourcesAsFileTree = (FileTreeInternal) getStableSources().getAsFileTree();
+        List<File> sourceRoots = CompilationSourceDirs.inferSourceRoots(stableSourcesAsFileTree);
 
         spec.setSourcesRoots(sourceRoots);
-        spec.setSourceFiles(getSource());
-        spec.setDestinationDir(getDestinationDir());
-        spec.setWorkingDir(getProject().getProjectDir());
+        spec.setSourceFiles(stableSourcesAsFileTree);
+        spec.setDestinationDir(getDestinationDirectory().getAsFile().get());
+        spec.setWorkingDir(getProjectLayout().getProjectDirectory().getAsFile());
         spec.setTempDir(getTemporaryDir());
         spec.setCompileClasspath(ImmutableList.copyOf(determineGroovyCompileClasspath()));
         spec.setSourceCompatibility(getSourceCompatibility());
         spec.setTargetCompatibility(getTargetCompatibility());
-        spec.setAnnotationProcessorPath(Lists.newArrayList(compileOptions.getAnnotationProcessorPath() == null ? getProject().getLayout().files() : compileOptions.getAnnotationProcessorPath()));
+        spec.setAnnotationProcessorPath(Lists.newArrayList(compileOptions.getAnnotationProcessorPath() == null ? getProjectLayout().files() : compileOptions.getAnnotationProcessorPath()));
         spec.setGroovyClasspath(Lists.newArrayList(getGroovyClasspath()));
         spec.setCompileOptions(compileOptions);
         spec.setGroovyCompileOptions(groovyCompileOptions);
@@ -317,6 +303,8 @@ public class GroovyCompile extends AbstractCompile {
             GFileUtils.mkdirs(dir);
             spec.getGroovyCompileOptions().setStubDir(dir);
         }
+        spec.getCompileOptions().getForkOptions().setExecutable(Jvm.current().getJavaExecutable().getAbsolutePath());
+
         return spec;
     }
 
@@ -345,7 +333,9 @@ public class GroovyCompile extends AbstractCompile {
      * @since 4.0
      */
     @Nested
-    protected JavaToolChain getJavaToolChain() {
+    @SuppressWarnings("deprecation")
+    @Deprecated
+    protected org.gradle.jvm.toolchain.JavaToolChain getJavaToolChain() {
         return getJavaToolChainFactory().forCompileOptions(getOptions());
     }
 
@@ -353,7 +343,7 @@ public class GroovyCompile extends AbstractCompile {
      * {@inheritDoc}
      */
     @Override
-    @Internal
+    @ReplacedBy("stableSources")
     public FileTree getSource() {
         return super.getSource();
     }

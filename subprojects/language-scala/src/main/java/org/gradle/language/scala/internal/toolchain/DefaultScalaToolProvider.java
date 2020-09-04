@@ -18,9 +18,10 @@ package org.gradle.language.scala.internal.toolchain;
 
 import org.gradle.api.internal.ClassPathRegistry;
 import org.gradle.api.internal.tasks.scala.DaemonScalaCompiler;
+import org.gradle.api.internal.tasks.scala.HashedClasspath;
 import org.gradle.api.internal.tasks.scala.NormalizingScalaCompiler;
 import org.gradle.api.internal.tasks.scala.ScalaJavaJointCompileSpec;
-import org.gradle.api.internal.tasks.scala.ZincScalaCompiler;
+import org.gradle.api.internal.tasks.scala.ZincScalaCompilerFacade;
 import org.gradle.initialization.ClassLoaderRegistry;
 import org.gradle.internal.logging.text.DiagnosticsVisitor;
 import org.gradle.language.base.internal.compile.CompileSpec;
@@ -34,20 +35,18 @@ import java.io.File;
 import java.util.Set;
 
 public class DefaultScalaToolProvider implements ToolProvider {
-    public static final String DEFAULT_ZINC_VERSION = "0.3.15";
+    public static final String DEFAULT_ZINC_VERSION = "1.3.5";
 
-    private final File gradleUserHomeDir;
     private final File daemonWorkingDir;
     private final WorkerDaemonFactory workerDaemonFactory;
-    private final Set<File> resolvedScalaClasspath;
+    private final HashedClasspath resolvedScalaClasspath;
     private final Set<File> resolvedZincClasspath;
     private final JavaForkOptionsFactory forkOptionsFactory;
     private final ClassPathRegistry classPathRegistry;
     private final ClassLoaderRegistry classLoaderRegistry;
     private final ActionExecutionSpecFactory actionExecutionSpecFactory;
 
-    public DefaultScalaToolProvider(File gradleUserHomeDir, File daemonWorkingDir, WorkerDaemonFactory workerDaemonFactory, JavaForkOptionsFactory forkOptionsFactory, ClassPathRegistry classPathRegistry, Set<File> resolvedScalaClasspath, Set<File> resolvedZincClasspath, ClassLoaderRegistry classLoaderRegistry, ActionExecutionSpecFactory actionExecutionSpecFactory) {
-        this.gradleUserHomeDir = gradleUserHomeDir;
+    public DefaultScalaToolProvider(File daemonWorkingDir, WorkerDaemonFactory workerDaemonFactory, JavaForkOptionsFactory forkOptionsFactory, HashedClasspath resolvedScalaClasspath, Set<File> resolvedZincClasspath, ClassPathRegistry classPathRegistry, ClassLoaderRegistry classLoaderRegistry, ActionExecutionSpecFactory actionExecutionSpecFactory) {
         this.daemonWorkingDir = daemonWorkingDir;
         this.workerDaemonFactory = workerDaemonFactory;
         this.forkOptionsFactory = forkOptionsFactory;
@@ -65,14 +64,15 @@ public class DefaultScalaToolProvider implements ToolProvider {
             return (Compiler<T>) new NormalizingScalaCompiler(
                     new DaemonScalaCompiler<ScalaJavaJointCompileSpec>(
                             daemonWorkingDir,
-                            ZincScalaCompiler.class,
-                            new Object[] {resolvedScalaClasspath, resolvedZincClasspath, gradleUserHomeDir},
+                            ZincScalaCompilerFacade.class,
+                            new Object[]{resolvedScalaClasspath, true},
                             workerDaemonFactory,
                             resolvedZincClasspath,
                             forkOptionsFactory,
                             classPathRegistry,
                             classLoaderRegistry,
-                            actionExecutionSpecFactory)
+                            actionExecutionSpecFactory
+                    )
             );
         }
         throw new IllegalArgumentException(String.format("Cannot create Compiler for unsupported CompileSpec type '%s'", spec.getSimpleName()));

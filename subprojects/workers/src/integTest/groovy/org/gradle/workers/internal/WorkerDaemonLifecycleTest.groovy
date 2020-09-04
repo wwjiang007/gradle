@@ -31,11 +31,11 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         fixture.withWorkActionClassInBuildScript()
         buildFile << """
             import org.gradle.workers.internal.WorkerDaemonFactory
-            
+
             task runInWorker1(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
-            
+
             task runInWorker2(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
                 doFirst {
@@ -62,7 +62,7 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
             task runInWorker1(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
-            
+
             task runInWorker2(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
@@ -110,7 +110,7 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
             task runInWorker1(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
-            
+
             task runInWorker2(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
@@ -140,7 +140,7 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
             task runInWorker1(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
-            
+
             task runInWorker2(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
@@ -176,7 +176,7 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
             task runInWorker1(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
-            
+
             task runInWorker2(type: WorkerTask) {
                 // This will cause the worker process to fail with exit code 127
                 list = runInWorker1.list + ["poisonPill"]
@@ -205,11 +205,11 @@ class WorkerDaemonLifecycleTest extends AbstractDaemonWorkerExecutorIntegrationS
         file('src/main/java/Test.java') << "public class Test {}"
         buildFile << """
             apply plugin: "java"
-            
+
             task runInWorker(type: WorkerTask) {
                 isolationMode = IsolationMode.PROCESS
             }
-            
+
             tasks.withType(JavaCompile) {
                 options.fork = true
             }

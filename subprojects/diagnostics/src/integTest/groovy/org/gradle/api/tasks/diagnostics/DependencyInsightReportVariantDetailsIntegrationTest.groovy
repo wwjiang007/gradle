@@ -18,7 +18,7 @@ package org.gradle.api.tasks.diagnostics
 
 import org.gradle.api.JavaVersion
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.FeaturePreviewsFixture
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.resolve.ResolveTestFixture
 import spock.lang.Unroll
 
@@ -32,12 +32,13 @@ class DependencyInsightReportVariantDetailsIntegrationTest extends AbstractInteg
     }
 
     @Unroll
+    @ToBeFixedForConfigurationCache(because = ":dependencyInsight")
     def "shows selected variant details"() {
         given:
         settingsFile << "include 'a', 'b', 'c'"
         file('a/build.gradle') << '''
             apply plugin: 'java-library'
-            
+
             dependencies {
                 api project(':b')
                 implementation project(':c')
@@ -55,9 +56,9 @@ class DependencyInsightReportVariantDetailsIntegrationTest extends AbstractInteg
         then:
         outputContains """project :$expectedProject
    variant "$expectedVariant" [
-      $expectedAttributes
+      org.gradle.category            = library
       org.gradle.dependency.bundling = external
-      org.gradle.category            = library (not requested)
+      $expectedAttributes
       org.gradle.jvm.version         = ${JavaVersion.current().majorVersion}
    ]
 
@@ -70,31 +71,31 @@ project :$expectedProject
         'runtimeClasspath' | 'c'             | 'runtimeElements' | 'org.gradle.usage               = java-runtime\n      org.gradle.libraryelements     = jar'
     }
 
+    @ToBeFixedForConfigurationCache(because = ":dependencyInsight")
     def "shows published variant details"() {
         given:
         mavenRepo.with {
             def leaf = module('org.test', 'leaf', '1.0')
                 .withModuleMetadata()
-                .variant('api', ['org.gradle.usage': 'java-api', 'org.gradle.libraryelements': 'jar', 'org.gradle.test': 'published attribute'])
+                .variant('api', ['org.gradle.usage': 'java-api', 'org.gradle.category': 'library', 'org.gradle.libraryelements': 'jar', 'org.gradle.test': 'published attribute'])
                 .publish()
             module('org.test', 'a', '1.0')
                 .dependsOn(leaf)
                 .publish()
 
         }
-        FeaturePreviewsFixture.enableGradleMetadata(settingsFile)
 
         file("build.gradle") << """
             apply plugin: 'java-library'
-            
+
             repositories {
                maven { url "${mavenRepo.uri}" }
             }
-            
+
             dependencies {
                 implementation 'org.test:a:1.0'
             }
-            
+
             configurations.compileClasspath.attributes.attribute(Attribute.of('org.gradle.blah', String), 'something')
         """
 
@@ -105,6 +106,7 @@ project :$expectedProject
         outputContains """org.test:leaf:1.0
    variant "api" [
       org.gradle.usage               = java-api
+      org.gradle.category            = library
       org.gradle.libraryelements     = jar (compatible with: classes)
       org.gradle.test                = published attribute (not requested)
       org.gradle.status              = release (not requested)
@@ -121,6 +123,7 @@ org.test:leaf:1.0
 """
     }
 
+    @ToBeFixedForConfigurationCache(because = ":dependencyInsight")
     def "Asking for variant details of 'FAILED' modules doesn't break the report"() {
         given:
         mavenRepo.module("org", "top").dependsOnModules("middle").publish()
@@ -152,6 +155,7 @@ org:middle:1.0 FAILED
 """
     }
 
+    @ToBeFixedForConfigurationCache(because = ":dependencyInsight")
     def "shows the target configuration name as variant display name for external dependencies which are not variant-aware"() {
         given:
         def leaf = mavenRepo.module('org', 'leaf', '1.0').publish()
@@ -192,6 +196,7 @@ org:leaf:1.0
 """
     }
 
+    @ToBeFixedForConfigurationCache(because = ":dependencyInsight")
     def "shows missing attributes when the target variant doesn't have any of its own"() {
         given:
         def leaf = mavenRepo.module('org', 'leaf', '1.0').publish()
@@ -235,6 +240,7 @@ org:leaf:1.0
 """
     }
 
+    @ToBeFixedForConfigurationCache(because = ":dependencyInsight")
     def "correctly reports attributes declared on dependencies"() {
         given:
         mavenRepo.module('org', 'testA', '1.0').publish()
@@ -245,7 +251,7 @@ org:leaf:1.0
             dependencies.attributesSchema.attribute(CUSTOM_ATTRIBUTE)
             def configValue = objects.named(CustomAttributeType.class, 'conf_value')
             def dependencyValue = objects.named(CustomAttributeType.class, 'dep_value')
-            
+
             repositories {
                 maven { url "${mavenRepo.uri}" }
             }
@@ -273,7 +279,7 @@ org:leaf:1.0
                     }
                 }
             }
-            
+
             interface CustomAttributeType extends Named {}
         """
 

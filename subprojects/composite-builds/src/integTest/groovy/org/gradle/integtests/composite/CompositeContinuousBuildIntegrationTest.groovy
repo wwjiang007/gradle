@@ -16,13 +16,15 @@
 
 package org.gradle.integtests.composite
 
-import org.gradle.launcher.continuous.Java7RequiringContinuousIntegrationTest
+import org.gradle.integtests.fixtures.AbstractContinuousIntegrationTest
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 
-class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIntegrationTest {
+class CompositeContinuousBuildIntegrationTest extends AbstractContinuousIntegrationTest {
     def setup() {
         buildTestFixture.withBuildInSubDir()
     }
 
+    @ToBeFixedForConfigurationCache
     def "will rebuild on input change for included build task dependency"() {
         def outputFile = file("included/build/output.txt")
         def inputFile = file("included/inputs/input.txt")
@@ -65,6 +67,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         outputFile.text == "second"
     }
 
+    @ToBeFixedForConfigurationCache
     def "will rebuild on change for included build library dependency"() {
         def includedLibrary = singleProjectBuild("library") {
             buildFile << """
@@ -89,7 +92,9 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
             apply plugin: 'java'
             apply plugin: 'application'
             group = 'com.example'
-            mainClassName = 'com.example.Main'
+            application {
+                mainClass = 'com.example.Main'
+            }
             dependencies {
                 implementation 'org.test:library:0.1'
             }
@@ -97,7 +102,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         def mainSource = file("src/main/java/com/example/Main.java")
         mainSource << """
             package com.example;
-            
+
             public class Main {
                 public static void main(String... args) {
                     org.test.Library.print("World");
@@ -122,6 +127,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         outputContains("Goodbye Friend")
     }
 
+    @ToBeFixedForConfigurationCache
     def "will rebuild on change for plugin supplied by included build"() {
         // to reduce contention with concurrently executing tests
         requireOwnGradleUserHomeDir()
@@ -180,6 +186,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         stopGradle()
     }
 
+    @ToBeFixedForConfigurationCache
     def "will rebuild on change for build included into a multi-project build"() {
         def includedLibrary = singleProjectBuild("library") {
             buildFile << """
@@ -207,7 +214,9 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
                 apply plugin: 'java'
                 apply plugin: 'application'
                 group = 'com.example'
-                mainClassName = 'com.example.' + name + '.Main'
+                application {
+                   mainClass = 'com.example.' + name + '.Main'
+                }
                 dependencies {
                     implementation 'org.test:library:0.1'
                 }
@@ -219,7 +228,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         def mainSourceSub1 = file("sub1/src/main/java/com/example/sub1/Main.java")
         mainSourceSub1 << """
             package com.example.sub1;
-            
+
             public class Main {
                 public static void main(String... args) {
                     org.test.Library.print("First");
@@ -229,7 +238,7 @@ class CompositeContinuousBuildIntegrationTest extends Java7RequiringContinuousIn
         def mainSourceSub2 = file("sub2/src/main/java/com/example/sub2/Main.java")
         mainSourceSub2 << """
             package com.example.sub2;
-            
+
             public class Main {
                 public static void main(String... args) {
                     org.test.Library.print("Second");

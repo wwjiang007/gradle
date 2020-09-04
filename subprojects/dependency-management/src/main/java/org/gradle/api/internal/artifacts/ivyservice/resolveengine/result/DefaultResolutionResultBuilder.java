@@ -46,7 +46,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class DefaultResolutionResultBuilder {
-    private final Map<Long, DefaultResolvedComponentResult> modules = new HashMap<Long, DefaultResolvedComponentResult>();
+    private static final DefaultComponentSelectionDescriptor DEPENDENCY_LOCKING = new DefaultComponentSelectionDescriptor(ComponentSelectionCause.CONSTRAINT, Describables.of("Dependency locking"));
+    private final Map<Long, DefaultResolvedComponentResult> modules = new HashMap<>();
     private final CachingDependencyResultFactory dependencyResultFactory = new CachingDependencyResultFactory();
     private AttributeContainer requestedAttributes;
 
@@ -78,6 +79,9 @@ public class DefaultResolutionResultBuilder {
                 dependencyResult = dependencyResultFactory.createUnresolvedDependency(d.getRequested(), from, d.isConstraint(), d.getReason(), d.getFailure());
             } else {
                 DefaultResolvedComponentResult selected = modules.get(d.getSelected());
+                if (selected == null) {
+                    throw new IllegalStateException("Corrupt serialized resolution result. Cannot find selected module (" + d.getSelected() + ") for " + (d.isConstraint() ? "constraint " : "") + fromVariant + " -> " + d.getRequested().getDisplayName());
+                }
                 dependencyResult = dependencyResultFactory.createResolvedDependency(d.getRequested(), from, selected, d.getSelectedVariant(), d.isConstraint());
                 selected.addDependent((ResolvedDependencyResult) dependencyResult);
             }
@@ -100,13 +104,13 @@ public class DefaultResolutionResultBuilder {
             ModuleVersionSelector failureSelector = failure.getSelector();
             ModuleComponentSelector failureComponentSelector = DefaultModuleComponentSelector.newSelector(failureSelector.getModule(), failureSelector.getVersion());
             root.addDependency(dependencyResultFactory.createUnresolvedDependency(failureComponentSelector, root, true,
-                    ComponentSelectionReasons.of(new DefaultComponentSelectionDescriptor(ComponentSelectionCause.CONSTRAINT, Describables.of("Dependency locking"))),
+                    ComponentSelectionReasons.of(DEPENDENCY_LOCKING),
                 new ModuleVersionResolveException(failureComponentSelector, () -> "Dependency lock state out of date", failure.getProblem())));
         }
     }
 
     private static class RootFactory implements Factory<ResolvedComponentResult> {
-        private DefaultResolvedComponentResult rootModule;
+        private final DefaultResolvedComponentResult rootModule;
 
         public RootFactory(DefaultResolvedComponentResult rootModule) {
             this.rootModule = rootModule;

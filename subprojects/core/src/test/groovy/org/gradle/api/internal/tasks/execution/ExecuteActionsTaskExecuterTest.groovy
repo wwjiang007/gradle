@@ -21,10 +21,8 @@ import org.gradle.api.execution.TaskActionListener
 import org.gradle.api.file.FileCollection
 import org.gradle.api.internal.TaskInternal
 import org.gradle.api.internal.TaskOutputsInternal
-import org.gradle.api.internal.cache.StringInterner
 import org.gradle.api.internal.changedetection.TaskExecutionMode
-import org.gradle.api.internal.file.DefaultFileCollectionFactory
-import org.gradle.api.internal.file.IdentityFileResolver
+import org.gradle.api.internal.file.FileOperations
 import org.gradle.api.internal.file.TestFiles
 import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.internal.tasks.InputChangesAwareTaskAction
@@ -49,7 +47,6 @@ import org.gradle.internal.execution.impl.DefaultWorkExecutor
 import org.gradle.internal.execution.steps.BroadcastChangingOutputsStep
 import org.gradle.internal.execution.steps.CancelExecutionStep
 import org.gradle.internal.execution.steps.CaptureStateBeforeExecutionStep
-import org.gradle.internal.execution.steps.CatchExceptionStep
 import org.gradle.internal.execution.steps.CleanupOutputsStep
 import org.gradle.internal.execution.steps.ExecuteStep
 import org.gradle.internal.execution.steps.LoadExecutionStateStep
@@ -72,8 +69,6 @@ import org.gradle.internal.operations.BuildOperationContext
 import org.gradle.internal.operations.BuildOperationExecutor
 import org.gradle.internal.operations.RunnableBuildOperation
 import org.gradle.internal.operations.TestBuildOperationExecutor
-import org.gradle.internal.snapshot.WellKnownFileLocations
-import org.gradle.internal.snapshot.impl.DefaultFileSystemMirror
 import org.gradle.internal.snapshot.impl.DefaultValueSnapshotter
 import org.gradle.internal.snapshot.impl.ImplementationSnapshot
 import org.gradle.internal.work.AsyncWorkTracker
@@ -115,9 +110,8 @@ class ExecuteActionsTaskExecuterTest extends Specification {
     def buildOperationExecutor = new TestBuildOperationExecutor()
     def asyncWorkTracker = Mock(AsyncWorkTracker)
 
-    def fileSystemMirror = new DefaultFileSystemMirror(Stub(WellKnownFileLocations))
-    def fileSystemSnapshotter = TestFiles.fileSystemSnapshotter(fileSystemMirror, new StringInterner())
-    def fileCollectionSnapshotter = new DefaultFileCollectionSnapshotter(fileSystemSnapshotter, TestFiles.fileSystem())
+    def fileSystemAccess = TestFiles.fileSystemAccess()
+    def fileCollectionSnapshotter = new DefaultFileCollectionSnapshotter(fileSystemAccess, TestFiles.genericFileTreeSnapshotter(), TestFiles.fileSystem())
     def fingerprinter = new AbsolutePathFileCollectionFingerprinter(fileCollectionSnapshotter)
     def fingerprinterRegistry = Stub(FileCollectionFingerprinterRegistry) {
         getFingerprinter(_) >> fingerprinter
@@ -145,30 +139,32 @@ class ExecuteActionsTaskExecuterTest extends Specification {
     def reservedFileSystemLocationRegistry = Stub(ReservedFileSystemLocationRegistry)
     def emptySourceTaskSkipper = Stub(EmptySourceTaskSkipper)
     def overlappingOutputDetector = Stub(OverlappingOutputDetector)
-    def fileCollectionFactory = new DefaultFileCollectionFactory(new IdentityFileResolver(), null)
+    def fileCollectionFactory = TestFiles.fileCollectionFactory()
+    def fileOperations = Stub(FileOperations)
+    def deleter = TestFiles.deleter()
+    def validationWarningReporter = Stub(ValidateStep.ValidationWarningReporter)
 
     // @formatter:off
     def workExecutor = new DefaultWorkExecutor<>(
         new LoadExecutionStateStep<>(
         new SkipEmptyWorkStep<>(
-        new ValidateStep<>(
+        new ValidateStep<>(validationWarningReporter,
         new CaptureStateBeforeExecutionStep(buildOperationExecutor, classloaderHierarchyHasher, valueSnapshotter, overlappingOutputDetector,
         new ResolveCachingStateStep(buildCacheController, false,
         new ResolveChangesStep<>(changeDetector,
         new SkipUpToDateStep<>(
         new BroadcastChangingOutputsStep<>(outputChangeListener,
         new SnapshotOutputsStep<>(buildOperationExecutor, buildId,
-        new CatchExceptionStep<>(
         new CancelExecutionStep<>(cancellationToken,
         new ResolveInputChangesStep<>(
-        new CleanupOutputsStep<>(
+        new CleanupOutputsStep<>(deleter, outputChangeListener,
         new ExecuteStep<>(
-    )))))))))))))))
+    ))))))))))))))
     // @formatter:on
 
     def executer = new ExecuteActionsTaskExecuter(
-        false,
-        false,
+        ExecuteActionsTaskExecuter.BuildCacheState.DISABLED,
+        ExecuteActionsTaskExecuter.ScanPluginState.NOT_APPLIED,
         taskSnapshotter,
         executionHistoryStore,
         buildOperationExecutorForTaskExecution,
@@ -181,7 +177,8 @@ class ExecuteActionsTaskExecuterTest extends Specification {
         listenerManager,
         reservedFileSystemLocationRegistry,
         emptySourceTaskSkipper,
-        fileCollectionFactory
+        fileCollectionFactory,
+        fileOperations
     )
 
     def setup() {

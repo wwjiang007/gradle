@@ -17,12 +17,14 @@
 package org.gradle.api.internal.artifacts.transform;
 
 import org.apache.commons.io.FileUtils;
-import org.gradle.caching.internal.command.BuildCacheCommandFactory;
+import org.gradle.caching.internal.controller.BuildCacheCommandFactory;
 import org.gradle.caching.internal.controller.BuildCacheController;
 import org.gradle.caching.internal.controller.BuildCacheLoadCommand;
 import org.gradle.caching.internal.controller.BuildCacheStoreCommand;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.initialization.DefaultBuildCancellationToken;
+import org.gradle.internal.deprecation.DeprecationLogger;
+import org.gradle.internal.enterprise.core.GradleEnterprisePluginManager;
 import org.gradle.internal.execution.CachingResult;
 import org.gradle.internal.execution.ExecutionRequestContext;
 import org.gradle.internal.execution.OutputChangeListener;
@@ -30,19 +32,19 @@ import org.gradle.internal.execution.WorkExecutor;
 import org.gradle.internal.execution.history.OutputFilesRepository;
 import org.gradle.internal.execution.history.changes.DefaultExecutionStateChangeDetector;
 import org.gradle.internal.execution.timeout.impl.DefaultTimeoutHandler;
-import org.gradle.internal.file.impl.Deleter;
+import org.gradle.internal.file.Deleter;
 import org.gradle.internal.fingerprint.overlap.impl.DefaultOverlappingOutputDetector;
 import org.gradle.internal.hash.ClassLoaderHierarchyHasher;
 import org.gradle.internal.id.UniqueId;
 import org.gradle.internal.operations.TestBuildOperationExecutor;
-import org.gradle.internal.scan.config.BuildScanPluginApplied;
 import org.gradle.internal.scopeids.id.BuildInvocationScopeId;
 import org.gradle.internal.service.scopes.ExecutionGradleServices;
 import org.gradle.internal.snapshot.FileSystemSnapshot;
 import org.gradle.internal.snapshot.ValueSnapshotter;
-import org.gradle.internal.snapshot.impl.DefaultFileSystemMirror;
+import org.gradle.internal.vfs.FileSystemAccess;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Optional;
 
 public class WorkExecutorTestFixture {
@@ -50,7 +52,7 @@ public class WorkExecutorTestFixture {
     private final WorkExecutor<ExecutionRequestContext, CachingResult> workExecutor;
 
     WorkExecutorTestFixture(
-        DefaultFileSystemMirror fileSystemMirror,
+        FileSystemAccess fileSystemAccess,
         ClassLoaderHierarchyHasher classLoaderHierarchyHasher,
         ValueSnapshotter valueSnapshotter
 
@@ -84,17 +86,7 @@ public class WorkExecutorTestFixture {
         BuildInvocationScopeId buildInvocationScopeId = new BuildInvocationScopeId(UniqueId.generate());
         BuildCancellationToken cancellationToken = new DefaultBuildCancellationToken();
         BuildCacheCommandFactory buildCacheCommandFactory = null;
-        OutputChangeListener outputChangeListener = new OutputChangeListener() {
-            @Override
-            public void beforeOutputChange() {
-                fileSystemMirror.beforeOutputChange();
-            }
-
-            @Override
-            public void beforeOutputChange(Iterable<String> affectedOutputPaths) {
-                fileSystemMirror.beforeOutputChange(affectedOutputPaths);
-            }
-        };
+        OutputChangeListener outputChangeListener = affectedOutputPaths -> fileSystemAccess.write(affectedOutputPaths, () -> {});
         OutputFilesRepository outputFilesRepository = new OutputFilesRepository() {
             @Override
             public boolean isGeneratedByGradle(File file) {
@@ -105,21 +97,37 @@ public class WorkExecutorTestFixture {
             public void recordOutputs(Iterable<? extends FileSystemSnapshot> outputFileFingerprints) {
             }
         };
-        BuildScanPluginApplied buildScanPluginApplied = new BuildScanPluginApplied() {
-            @Override
-            public boolean isBuildScanPluginApplied() {
-                return false;
-            }
-        };
         Deleter deleter = new Deleter() {
+            @Override
+            public boolean deleteRecursively(File target) {
+                return deleteRecursively(target, false);
+            }
+
             @Override
             public boolean deleteRecursively(File target, boolean followSymlinks) {
                 return FileUtils.deleteQuietly(target);
             }
 
             @Override
-            public boolean delete(File target) {
-                return FileUtils.deleteQuietly(target);
+            public boolean ensureEmptyDirectory(File target) throws IOException {
+                return ensureEmptyDirectory(target, false);
+            }
+
+            @Override
+            public boolean ensureEmptyDirectory(File target, boolean followSymlinks) throws IOException {
+                File[] children = target.listFiles();
+                FileUtils.forceDelete(target);
+                FileUtils.forceMkdir(target);
+                return children == null || children.length == 0;
+            }
+
+            @Override
+            public boolean delete(File target) throws IOException {
+                if (!target.exists()) {
+                    return false;
+                }
+                FileUtils.forceDelete(target);
+                return true;
             }
         };
         workExecutor = new ExecutionGradleServices().createWorkExecutor(
@@ -128,7 +136,7 @@ public class WorkExecutorTestFixture {
             cancellationToken,
             buildInvocationScopeId,
             new TestBuildOperationExecutor(),
-            buildScanPluginApplied,
+            new GradleEnterprisePluginManager(),
             classLoaderHierarchyHasher,
             deleter,
             new DefaultExecutionStateChangeDetector(),
@@ -136,6 +144,7 @@ public class WorkExecutorTestFixture {
             outputFilesRepository,
             new DefaultOverlappingOutputDetector(),
             new DefaultTimeoutHandler(null),
+            behaviour -> DeprecationLogger.deprecateBehaviour(behaviour).willBeRemovedInGradle7().undocumented().nagUser(),
             valueSnapshotter
         );
     }

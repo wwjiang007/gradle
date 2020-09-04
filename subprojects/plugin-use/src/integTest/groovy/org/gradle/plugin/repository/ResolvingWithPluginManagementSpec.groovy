@@ -38,7 +38,7 @@ class ResolvingWithPluginManagementSpec extends AbstractDependencyResolutionTest
         def taskName = "pluginTask"
 
         pluginBuilder.addPluginWithPrintlnTask(taskName, message, "org.example.plugin")
-        if(repository instanceof  MavenRepository) {
+        if (repository instanceof MavenRepository) {
             pluginBuilder.publishAs("org.example.plugin:plugin:1.0", repository, executer)
         } else if (repository instanceof IvyRepository) {
             pluginBuilder.publishAs("org.example.plugin:plugin:1.0", repository, executer)
@@ -57,6 +57,7 @@ class ResolvingWithPluginManagementSpec extends AbstractDependencyResolutionTest
           }
         """
     }
+
     def 'setting different version in resolutionStrategy will affect plugin choice'() {
         given:
         publishTestPlugin()
@@ -294,7 +295,7 @@ class ResolvingWithPluginManagementSpec extends AbstractDependencyResolutionTest
           settingsEvaluated { settings ->
               mySettings = settings
           }
-          projectsLoaded { 
+          projectsLoaded {
             mySettings.pluginManagement.resolutionStrategy.eachPlugin {}
           }
         """

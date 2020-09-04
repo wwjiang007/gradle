@@ -68,7 +68,7 @@ public class CompositeProjectInitDescriptor implements BuildInitializer {
 
     @Override
     public Set<BuildInitDsl> getDsls() {
-        return new TreeSet<BuildInitDsl>(Arrays.asList(BuildInitDsl.values()));
+        return new TreeSet<>(Arrays.asList(BuildInitDsl.values()));
     }
 
     @Override
@@ -82,6 +82,11 @@ public class CompositeProjectInitDescriptor implements BuildInitializer {
     }
 
     @Override
+    public Optional<String> getFurtherReading() {
+        return descriptor.getFurtherReading();
+    }
+
+    @Override
     public void generate(InitSettings settings) {
         for (BuildContentGenerator generator : generators) {
             generator.generate(settings);
@@ -89,8 +94,13 @@ public class CompositeProjectInitDescriptor implements BuildInitializer {
         descriptor.generate(settings);
     }
 
-    @Override
-    public Optional<String> getFurtherReading() {
-        return descriptor.getFurtherReading();
+    public List<String> generateWithExternalComments(InitSettings settings) {
+        if (!(descriptor instanceof LanguageSpecificAdaptor)) {
+            throw new UnsupportedOperationException();
+        }
+        for (BuildContentGenerator generator : generators) {
+            generator.generate(settings);
+        }
+        return ((LanguageSpecificAdaptor) descriptor).generateWithExternalComments(settings);
     }
 }

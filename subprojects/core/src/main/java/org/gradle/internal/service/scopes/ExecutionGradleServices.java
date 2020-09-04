@@ -15,7 +15,6 @@
  */
 package org.gradle.internal.service.scopes;
 
-import org.gradle.api.execution.SharedResourceContainer;
 import org.gradle.api.internal.cache.StringInterner;
 import org.gradle.api.internal.changedetection.state.DefaultExecutionHistoryCacheAccess;
 import org.gradle.api.invocation.Gradle;
@@ -24,14 +23,14 @@ import org.gradle.cache.CacheRepository;
 import org.gradle.cache.FileLockManager;
 import org.gradle.cache.PersistentCache;
 import org.gradle.cache.internal.InMemoryCacheDecoratorFactory;
-import org.gradle.caching.internal.command.BuildCacheCommandFactory;
+import org.gradle.caching.internal.controller.BuildCacheCommandFactory;
 import org.gradle.caching.internal.controller.BuildCacheController;
-import org.gradle.execution.DefaultSharedResourceContainer;
+import org.gradle.concurrent.ParallelismConfiguration;
 import org.gradle.execution.plan.DefaultPlanExecutor;
 import org.gradle.execution.plan.PlanExecutor;
 import org.gradle.initialization.BuildCancellationToken;
 import org.gradle.internal.concurrent.ExecutorFactory;
-import org.gradle.internal.concurrent.ParallelismConfigurationManager;
+import org.gradle.internal.enterprise.core.GradleEnterprisePluginManager;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.execution.CachingResult;
 import org.gradle.internal.execution.ExecutionRequestContext;
@@ -48,7 +47,6 @@ import org.gradle.internal.execution.steps.BroadcastChangingOutputsStep;
 import org.gradle.internal.execution.steps.CacheStep;
 import org.gradle.internal.execution.steps.CancelExecutionStep;
 import org.gradle.internal.execution.steps.CaptureStateBeforeExecutionStep;
-import org.gradle.internal.execution.steps.CatchExceptionStep;
 import org.gradle.internal.execution.steps.CleanupOutputsStep;
 import org.gradle.internal.execution.steps.CreateOutputsStep;
 import org.gradle.internal.execution.steps.ExecuteStep;
@@ -66,14 +64,12 @@ import org.gradle.internal.execution.steps.ValidateStep;
 import org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep;
 import org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep;
 import org.gradle.internal.execution.timeout.TimeoutHandler;
-import org.gradle.internal.file.impl.Deleter;
+import org.gradle.internal.file.Deleter;
 import org.gradle.internal.fingerprint.overlap.OverlappingOutputDetector;
 import org.gradle.internal.hash.ClassLoaderHierarchyHasher;
 import org.gradle.internal.operations.BuildOperationExecutor;
-import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.resources.ResourceLockCoordinationService;
 import org.gradle.internal.resources.SharedResourceLeaseRegistry;
-import org.gradle.internal.scan.config.BuildScanPluginApplied;
 import org.gradle.internal.scopeids.id.BuildInvocationScopeId;
 import org.gradle.internal.snapshot.ValueSnapshotter;
 import org.gradle.internal.work.WorkerLeaseService;
@@ -84,12 +80,20 @@ import java.util.Collections;
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
 public class ExecutionGradleServices {
-    ExecutionHistoryCacheAccess createCacheAccess(Gradle gradle, CacheRepository cacheRepository, InMemoryCacheDecoratorFactory inMemoryCacheDecoratorFactory) {
-        return new DefaultExecutionHistoryCacheAccess(gradle, cacheRepository, inMemoryCacheDecoratorFactory);
+    ExecutionHistoryCacheAccess createCacheAccess(Gradle gradle, CacheRepository cacheRepository) {
+        return new DefaultExecutionHistoryCacheAccess(gradle, cacheRepository);
     }
 
-    ExecutionHistoryStore createExecutionHistoryStore(ExecutionHistoryCacheAccess executionHistoryCacheAccess, StringInterner stringInterner) {
-        return new DefaultExecutionHistoryStore(executionHistoryCacheAccess, stringInterner);
+    ExecutionHistoryStore createExecutionHistoryStore(
+        ExecutionHistoryCacheAccess executionHistoryCacheAccess,
+        InMemoryCacheDecoratorFactory inMemoryCacheDecoratorFactory,
+        StringInterner stringInterner
+    ) {
+        return new DefaultExecutionHistoryStore(
+            executionHistoryCacheAccess,
+            inMemoryCacheDecoratorFactory,
+            stringInterner
+        );
     }
 
     OutputFilesRepository createOutputFilesRepository(CacheRepository cacheRepository, Gradle gradle, InMemoryCacheDecoratorFactory inMemoryCacheDecoratorFactory) {
@@ -97,26 +101,25 @@ public class ExecutionGradleServices {
             .cache(gradle, "buildOutputCleanup")
             .withCrossVersionCache(CacheBuilder.LockTarget.DefaultTarget)
             .withDisplayName("Build Output Cleanup Cache")
-            .withLockOptions(mode(FileLockManager.LockMode.None))
+            .withLockOptions(mode(FileLockManager.LockMode.OnDemand))
             .withProperties(Collections.singletonMap("gradle.version", GradleVersion.current().getVersion()))
             .open();
         return new DefaultOutputFilesRepository(cacheAccess, inMemoryCacheDecoratorFactory);
     }
 
     PlanExecutor createPlanExecutor(
-        ParallelismConfigurationManager parallelismConfigurationManager,
+        ParallelismConfiguration parallelismConfiguration,
         ExecutorFactory executorFactory,
         WorkerLeaseService workerLeaseService,
         BuildCancellationToken cancellationToken,
         ResourceLockCoordinationService coordinationService) {
-        int parallelThreads = parallelismConfigurationManager.getParallelismConfiguration().getMaxWorkerCount();
+        int parallelThreads = parallelismConfiguration.getMaxWorkerCount();
         if (parallelThreads < 1) {
             throw new IllegalStateException(String.format("Cannot create executor for requested number of worker threads: %s.", parallelThreads));
         }
 
-        // TODO: Make plan executor respond to changes in parallelism configuration
         return new DefaultPlanExecutor(
-            parallelismConfigurationManager.getParallelismConfiguration(),
+            parallelismConfiguration,
             executorFactory,
             workerLeaseService,
             cancellationToken,
@@ -134,7 +137,7 @@ public class ExecutionGradleServices {
         BuildCancellationToken cancellationToken,
         BuildInvocationScopeId buildInvocationScopeId,
         BuildOperationExecutor buildOperationExecutor,
-        BuildScanPluginApplied buildScanPlugin,
+        GradleEnterprisePluginManager gradleEnterprisePluginManager,
         ClassLoaderHierarchyHasher classLoaderHierarchyHasher,
         Deleter deleter,
         ExecutionStateChangeDetector changeDetector,
@@ -142,6 +145,7 @@ public class ExecutionGradleServices {
         OutputFilesRepository outputFilesRepository,
         OverlappingOutputDetector overlappingOutputDetector,
         TimeoutHandler timeoutHandler,
+        ValidateStep.ValidationWarningReporter validationWarningReporter,
         ValueSnapshotter valueSnapshotter
     ) {
         // @formatter:off
@@ -149,30 +153,25 @@ public class ExecutionGradleServices {
             new LoadExecutionStateStep<>(
             new MarkSnapshottingInputsStartedStep<>(
             new SkipEmptyWorkStep<>(
-            new ValidateStep<>(
+            new ValidateStep<>(validationWarningReporter,
             new CaptureStateBeforeExecutionStep(buildOperationExecutor, classLoaderHierarchyHasher, valueSnapshotter, overlappingOutputDetector,
-            new ResolveCachingStateStep(buildCacheController, buildScanPlugin.isBuildScanPluginApplied(),
+            new ResolveCachingStateStep(buildCacheController, gradleEnterprisePluginManager.isPresent(),
             new MarkSnapshottingInputsFinishedStep<>(
             new ResolveChangesStep<>(changeDetector,
             new SkipUpToDateStep<>(
             new RecordOutputsStep<>(outputFilesRepository,
             new StoreExecutionStateStep<>(
+            new CacheStep(buildCacheController, buildCacheCommandFactory, deleter, outputChangeListener,
             new BroadcastChangingOutputsStep<>(outputChangeListener,
-            new CacheStep(buildCacheController, buildCacheCommandFactory, deleter,
             new SnapshotOutputsStep<>(buildOperationExecutor, buildInvocationScopeId.getId(),
             new CreateOutputsStep<>(
-            new CatchExceptionStep<>(
             new TimeoutStep<>(timeoutHandler,
             new CancelExecutionStep<>(cancellationToken,
             new ResolveInputChangesStep<>(
-            new CleanupOutputsStep<>(
+            new CleanupOutputsStep<>(deleter, outputChangeListener,
             new ExecuteStep<>(
-        ))))))))))))))))))))));
+        )))))))))))))))))))));
         // @formatter:on
-    }
-
-    SharedResourceContainer createSharedResourceContainer(Instantiator instantiator) {
-        return new DefaultSharedResourceContainer(instantiator);
     }
 
     SharedResourceLeaseRegistry createSharedResourceLeaseRegistry(ResourceLockCoordinationService coordinationService) {

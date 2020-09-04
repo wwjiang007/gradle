@@ -45,11 +45,12 @@ class DefaultGradleLauncherSpec extends Specification {
 
     def exceptionAnalyserMock = Mock(ExceptionAnalyser)
     def buildCompletionListener = Mock(BuildCompletionListener.class)
+    def buildFinishedListener = Mock(InternalBuildFinishedListener.class)
     def buildServices = Mock(BuildScopeServices.class)
     def otherService = Mock(Stoppable)
     def includedBuildControllers = Mock(IncludedBuildControllers)
-    def instantExecution = Mock(InstantExecution)
-    public TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
+    def configurationCache = Mock(ConfigurationCache)
+    public TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider(getClass())
 
     def failure = new RuntimeException("main")
     def transformedException = new RuntimeException("transformed")
@@ -64,8 +65,8 @@ class DefaultGradleLauncherSpec extends Specification {
 
     DefaultGradleLauncher launcher() {
         return new DefaultGradleLauncher(gradleMock, buildConfigurerMock, exceptionAnalyserMock, buildBroadcaster,
-            buildCompletionListener, buildExecuter, buildServices, [otherService], includedBuildControllers,
-            settingsPreparerMock, taskExecutionPreparerMock, instantExecution)
+            buildCompletionListener, buildFinishedListener, buildExecuter, buildServices, [otherService], includedBuildControllers,
+            settingsPreparerMock, taskExecutionPreparerMock, configurationCache, Mock(BuildOptionBuildOperationProgressEventsEmitter))
     }
 
     void testRunTasks() {
@@ -103,6 +104,7 @@ class DefaultGradleLauncherSpec extends Specification {
         expectSettingsBuilt()
         expectBuildListenerCallbacks()
 
+        and:
         1 * buildConfigurerMock.prepareProjects(gradleMock)
 
         DefaultGradleLauncher gradleLauncher = launcher()
@@ -117,6 +119,8 @@ class DefaultGradleLauncherSpec extends Specification {
         isRootBuild()
         expectSettingsBuilt()
         expectBuildListenerCallbacks()
+
+        and:
         1 * buildConfigurerMock.prepareProjects(gradleMock)
 
         then:
@@ -279,7 +283,7 @@ class DefaultGradleLauncherSpec extends Specification {
 
     private void isNestedBuild() {
         _ * gradleMock.parent >> Mock(GradleInternal)
-        _ * gradleMock.findIdentityPath() >> path(":nested")
+        _ * gradleMock.getIdentityPath() >> path(":nested")
         _ * gradleMock.contextualize(_) >> { "${it[0]} (:nested)" }
     }
 

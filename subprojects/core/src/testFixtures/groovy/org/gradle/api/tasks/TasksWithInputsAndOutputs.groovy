@@ -24,44 +24,78 @@ import org.gradle.test.fixtures.file.TestFile
 trait TasksWithInputsAndOutputs {
     abstract TestFile getBuildFile()
 
-    def taskTypeWithOutputFileProperty() {
+    abstract TestFile getBuildKotlinFile()
+
+    def taskTypeWithOutputFileProperty(TestFile buildFile = getBuildFile()) {
         buildFile << """
             class FileProducer extends DefaultTask {
                 @OutputFile
                 final RegularFileProperty output = project.objects.fileProperty()
                 @Input
-                String content = "content" // set to empty string to delete file
-            
+                final Property<String> content = project.objects.property(String).convention("content") // set to empty string to delete file
+
                 @TaskAction
                 def go() {
                     def file = output.get().asFile
-                    if (content.empty) {
+                    def text = this.content.get()
+                    if (text.empty) {
                         file.delete()
                     } else {
-                        file.text = content
+                        file.text = text
                     }
                 }
             }
         """
     }
 
-    def taskTypeWithOutputDirectoryProperty() {
+    def kotlinTaskTypeWithOutputFileProperty() {
+        buildKotlinFile << """
+            abstract class FileProducer: DefaultTask() {
+                @get:OutputFile
+                abstract val output: RegularFileProperty
+                @get:Input
+                var content = "content" // set to empty string to delete file
+
+                @TaskAction
+                fun go() {
+                    val file = output.get().asFile
+                    if (content.isBlank()) {
+                        file.delete()
+                    } else {
+                        file.writeText(content)
+                    }
+                }
+            }
+        """
+    }
+
+    def taskTypeWithOutputDirectoryProperty(TestFile buildFile = getBuildFile()) {
         buildFile << """
-            class DirProducer extends DefaultTask {
+            import javax.inject.Inject
+
+            abstract class DirProducer extends DefaultTask {
                 @OutputDirectory
-                final DirectoryProperty output = project.objects.directoryProperty()
+                abstract DirectoryProperty getOutput()
                 @Input
-                final ListProperty<String> names = project.objects.listProperty(String)
+                abstract ListProperty<String> getNames()
                 @Input
-                String content = "content" // set to empty string to delete directory
-            
+                abstract Property<String> getContent() // set to empty string to delete directory
+
+                @Inject
+                abstract FileSystemOperations getFs()
+
+                DirProducer() {
+                    content.convention("content")
+                }
+
                 @TaskAction
                 def go() {
                     def dir = output.get().asFile
+                    def content = this.content.get()
                     if (content.empty) {
-                        project.delete(dir)
+                        fs.delete { delete(dir) }
                     } else {
-                        project.delete(dir)
+                        fs.delete { delete(dir) }
                         dir.mkdirs()
                         names.get().forEach {
                             new File(dir, it).text = content
@@ -105,7 +139,7 @@ trait TasksWithInputsAndOutputs {
         """
     }
 
-    def taskTypeWithInputProperty() {
+    def taskTypeWithIntInputProperty() {
         buildFile << """
             class InputTask extends DefaultTask {
                 @Input
@@ -115,6 +149,36 @@ trait TasksWithInputsAndOutputs {
                 @TaskAction
                 def go() {
                     outFile.get().asFile.text = (inValue.get() + 10) as String
+                }
+            }
+        """
+    }
+
+    def taskTypeWithInputListProperty() {
+        buildFile << """
+            class InputTask extends DefaultTask {
+                @Input
+                final ListProperty<Integer> inValue = project.objects.listProperty(Integer)
+                @OutputFile
+                final RegularFileProperty outFile = project.objects.fileProperty()
+                @TaskAction
+                def go() {
+                    outFile.get().asFile.text = inValue.get().collect { it + 10 }.join(",")
+                }
+            }
+        """
+    }
+
+    def taskTypeWithInputMapProperty() {
+        buildFile << """
+            class InputTask extends DefaultTask {
+                @Input
+                final MapProperty<String, Integer> inValue = project.objects.mapProperty(String, Integer)
+                @OutputFile
+                final RegularFileProperty outFile = project.objects.fileProperty()
+                @TaskAction
+                def go() {
+                    outFile.get().asFile.text = inValue.get().collect { k, v -> "\$k=\${v + 10}" }.join(",")
                 }
             }
         """
@@ -145,6 +209,41 @@ trait TasksWithInputsAndOutputs {
                 @TaskAction
                 def go() {
                     outFile.get().asFile.text = inFiles*.text.sort().join(',')
+                }
+            }
+        """
+    }
+
+    def taskTypeLogsInputFileCollectionContent() {
+        buildFile << """
+            class ShowFilesTask extends DefaultTask {
+                @InputFiles
+                final ConfigurableFileCollection inFiles = project.files()
+                @TaskAction
+                def go() {
+                    println "result = " + inFiles.files.name
+                }
+            }
+        """
+    }
+
+    def taskTypeLogsArtifactCollectionDetails(TestFile buildFile = getBuildFile()) {
+        buildFile << """
+            class ShowArtifactCollection extends DefaultTask {
+                @Internal
+                ArtifactCollection collection
+
+                @InputFiles
+                FileCollection getFiles() {
+                    return collection?.artifactFiles
+                }
+
+                @TaskAction
+                def log() {
+                    println("files = \${collection.artifactFiles.files.name}")
+                    println("artifacts = \${collection.artifacts.id}")
+                    println("components = \${collection.artifacts.id.componentIdentifier}")
+                    println("variants = \${collection.artifacts.variant.attributes}")
                 }
             }
         """

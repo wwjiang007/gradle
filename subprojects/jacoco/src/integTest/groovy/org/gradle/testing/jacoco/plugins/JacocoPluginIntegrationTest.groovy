@@ -19,7 +19,11 @@ package org.gradle.testing.jacoco.plugins
 import org.gradle.api.Project
 import org.gradle.api.reporting.ReportingExtension
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
+import org.gradle.testing.jacoco.plugins.fixtures.JacocoReportFixture
 import org.gradle.testing.jacoco.plugins.fixtures.JavaProjectUnderTest
+import org.gradle.util.Requires
+import org.gradle.util.TestPrecondition
 
 class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
 
@@ -30,6 +34,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         javaProjectUnderTest.writeBuildScript().writeSourceFiles()
     }
 
+    @ToBeFixedForConfigurationCache
     def "does not add jvmArgs if jacoco is disabled"() {
         buildFile << """
             test {
@@ -46,6 +51,7 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         succeeds "test"
     }
 
+    @ToBeFixedForConfigurationCache(because = "Task.getProject() during execution")
     def "jacoco plugin adds coverage report for test task when java plugin applied"() {
         given:
         buildFile << '''
@@ -63,15 +69,21 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         succeeds 'doCheck'
     }
 
+    @ToBeFixedForConfigurationCache
     def "dependencies report shows default jacoco dependencies"() {
-        when: succeeds("dependencies", "--configuration", "jacocoAgent")
-        then: output.contains "org.jacoco:org.jacoco.agent:"
+        when:
+        succeeds("dependencies", "--configuration", "jacocoAgent")
+        then:
+        output.contains "org.jacoco:org.jacoco.agent:"
 
-        when: succeeds("dependencies", "--configuration", "jacocoAnt")
-        then: output.contains "org.jacoco:org.jacoco.ant:"
+        when:
+        succeeds("dependencies", "--configuration", "jacocoAnt")
+        then:
+        output.contains "org.jacoco:org.jacoco.ant:"
     }
 
-    void "allows configuring tool dependencies explicitly"() {
+    @ToBeFixedForConfigurationCache
+    def "allows configuring tool dependencies explicitly"() {
         when:
         buildFile << """
             dependencies {
@@ -82,13 +94,18 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
         """
 
         succeeds("dependencies", "--configuration", "jacocoAgent")
-        then: output.contains "org.jacoco:org.jacoco.agent:0.6.0.201210061924"
+        then:
+        output.contains "org.jacoco:org.jacoco.agent:0.6.0.201210061924"
 
-        when: succeeds("dependencies", "--configuration", "jacocoAnt")
-        then: output.contains "org.jacoco:org.jacoco.ant:0.6.0.201210061924"
+        when:
+        succeeds("dependencies", "--configuration", "jacocoAnt")
+        then:
+        output.contains "org.jacoco:org.jacoco.ant:0.6.0.201210061924"
     }
 
-    void jacocoReportIsIncremental() {
+    @Requires(TestPrecondition.JDK14_OR_EARLIER) // reevaluate when upgrading JaCoco from current 0.8.5
+    @ToBeFixedForConfigurationCache
+    def "jacoco report is incremental"() {
         def reportResourceDir = file("${REPORTING_BASE}/jacoco/test/html/jacoco-resources")
 
         when:
@@ -119,6 +136,24 @@ class JacocoPluginIntegrationTest extends AbstractIntegrationSpec {
 
     private JacocoReportFixture htmlReport(String basedir = "${REPORTING_BASE}/jacoco/test/html") {
         return new JacocoReportFixture(file(basedir))
+    }
+
+    @ToBeFixedForConfigurationCache
+    def "reports miss configuration of destination file"() {
+        given:
+        buildFile << """
+            test {
+                jacoco {
+                    destinationFile = provider { null }
+                }
+            }
+        """
+
+        when:
+        runAndFail("test")
+
+        then:
+        errorOutput.contains("JaCoCo destination file must not be null if output type is FILE")
     }
 }
 

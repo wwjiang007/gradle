@@ -61,6 +61,16 @@ public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     }
 
     @Override
+    public String getOutputLineThatContains(String text) {
+        return delegate.getOutputLineThatContains(text);
+    }
+
+    @Override
+    public String getPostBuildOutputLineThatContains(String text) {
+        return delegate.getPostBuildOutputLineThatContains(text);
+    }
+
+    @Override
     public ExecutionResult assertHasErrorOutput(String expectedOutput) {
         assertContentContains(getOutput(), expectedOutput, "Build output");
         return this;
@@ -159,5 +169,10 @@ public class ErrorsOnStdoutScrapingExecutionResult implements ExecutionResult {
     public ExecutionResult assertTaskNotSkipped(String taskPath) {
         delegate.assertTasksNotSkipped(taskPath);
         return this;
+    }
+
+    @Override
+    public void assertResultVisited() {
+        delegate.assertResultVisited();
     }
 }

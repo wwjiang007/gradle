@@ -15,12 +15,15 @@
  */
 
 package org.gradle.integtests.publish.maven
+
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.server.http.HttpServer
 import org.junit.Rule
 import spock.lang.Issue
 
+@UnsupportedWithConfigurationCache(because = "legacy maven plugin")
 class MavenSettingsPublishIntegrationTest extends AbstractIntegrationSpec {
     @Rule
     public final HttpServer server = new HttpServer()
@@ -30,6 +33,7 @@ class MavenSettingsPublishIntegrationTest extends AbstractIntegrationSpec {
         given:
 
         using m2
+        executer.expectDeprecationWarnings(2)
 
         TestFile m2Home = temporaryFolder.createDir("m2_home");
         m2Home.file("conf/settings.xml").text = """

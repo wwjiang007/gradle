@@ -17,6 +17,8 @@
 package org.gradle.api.plugins
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
+import spock.lang.IgnoreIf
 import spock.lang.Issue
 
 class BuildSrcPluginIntegrationTest extends AbstractIntegrationSpec {
@@ -90,9 +92,9 @@ class BuildSrcPluginIntegrationTest extends AbstractIntegrationSpec {
         output.contains "hello again"
     }
 
+    @IgnoreIf({ GradleContextualExecuter.embedded }) // In embedded testing mode, the visibility constraints are not enforced
     def "build src plugin cannot access Gradle implementation dependencies"() {
         when:
-        requireGradleDistribution()
         file("buildSrc/src/main/groovy/pkg/BuildSrcPlugin.groovy") << """
             package pkg
             import ${com.google.common.collect.ImmutableList.name}
@@ -108,7 +110,6 @@ class BuildSrcPluginIntegrationTest extends AbstractIntegrationSpec {
 
     def "use of buildSrc does not expose Gradle runtime dependencies to build script"() {
         when:
-        requireGradleDistribution()
         file("buildSrc/src/main/groovy/pkg/BuildSrcPlugin.groovy") << """
             package pkg
             class BuildSrcPlugin {
@@ -130,7 +131,7 @@ class BuildSrcPluginIntegrationTest extends AbstractIntegrationSpec {
         buildFile << """
             apply plugin: MyPlugin
             // nuke buildSrc classes so we can't use them
-            project.delete(file("buildSrc/build/classes")) 
+            project.delete(file("buildSrc/build/classes"))
         """
         when:
         succeeds("myTaskMyPlugin")
@@ -168,6 +169,26 @@ class BuildSrcPluginIntegrationTest extends AbstractIntegrationSpec {
         then:
         outputContains("From MyPlugin")
         outputContains("From MyPluginSub")
+    }
+
+    def "Default buildSrc root project dependencies are on the api"() {
+        when:
+        file("buildSrc/settings.gradle") << "include ':subInBuildSrc'"
+        file("buildSrc/subInBuildSrc/build.gradle") << """
+            plugins { id 'java-library' }
+            dependencies { implementation(project(':')) }
+        """
+        file("buildSrc/subInBuildSrc/src/main/java/MySubProjectClass.java") << """
+            import org.gradle.api.Project;
+            import groovy.lang.Closure;
+            public class MySubProjectClass {
+                private Project p;
+                private Closure c;
+            }
+        """
+        then:
+        succeeds "help"
+        outputContains("Task :buildSrc:subInBuildSrc:compileJava")
     }
 
     private void writeBuildSrcPlugin(String location, String className) {

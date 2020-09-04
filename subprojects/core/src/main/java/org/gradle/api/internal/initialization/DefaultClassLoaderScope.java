@@ -51,64 +51,55 @@ public class DefaultClassLoaderScope extends AbstractClassLoaderScope {
     public DefaultClassLoaderScope(ClassLoaderScopeIdentifier id, ClassLoaderScope parent, ClassLoaderCache classLoaderCache, ClassLoaderScopeRegistryListener listener) {
         super(id, classLoaderCache, listener);
         this.parent = parent;
+        listener.childScopeCreated(parent.getId(), id);
     }
 
-    protected ClassLoader buildLockedLoader(ClassLoaderId id, ClassPath classPath) {
-        if (classPath.isEmpty()) {
-            return parent.getExportClassLoader();
+    private ClassLoader loader(ClassLoaderId id, ClassLoader parent, ClassPath classPath, @Nullable List<ClassLoader> additionalLoaders) {
+        if (additionalLoaders == null) {
+            return loader(id, parent, classPath);
         }
-        return loader(id, classPath);
+        return new CachingClassLoader(multiLoader(id, parent, classPath, additionalLoaders));
     }
 
-    private ClassLoader buildLockedLoader(ClassLoaderId id, ClassLoader additional, ClassPath classPath) {
-        if (classPath.isEmpty()) {
-            return additional;
-        }
-        return new CachingClassLoader(new MultiParentClassLoader(additional, loader(id, classPath)));
-    }
-
-    private ClassLoader buildLockedLoader(ClassLoaderId id, ClassPath classPath, @Nullable List<ClassLoader> loaders) {
-        if (loaders != null) {
-            return new CachingClassLoader(buildMultiLoader(id, classPath, loaders));
-        }
-        return buildLockedLoader(id, classPath);
-    }
-
-    private MultiParentClassLoader buildMultiLoader(ClassLoaderId id, ClassPath classPath, @Nullable List<ClassLoader> loaders) {
+    private MultiParentClassLoader multiLoader(ClassLoaderId id, ClassLoader parent, ClassPath classPath, @Nullable List<ClassLoader> additionalLoaders) {
         int numParents = 1;
-        if (loaders != null) {
-            numParents += loaders.size();
+        if (additionalLoaders != null) {
+            numParents += additionalLoaders.size();
         }
         if (!classPath.isEmpty()) {
             numParents += 1;
         }
-        List<ClassLoader> parents = new ArrayList<ClassLoader>(numParents);
-        parents.add(parent.getExportClassLoader());
-        if (loaders != null) {
-            parents.addAll(loaders);
+        List<ClassLoader> parents = new ArrayList<>(numParents);
+        parents.add(parent);
+        if (additionalLoaders != null) {
+            parents.addAll(additionalLoaders);
         }
         if (!classPath.isEmpty()) {
-            parents.add(loader(id, classPath));
+            parents.add(loader(id, parent, classPath));
         }
         return new MultiParentClassLoader(parents);
     }
 
-    protected void buildEffectiveLoaders() {
+    private ClassLoader localLoader(ClassLoaderId classLoaderId, ClassLoader parent, ClassPath classPath) {
+        return loader(classLoaderId, parent, classPath);
+    }
+
+    private void buildEffectiveLoaders() {
         if (effectiveLocalClassLoader == null) {
             boolean hasExports = !export.isEmpty() || exportLoaders != null;
             boolean hasLocals = !local.isEmpty();
             if (locked) {
                 if (hasExports && hasLocals) {
-                    effectiveExportClassLoader = buildLockedLoader(id.exportId(), export, exportLoaders);
-                    effectiveLocalClassLoader = buildLockedLoader(id.localId(), effectiveExportClassLoader, local);
+                    effectiveExportClassLoader = loader(id.exportId(), parent.getExportClassLoader(), export, exportLoaders);
+                    effectiveLocalClassLoader = localLoader(id.localId(), effectiveExportClassLoader, local);
                 } else if (hasLocals) {
                     classLoaderCache.remove(id.exportId());
-                    effectiveLocalClassLoader = buildLockedLoader(id.localId(), local);
                     effectiveExportClassLoader = parent.getExportClassLoader();
+                    effectiveLocalClassLoader = localLoader(id.localId(), effectiveExportClassLoader, local);
                 } else if (hasExports) {
                     classLoaderCache.remove(id.localId());
-                    effectiveLocalClassLoader = buildLockedLoader(id.exportId(), export, exportLoaders);
-                    effectiveExportClassLoader = effectiveLocalClassLoader;
+                    effectiveExportClassLoader = loader(id.exportId(), parent.getExportClassLoader(), export, exportLoaders);
+                    effectiveLocalClassLoader = effectiveExportClassLoader;
                 } else {
                     classLoaderCache.remove(id.localId());
                     classLoaderCache.remove(id.exportId());
@@ -120,16 +111,14 @@ public class DefaultClassLoaderScope extends AbstractClassLoaderScope {
                     throw new IllegalStateException("Attempt to define scope class loader before scope is locked, scope identifier is " + id);
                 }
 
-                exportingClassLoader = buildMultiLoader(id.exportId(), export, exportLoaders);
+                exportingClassLoader = multiLoader(id.exportId(), parent.getExportClassLoader(), export, exportLoaders);
                 effectiveExportClassLoader = new CachingClassLoader(exportingClassLoader);
 
-                localClassLoader = new MultiParentClassLoader(effectiveExportClassLoader, loader(id.localId(), local));
+                localClassLoader = new MultiParentClassLoader(loader(id.localId(), effectiveExportClassLoader, local));
                 effectiveLocalClassLoader = new CachingClassLoader(localClassLoader);
             }
 
-            export = null;
             exportLoaders = null;
-            local = null;
         }
     }
 
@@ -162,10 +151,14 @@ public class DefaultClassLoaderScope extends AbstractClassLoaderScope {
         return false;
     }
 
-    private ClassLoader loader(ClassLoaderId id, ClassPath classPath) {
-        ClassLoader classLoader = classLoaderCache.get(id, classPath, parent.getExportClassLoader(), null);
+    protected ClassLoader loader(ClassLoaderId classLoaderId, ClassLoader parent, ClassPath classPath) {
+        if (classPath.isEmpty()) {
+            return parent;
+        }
+        ClassLoader classLoader = classLoaderCache.get(classLoaderId, classPath, parent, null);
+        listener.classloaderCreated(this.id, classLoaderId, classLoader, classPath, null);
         if (ownLoaders == null) {
-            ownLoaders = new ArrayList<ClassLoader>();
+            ownLoaders = new ArrayList<>();
         }
         ownLoaders.add(classLoader);
         return classLoader;
@@ -179,13 +172,12 @@ public class DefaultClassLoaderScope extends AbstractClassLoaderScope {
 
         assertNotLocked();
         if (localClassLoader != null) {
-            ClassLoader loader = loader(id.localId(), classPath);
+            ClassLoader loader = loader(id.localId(), effectiveExportClassLoader, classPath);
             localClassLoader.addParent(loader);
         } else {
             local = local.plus(classPath);
         }
 
-        localClasspathAdded(classPath);
         return this;
     }
 
@@ -197,12 +189,11 @@ public class DefaultClassLoaderScope extends AbstractClassLoaderScope {
 
         assertNotLocked();
         if (exportingClassLoader != null) {
-            exportingClassLoader.addParent(loader(id.exportId(), classPath));
+            exportingClassLoader.addParent(loader(id.exportId(), parent.getExportClassLoader(), classPath));
         } else {
             export = export.plus(classPath);
         }
 
-        exportClasspathAdded(classPath);
         return this;
     }
 
@@ -213,7 +204,7 @@ public class DefaultClassLoaderScope extends AbstractClassLoaderScope {
             exportingClassLoader.addParent(classLoader);
         } else {
             if (exportLoaders == null) {
-                exportLoaders = new ArrayList<ClassLoader>(1);
+                exportLoaders = new ArrayList<>(1);
             }
             exportLoaders.add(classLoader);
         }
@@ -239,21 +230,14 @@ public class DefaultClassLoaderScope extends AbstractClassLoaderScope {
     }
 
     @Override
-    public ClassLoaderScope deprecated() {
-        ClassLoaderScopeIdentifier childId = id.child("deprecated");
-        DeprecatedClassLoaderScope deprecatedScope = new DeprecatedClassLoaderScope(childId, parent, classLoaderCache, export.plus(local), listener);
-        childScopeCreated(childId);
-        if (isLocked()) {
-            deprecatedScope.lock();
+    public void onReuse() {
+        parent.onReuse();
+        listener.childScopeCreated(parent.getId(), id);
+        if (!export.isEmpty()) {
+            listener.classloaderCreated(this.id, id.exportId(), effectiveExportClassLoader, export, null);
         }
-        return deprecatedScope;
-    }
-
-    protected void exportClasspathAdded(ClassPath classPath) {
-        listener.exportClasspathAdded(id, classPath);
-    }
-
-    protected void localClasspathAdded(ClassPath classPath) {
-        listener.localClasspathAdded(id, classPath);
+        if (!local.isEmpty()) {
+            listener.classloaderCreated(this.id, id.localId(), effectiveLocalClassLoader, export, null);
+        }
     }
 }

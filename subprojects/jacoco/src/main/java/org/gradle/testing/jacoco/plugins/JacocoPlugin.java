@@ -22,6 +22,7 @@ import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.DependencySet;
+import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.ReportingBasePlugin;
@@ -46,13 +47,13 @@ import java.util.concurrent.Callable;
 /**
  * Plugin that provides support for generating Jacoco coverage data.
  */
-public class JacocoPlugin implements Plugin<ProjectInternal> {
+public class JacocoPlugin implements Plugin<Project> {
 
     /**
      * The jacoco version used if none is explicitly specified.
      * @since 3.4
      */
-    public static final String DEFAULT_JACOCO_VERSION = "0.8.4";
+    public static final String DEFAULT_JACOCO_VERSION = "0.8.5";
     public static final String AGENT_CONFIGURATION_NAME = "jacocoAgent";
     public static final String ANT_CONFIGURATION_NAME = "jacocoAnt";
     public static final String PLUGIN_EXTENSION_NAME = "jacoco";
@@ -65,11 +66,12 @@ public class JacocoPlugin implements Plugin<ProjectInternal> {
     }
 
     @Override
-    public void apply(ProjectInternal project) {
+    public void apply(Project project) {
         project.getPluginManager().apply(ReportingBasePlugin.class);
         this.project = project;
         addJacocoConfigurations();
-        JacocoAgentJar agent = instantiator.newInstance(JacocoAgentJar.class, project);
+        ProjectInternal projectInternal = (ProjectInternal) project;
+        JacocoAgentJar agent = instantiator.newInstance(JacocoAgentJar.class, projectInternal.getServices().get(FileOperations.class));
         JacocoPluginExtension extension = project.getExtensions().create(PLUGIN_EXTENSION_NAME, JacocoPluginExtension.class, project, agent);
         extension.setToolVersion(DEFAULT_JACOCO_VERSION);
         final ReportingExtension reportingExtension = (ReportingExtension) project.getExtensions().getByName(ReportingExtension.NAME);

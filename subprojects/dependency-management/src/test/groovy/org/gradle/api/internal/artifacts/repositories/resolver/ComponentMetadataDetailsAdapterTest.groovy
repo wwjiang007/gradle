@@ -56,15 +56,15 @@ class ComponentMetadataDetailsAdapterTest extends Specification {
     def mavenMetadataFactory = DependencyManagementTestUtil.mavenMetadataFactory()
 
     def gradleMetadata
-    def adapterOnMavenMetadata = new ComponentMetadataDetailsAdapter(mavenComponentMetadata(), instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser)
-    def adapterOnIvyMetadata = new ComponentMetadataDetailsAdapter(ivyComponentMetadata(), instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser)
-    def adapterOnGradleMetadata = new ComponentMetadataDetailsAdapter(gradleComponentMetadata(), instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser)
+    def adapterOnMavenMetadata = new ComponentMetadataDetailsAdapter(mavenComponentMetadata(), instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser, DependencyManagementTestUtil.platformSupport())
+    def adapterOnIvyMetadata = new ComponentMetadataDetailsAdapter(ivyComponentMetadata(), instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser, DependencyManagementTestUtil.platformSupport())
+    def adapterOnGradleMetadata = new ComponentMetadataDetailsAdapter(gradleComponentMetadata(), instantiator, dependencyMetadataNotationParser, dependencyConstraintMetadataNotationParser, componentIdentifierNotationParser, DependencyManagementTestUtil.platformSupport())
 
     private ivyComponentMetadata() {
         ivyMetadataFactory.create(componentIdentifier, [], [new Configuration("configurationDefinedInIvyMetadata", true, true, [])], [], [])
     }
     private gradleComponentMetadata() {
-        def metadata = mavenMetadataFactory.create(componentIdentifier)
+        def metadata = mavenMetadataFactory.create(componentIdentifier, [])
         metadata.addVariant("variantDefinedInGradleMetadata1", attributes) //gradle metadata is distinguished from maven POM metadata by explicitly defining variants
         metadata.addVariant("variantDefinedInGradleMetadata2", AttributeTestUtil.attributesFactory().of(testAttribute, "other")) //gradle metadata is distinguished from maven POM metadata by explicitly defining variants
         gradleMetadata = metadata
@@ -72,7 +72,7 @@ class ComponentMetadataDetailsAdapterTest extends Specification {
     }
 
     private MutableMavenModuleResolveMetadata mavenComponentMetadata() {
-        mavenMetadataFactory.create(componentIdentifier)
+        mavenMetadataFactory.create(componentIdentifier, [])
     }
 
     def setup() {
@@ -156,7 +156,7 @@ class ComponentMetadataDetailsAdapterTest extends Specification {
         def componentIdentifier = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId("org.test", "consumer"), "1.0")
         def consumerIdentifier = DefaultModuleVersionIdentifier.newId(componentIdentifier)
         def componentSelector = newSelector(DefaultModuleIdentifier.newId(consumerIdentifier.group, consumerIdentifier.name), new DefaultMutableVersionConstraint(consumerIdentifier.version))
-        def consumer = new LocalComponentDependencyMetadata(componentIdentifier, componentSelector, "default", attributes, ImmutableAttributes.EMPTY, null, [] as List, [], false, false, true, false, null)
+        def consumer = new LocalComponentDependencyMetadata(componentIdentifier, componentSelector, "default", attributes, ImmutableAttributes.EMPTY, null, [] as List, [], false, false, true, false, false, null)
 
         def configuration = consumer.selectConfigurations(attributes, immutable, schema, [] as Set)[0]
         configuration.dependencies

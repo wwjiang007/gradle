@@ -109,11 +109,11 @@ public abstract class SwiftProjectInitDescriptor extends LanguageLibraryProjectI
             buildScriptBuilder.methodInvocation("Swift tool chain does not support Windows. The following targets macOS and Linux:", "targetMachines.add", buildScriptBuilder.propertyExpression("machines.macOS.x86_64"));
             buildScriptBuilder.methodInvocation(null, "targetMachines.add", buildScriptBuilder.propertyExpression("machines.linux.x86_64"));
         } else {
-            buildScriptBuilder.methodInvocation(null, "targetMachines.add", buildScriptBuilder.propertyExpression(getHostTargetMachineDefinition()));
+            buildScriptBuilder.methodInvocation("Set the target operating system and architecture for this library", "targetMachines.add", buildScriptBuilder.propertyExpression(getHostTargetMachineDefinition()));
         }
     }
 
-    TemplateOperation fromSwiftTemplate(String template, InitSettings settings, String sourceSetName, String sourceDir) {
+    TemplateOperation fromSwiftTemplate(String template, InitSettings settings, String sourceSetName, @SuppressWarnings("SameParameterValue") String sourceDir) {
         String targetFileName = template.substring(template.lastIndexOf("/") + 1).replace(".template", "");
         return fromSwiftTemplate(template, targetFileName, settings, sourceSetName, sourceDir);
     }
@@ -123,11 +123,11 @@ public abstract class SwiftProjectInitDescriptor extends LanguageLibraryProjectI
             throw new IllegalArgumentException("Project name cannot be empty for a Swift project");
         }
 
-        String moduleName = toModuleName(settings.getProjectName());
+        String moduleName = toModuleName(settings.getSubprojectName());
 
         return templateOperationFactory.newTemplateOperation()
             .withTemplate(template)
-            .withTarget("src/" + sourceSetName + "/" + sourceDir + "/" + targetFileName)
+            .withTarget(settings.getTarget().file(settings.getSubprojectName() + "/src/" + sourceSetName + "/" + sourceDir + "/" + targetFileName).getAsFile())
             .withBinding("projectName", settings.getProjectName())
             .withBinding("moduleName", moduleName)
             .create();

@@ -57,7 +57,7 @@ public class DefaultVisualStudioProject implements VisualStudioProjectInternal {
     private final String componentName;
     private final Property<VersionNumber> visualStudioVersion;
     private final Property<VersionNumber> sdkVersion;
-    private final List<File> additionalFiles = new ArrayList<File>();
+    private final List<File> additionalFiles = new ArrayList<>();
     private final Map<VisualStudioTargetBinary, VisualStudioProjectConfiguration> configurations = new LinkedHashMap<VisualStudioTargetBinary, VisualStudioProjectConfiguration>();
     private final DefaultTaskDependency buildDependencies = new DefaultTaskDependency();
     private final ConfigurableFileCollection sourceFiles;
@@ -71,7 +71,7 @@ public class DefaultVisualStudioProject implements VisualStudioProjectInternal {
         this.projectFile = objectFactory.newInstance(DefaultConfigFile.class, fileResolver, getName() + ".vcxproj");
         this.filtersFile = objectFactory.newInstance(DefaultConfigFile.class, fileResolver, getName() + ".vcxproj.filters");
         this.sourceFiles = objectFactory.fileCollection().from(providerFactory.provider(() -> {
-            Set<File> allSourcesFromBinaries = new LinkedHashSet<File>();
+            Set<File> allSourcesFromBinaries = new LinkedHashSet<>();
             for (VisualStudioTargetBinary binary : configurations.keySet()) {
                 allSourcesFromBinaries.addAll(binary.getSourceFiles().getFiles());
             }
@@ -87,7 +87,6 @@ public class DefaultVisualStudioProject implements VisualStudioProjectInternal {
     }
 
     @Override
-    @Input
     public String getComponentName() {
         return componentName;
     }
@@ -174,7 +173,6 @@ public class DefaultVisualStudioProject implements VisualStudioProjectInternal {
         builtBy(nativeBinary.getHeaderFiles());
     }
 
-    @Internal
     public VisualStudioProjectConfiguration getConfiguration(VisualStudioTargetBinary nativeBinary) {
         return configurations.get(nativeBinary);
     }
@@ -194,16 +192,17 @@ public class DefaultVisualStudioProject implements VisualStudioProjectInternal {
         return name;
     }
 
+    @Internal
     public Property<VersionNumber> getVisualStudioVersion() {
         return visualStudioVersion;
     }
 
+    @Internal
     public Property<VersionNumber> getSdkVersion() {
         return sdkVersion;
     }
 
     @Override
-    @Internal
     public IdeProjectMetadata getPublishArtifact() {
         return new VisualStudioProjectMetadata(this);
     }

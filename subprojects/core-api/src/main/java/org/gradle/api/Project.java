@@ -115,7 +115,7 @@ import java.util.concurrent.Callable;
  * Plugins can be applied using the {@link PluginAware#apply(java.util.Map)} method, or by using the {@link org.gradle.plugin.use.PluginDependenciesSpec} plugins script block.
  * </p>
  *
- * <a name="properties"></a> <h3>Properties</h3>
+ * <a name="properties"></a> <h3>Dynamic Project Properties</h3>
  *
  * <p>Gradle executes the project's build file against the <code>Project</code> instance to configure the project. Any
  * property or method which your script uses is delegated through to the associated <code>Project</code> object.  This
@@ -530,7 +530,6 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * @see TaskContainer#create(String, Action)
      * @since 4.10
      */
-    @Incubating
     Task task(String name, Action<? super Task> configureAction);
 
     /**
@@ -670,6 +669,8 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      *
      * <li>A {@link Provider} of any supported type. The provider's value is resolved recursively.</li>
      *
+     * <li>A {@link org.gradle.api.resources.TextResource}.</li>
+     *
      * <li>A Groovy {@link Closure} or Kotlin function that returns any supported type. The closure's return value is resolved recursively.</li>
      *
      * <li>A {@link java.util.concurrent.Callable} that returns any supported type. The callable's return value is resolved recursively.</li>
@@ -728,6 +729,8 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * <li>A {@link java.util.Collection}, {@link Iterable}, or an array that contains objects of any supported type. The elements of the collection are recursively converted to files.</li>
      *
      * <li>A {@link org.gradle.api.file.FileCollection}. The contents of the collection are included in the returned collection.</li>
+     *
+     * <li>A {@link org.gradle.api.file.FileTree} or {@link org.gradle.api.file.DirectoryTree}. The contents of the tree are included in the returned collection.</li>
      *
      * <li>A {@link Provider} of any supported type. The provider's value is recursively converted to files. If the provider represents an output of a task, that task is executed if the file collection is used as an input to another task.
      *
@@ -814,6 +817,8 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * }
      * </pre>
      *
+     * <p>The order of the files in a {@code FileTree} is not stable, even on a single computer.
+     *
      * @param baseDir The base directory of the file tree. Evaluated as per {@link #file(Object)}.
      * @return the file tree. Never returns null.
      */
@@ -838,6 +843,8 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * <p>The returned file tree is lazy, so that it scans for files only when the contents of the file tree are
      * queried. The file tree is also live, so that it scans for files each time the contents of the file tree are
      * queried.</p>
+     *
+     * <p>The order of the files in a {@code FileTree} is not stable, even on a single computer.
      *
      * @param baseDir The base directory of the file tree. Evaluated as per {@link #file(Object)}.
      * @param configureClosure Closure to configure the {@code ConfigurableFileTree} object.
@@ -864,6 +871,8 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * queried. The file tree is also live, so that it scans for files each time the contents of the file tree are
      * queried.</p>
      *
+     * <p>The order of the files in a {@code FileTree} is not stable, even on a single computer.
+     *
      * @param baseDir The base directory of the file tree. Evaluated as per {@link #file(Object)}.
      * @param configureAction Action to configure the {@code ConfigurableFileTree} object.
      * @return the configured file tree. Never returns null.
@@ -886,6 +895,8 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * <p>The returned file tree is lazy, so that it scans for files only when the contents of the file tree are
      * queried. The file tree is also live, so that it scans for files each time the contents of the file tree are
      * queried.</p>
+     *
+     * <p>The order of the files in a {@code FileTree} is not stable, even on a single computer.
      *
      * @param args map of property assignments to {@code ConfigurableFileTree} object
      * @return the configured file tree. Never returns null.
@@ -952,7 +963,6 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      * @see org.gradle.api.provider.ProviderFactory#provider(Callable)
      * @since 4.0
      */
-    @Incubating
     <T> Provider<T> provider(Callable<T> value);
 
     /**
@@ -960,7 +970,6 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      *
      * @since 4.0
      */
-    @Incubating
     ProviderFactory getProviders();
 
     /**
@@ -968,7 +977,6 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      *
      * @since 4.0
      */
-    @Incubating
     ObjectFactory getObjects();
 
     /**
@@ -976,7 +984,6 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      *
      * @since 4.1
      */
-    @Incubating
     ProjectLayout getLayout();
 
     /**
@@ -1743,7 +1750,6 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      *
      * @since 4.8
      */
-    @Incubating
     void dependencyLocking(Action<? super DependencyLockingHandler> configuration);
 
     /**
@@ -1751,6 +1757,5 @@ public interface Project extends Comparable<Project>, ExtensionAware, PluginAwar
      *
      * @since 4.8
      */
-    @Incubating
     DependencyLockingHandler getDependencyLocking();
 }

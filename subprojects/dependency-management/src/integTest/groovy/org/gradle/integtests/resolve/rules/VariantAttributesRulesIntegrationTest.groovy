@@ -17,7 +17,6 @@ package org.gradle.integtests.resolve.rules
 
 import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
 import org.gradle.integtests.fixtures.RequiredFeature
-import org.gradle.integtests.fixtures.RequiredFeatures
 import org.gradle.integtests.resolve.AbstractModuleDependencyResolveTest
 import spock.lang.Unroll
 
@@ -29,10 +28,10 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
      * Does the published metadata provide variants with attributes? Eventually all metadata should do that.
      * For Ivy and Maven POM metadata, the variants and attributes should be derived from configurations and scopes.
      */
-    boolean getPublishedModulesHaveAttributes() { gradleMetadataEnabled }
+    boolean getPublishedModulesHaveAttributes() { gradleMetadataPublished }
 
     String getVariantToTest() {
-        if (gradleMetadataEnabled || useIvy()) {
+        if (gradleMetadataPublished || useIvy()) {
             'customVariant'
         } else {
             'compile'
@@ -52,7 +51,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
             def formatAttribute = Attribute.of('format', String)
 
             configurations { $variantToTest { attributes { attribute(formatAttribute, 'custom') } } }
-            
+
             dependencies {
                 $variantToTest group: 'org.test', name: 'moduleA', version: '1.0' ${publishedModulesHaveAttributes ? "" : ", configuration: '$variantToTest'"}
             }
@@ -72,7 +71,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
                 }
 
                 void execute(ComponentMetadataContext context) {
-                    context.details.withVariant("$variantToTest") { 
+                    context.details.withVariant("$variantToTest") {
                         attributes {
                             attribute(attribute, "custom")
                         }
@@ -122,6 +121,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
     def "can override attributes"() {
         given:
         withDefaultVariantToTest()
+        def transitiveSelectedVariant = !gradleMetadataPublished && useIvy()? 'default' : variantToTest
         buildFile << """
             class AttributeRule implements ComponentMetadataRule {
                 Attribute attribute
@@ -132,7 +132,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
                 }
 
                 void execute(ComponentMetadataContext context) {
-                    context.details.withVariant("$variantToTest") { 
+                    context.details.withVariant("$transitiveSelectedVariant") {
                         attributes {
                             attribute(attribute, "custom")
                         }
@@ -152,7 +152,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
         repository {
             'org.test:moduleB:1.0' {
                 variant('customVariant') {
-                    if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+                    if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
                         artifact 'variant1'
                     }
                     attribute 'format', 'will be overridden'
@@ -168,7 +168,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
             }
             'org.test:moduleB:1.0'() {
                 expectGetMetadata()
-                if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+                if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
                     expectGetVariantArtifacts('customVariant')
                 } else {
                     expectGetArtifact()
@@ -185,7 +185,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
                     module("org.test:moduleB:1.0") {
                         String expectedTargetVariant
                         Map<String, String> expectedAttributes
-                        if (GradleMetadataResolveRunner.gradleMetadataEnabled) {
+                        if (GradleMetadataResolveRunner.gradleMetadataPublished) {
                             // when Gradle metadata is on, variants used during selection are Gradle defined variants
                             // and here, they do not define any "usage". However, they do define a "status". The selected variant
                             // is target to the metadata rule, which explains we find the "format" attribute here
@@ -195,7 +195,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
                         } else {
                             if (GradleMetadataResolveRunner.useIvy()) {
                                 // Ivy doesn't derive any variant
-                                expectedTargetVariant = 'customVariant'
+                                expectedTargetVariant = 'default'
                                 expectedAttributes = [format: 'custom', 'org.gradle.status': GradleMetadataResolveRunner.useIvy() ? 'integration' : 'release']
                             } else {
                                 // for Maven, we derive variants for compile/runtime. Variants are then used during selection, and are subject
@@ -232,7 +232,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
                 }
 
                 void execute(ComponentMetadataContext context) {
-                    context.details.withVariant("$variantToTest") { 
+                    context.details.withVariant("$variantToTest") {
                         attributes {
                             // defines the 'format' attribute with value 'custom' on all variants
                             // which will be inherited by artifacts
@@ -261,7 +261,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
         repository {
             'org.test:moduleB:1.0' {
                 variant('customVariant') {
-                    if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+                    if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
                         artifact 'variant1'
                     }
                 }
@@ -276,7 +276,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
             }
             'org.test:moduleB:1.0'() {
                 expectGetMetadata()
-                if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+                if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
                     expectGetVariantArtifacts('customVariant')
                 } else {
                     expectGetArtifact()
@@ -291,7 +291,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
             root(':', ':test:') {
                 module("org.test:moduleA:1.0:$expectedVariant") {
                     module("org.test:moduleB:1.0") {
-                        if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+                        if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
                             artifact group: 'org', module: 'moduleB', version: '1.0', classifier: 'variant1'
                         }
                     }
@@ -304,7 +304,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
         given:
         withDefaultVariantToTest()
         int invalidCount = 2
-        if (GradleMetadataResolveRunner.useMaven() && !GradleMetadataResolveRunner.gradleMetadataEnabled) {
+        if (GradleMetadataResolveRunner.useMaven() && !GradleMetadataResolveRunner.gradleMetadataPublished) {
             // for Maven with experimental, we use variant aware matching which will (today) involve another round
             // of execution of the rule
             invalidCount++
@@ -314,7 +314,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
             dependencies {
                 components {
                     withModule('org.test:moduleB') {
-                        withVariant("$variantToTest") { 
+                        withVariant("$variantToTest") {
                             attributes {
                                 if (++cpt == $invalidCount) {
                                     throw new IllegalStateException("rule should only be applied once on variant $variantToTest")
@@ -370,7 +370,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
                 }
 
                 void execute(ComponentMetadataContext context) {
-                    context.details.withVariant('$selectedVariant') { 
+                    context.details.withVariant('$selectedVariant') {
                         attributes {
                             attribute(attribute, "select")
                         }
@@ -406,7 +406,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
 
         when:
         // @RequiredFeatures not compatible with @Unroll at method level
-        if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+        if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
             repositoryInteractions {
                 'org.test:moduleA:1.0' {
                     expectGetMetadata()
@@ -421,7 +421,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
 
         then:
         // @RequiredFeatures not compatible with @Unroll at method level
-        if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+        if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
             succeeds 'checkDep'
 
             def expectedVariant = variantToTest
@@ -440,10 +440,8 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
         selectedVariant << ['customVariant1', 'customVariant2']
     }
 
-    @RequiredFeatures(
-        // published attributes are only available in Gradle metadata
-        @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true")
-    )
+    // published attributes are only available in Gradle metadata
+    @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true")
     def "published variant metadata can be overwritten"() {
         given:
         repository {
@@ -458,7 +456,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
         }
         buildFile << """
             def quality = Attribute.of("quality", String)
-            
+
             class AttributeRule implements ComponentMetadataRule {
                 Attribute attribute
 
@@ -479,7 +477,7 @@ class VariantAttributesRulesIntegrationTest extends AbstractModuleDependencyReso
             configurations {
                 ${variantToTest}.attributes.attribute(quality, 'qa')
             }
-            
+
             dependencies {
                 attributesSchema {
                     attribute(quality)

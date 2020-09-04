@@ -17,13 +17,16 @@
 package org.gradle.performance.regression.nativeplatform
 
 import org.gradle.performance.AbstractCrossVersionGradleProfilerPerformanceTest
+import org.gradle.util.Requires
+import org.gradle.util.TestPrecondition
 import spock.lang.Unroll
 
+@Requires(TestPrecondition.LINUX)
 class NativeBuildDependentsPerformanceTest extends AbstractCrossVersionGradleProfilerPerformanceTest {
 
     def setup() {
-        runner.targetVersions = ["5.7-20190722220035+0000"]
-        runner.minimumVersion = "4.0"
+        runner.targetVersions = ["6.7-20200824220048+0000"]
+        runner.minimumBaseVersion = "4.0"
     }
 
     @Unroll

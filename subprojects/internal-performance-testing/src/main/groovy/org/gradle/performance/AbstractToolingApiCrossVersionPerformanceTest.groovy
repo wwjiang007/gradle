@@ -16,6 +16,7 @@
 
 package org.gradle.performance
 
+import org.apache.commons.io.FileUtils
 import org.gradle.integtests.fixtures.RepoScriptBlockUtil
 import org.gradle.integtests.fixtures.executer.GradleDistribution
 import org.gradle.integtests.fixtures.executer.IntegrationTestBuildContext
@@ -38,7 +39,6 @@ import org.gradle.performance.fixture.AbstractCrossVersionPerformanceTestRunner
 import org.gradle.performance.fixture.BuildExperimentSpec
 import org.gradle.performance.fixture.InvocationSpec
 import org.gradle.performance.fixture.OperationTimer
-import org.gradle.performance.fixture.PerformanceTestConditions
 import org.gradle.performance.fixture.PerformanceTestDirectoryProvider
 import org.gradle.performance.fixture.PerformanceTestGradleDistribution
 import org.gradle.performance.fixture.PerformanceTestIdProvider
@@ -63,13 +63,12 @@ import org.junit.Rule
 import org.junit.experimental.categories.Category
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import spock.lang.Retry
 import spock.lang.Shared
 import spock.lang.Specification
 
 import java.lang.reflect.Proxy
 
-import static spock.lang.Retry.Mode.SETUP_FEATURE_CLEANUP
+import static org.gradle.performance.results.ResultsStoreHelper.createResultsStoreWhenDatabaseAvailable
 
 /**
  * Base class for all Tooling API performance regression tests. Subclasses can profile arbitrary actions against a {@link ProjectConnection).
@@ -78,13 +77,12 @@ import static spock.lang.Retry.Mode.SETUP_FEATURE_CLEANUP
  */
 @Category(PerformanceRegressionTest)
 @CleanupTestDirectory
-@Retry(condition = { PerformanceTestConditions.whenSlowerButNotAdhoc(failure) }, mode = SETUP_FEATURE_CLEANUP, count = 2)
 abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specification {
     protected final static ReleasedVersionDistributions RELEASES = new ReleasedVersionDistributions()
     protected final static GradleDistribution CURRENT = new UnderDevelopmentGradleDistribution()
 
-    static def resultStore = new CrossVersionResultsStore()
-    final TestNameTestDirectoryProvider temporaryFolder = new PerformanceTestDirectoryProvider()
+    private static final RESULTS_STORE = createResultsStoreWhenDatabaseAvailable { new CrossVersionResultsStore() }
+    final TestNameTestDirectoryProvider temporaryFolder = new PerformanceTestDirectoryProvider(getClass())
 
     protected ToolingApiExperiment experiment
 
@@ -123,16 +121,16 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
     static {
         // TODO - find a better way to cleanup
         System.addShutdownHook {
-            ((Closeable) resultStore).close()
+            ((Closeable) RESULTS_STORE).close()
         }
     }
 
-    public class ToolingApiExperiment {
+    class ToolingApiExperiment {
         final String projectName
         String displayName
         String testClassName
         List<String> targetVersions = []
-        String minimumVersion
+        String minimumBaseVersion
         List<File> extraTestClassPath = []
         Closure<?> action
         Integer invocationCount
@@ -150,7 +148,7 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
     private static class ToolingApiBuildExperimentSpec extends BuildExperimentSpec {
 
         ToolingApiBuildExperimentSpec(String version, TestFile workingDir, ToolingApiExperiment experiment) {
-            super(version, experiment.projectName, workingDir, experiment.warmUpCount ?: 10, experiment.invocationCount ?: 40, null, null)
+            super(version, experiment.projectName, workingDir, experiment.warmUpCount ?: 10, experiment.invocationCount ?: 40, null, [])
         }
 
         @Override
@@ -169,7 +167,7 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
 
         private CrossVersionPerformanceResults run() {
             def testId = experiment.displayName
-            Assume.assumeTrue(TestScenarioSelector.shouldRun(experiment.testClassName, testId, [experiment.projectName].toSet(), resultStore))
+            Assume.assumeTrue(TestScenarioSelector.shouldRun(experiment.testClassName, testId, [experiment.projectName].toSet(), RESULTS_STORE))
             profiler = Profiler.create()
             try {
                 doRun(testId)
@@ -201,15 +199,15 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
                 channel: ResultsStoreHelper.determineChannel(),
                 teamCityBuildId: ResultsStoreHelper.determineTeamCityBuildId()
             )
-            def resolver = new ToolingApiDistributionResolver().withDefaultRepository()
+            def resolver = new ToolingApiDistributionResolver().withDefaultRepository().withExternalToolingApiDistribution()
             try {
-                List<String> baselines = AbstractCrossVersionPerformanceTestRunner.toBaselineVersions(RELEASES, experiment.targetVersions, experiment.minimumVersion).toList()
+                List<String> baselines = AbstractCrossVersionPerformanceTestRunner.toBaselineVersions(RELEASES, experiment.targetVersions, experiment.minimumBaseVersion).toList()
                 [*baselines, 'current'].each { String version ->
                     def experimentSpec = new ToolingApiBuildExperimentSpec(version, temporaryFolder.testDirectory, experiment)
                     def workingDirProvider = copyTemplateTo(projectDir, experimentSpec.workingDirectory, version)
                     GradleDistribution dist = 'current' == version ? CURRENT : buildContext.distribution(version)
                     println "Testing ${dist.version}..."
-                    def toolingApiDistribution = new PerformanceTestToolingApiDistribution(resolver.resolve(dist.version.version), workingDirProvider.testDirectory)
+                    def toolingApiDistribution = new PerformanceTestToolingApiDistribution(resolver.resolve(dist == CURRENT ? dist.version.baseVersion.version : dist.version.version), workingDirProvider.testDirectory)
                     List<File> testClassPath = [*experiment.extraTestClassPath]
                     // add TAPI test fixtures to classpath
                     testClassPath << ClasspathUtil.getClasspathForClass(ToolingApi)
@@ -233,7 +231,7 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
 
             results.endTime = clock.getCurrentTime()
 
-            resultStore.report(results)
+            RESULTS_STORE.report(results)
 
             results
         }
@@ -241,7 +239,7 @@ abstract class AbstractToolingApiCrossVersionPerformanceTest extends Specificati
         private TestDirectoryProvider copyTemplateTo(File templateDir, File workingDir, String version) {
             TestFile perVersionDir = new TestFile(workingDir, version)
             if (perVersionDir.exists()) {
-                GFileUtils.cleanDirectory(perVersionDir)
+                FileUtils.cleanDirectory(perVersionDir)
             } else {
                 perVersionDir.mkdirs()
             }

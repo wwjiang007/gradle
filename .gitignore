@@ -6,6 +6,7 @@
 /buildSrc/subprojects/*/build
 /subprojects/*/build
 /subprojects/docs/src/samples/**/build
+/subprojects/docs/src/snippets/**/build
 /subprojects/internal-android-performance-testing/build-android-libs
 
 # IDEA
@@ -14,6 +15,8 @@
 /.idea/*
 !/.idea/codeStyles
 !/.idea/inspectionProfiles
+!/.idea/icon.png
+!/.idea/icon_dark.png
 */**/.idea
 .shelf
 /*.iml
@@ -32,7 +35,6 @@
 /subprojects/*/out
 /.teamcity/*.iml
 /.teamcity/target
-!/.teamcity/Gradle_Check_dsl.iml
 
 # Eclipse
 # -------

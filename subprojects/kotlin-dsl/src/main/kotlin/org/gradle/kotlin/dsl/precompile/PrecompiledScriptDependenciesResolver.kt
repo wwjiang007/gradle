@@ -17,8 +17,8 @@
 package org.gradle.kotlin.dsl.precompile
 
 import org.gradle.internal.hash.Hashing
-
 import org.gradle.kotlin.dsl.resolver.KotlinBuildScriptDependencies
+import org.gradle.util.TextUtil.convertLineSeparatorsToUnix
 
 import java.util.concurrent.Future
 
@@ -33,7 +33,35 @@ class PrecompiledScriptDependenciesResolver : ScriptDependenciesResolver {
 
     companion object {
 
-        fun hashOf(charSequence: CharSequence?) = Hashing.hashString(charSequence).toString()
+        fun hashOf(charSequence: CharSequence) =
+            hashOfNormalisedString(convertLineSeparatorsToUnix(charSequence.toString()))
+
+        fun hashOfNormalisedString(charSequence: CharSequence) =
+            Hashing.hashString(charSequence).toString()
+
+        /**
+         * **Optimisation note**: assumes [scriptText] contains only `\n` line separators as any script text
+         * coming from the Kotlin compiler already should.
+         */
+        fun implicitImportsForScript(scriptText: CharSequence, environment: Environment?) =
+            implicitImportsFrom(environment) + precompiledScriptPluginImportsFrom(environment, scriptText)
+
+        private
+        fun implicitImportsFrom(environment: Environment?) =
+            environment.stringList(EnvironmentProperties.kotlinDslImplicitImports)
+
+        private
+        fun precompiledScriptPluginImportsFrom(environment: Environment?, scriptText: CharSequence): List<String> =
+            environment.stringList(hashOfNormalisedString(scriptText))
+
+        private
+        fun Environment?.stringList(key: String) =
+            string(key)?.split(':')
+                ?: emptyList()
+
+        private
+        fun Environment?.string(key: String) =
+            this?.get(key) as? String
     }
 
     object EnvironmentProperties {
@@ -49,26 +77,11 @@ class PrecompiledScriptDependenciesResolver : ScriptDependenciesResolver {
 
         PseudoFuture(
             KotlinBuildScriptDependencies(
-                imports = implicitImportsFrom(environment) + precompiledScriptPluginImportsFrom(environment, script),
                 classpath = emptyList(),
-                sources = emptyList()
+                sources = emptyList(),
+                imports = implicitImportsForScript(script.text!!, environment),
+                javaHome = null,
+                classPathBlocksHash = null
             )
         )
-
-    private
-    fun implicitImportsFrom(environment: Environment?) =
-        environment.stringList(EnvironmentProperties.kotlinDslImplicitImports)
-
-    private
-    fun precompiledScriptPluginImportsFrom(environment: Environment?, script: ScriptContents): List<String> =
-        environment.stringList(hashOf(script.text))
-
-    private
-    fun Environment?.stringList(key: String) =
-        string(key)?.split(':')
-            ?: emptyList()
-
-    private
-    fun Environment?.string(key: String) =
-        this?.get(key) as? String
 }

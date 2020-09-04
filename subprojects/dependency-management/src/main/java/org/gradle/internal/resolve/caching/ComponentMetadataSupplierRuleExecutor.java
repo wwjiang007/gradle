@@ -20,20 +20,16 @@ import org.gradle.api.artifacts.ComponentMetadata;
 import org.gradle.api.artifacts.ComponentMetadataSupplierDetails;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.ResolvedModuleVersion;
-import org.gradle.api.internal.artifacts.configurations.dynamicversion.CachePolicy;
 import org.gradle.cache.CacheRepository;
 import org.gradle.cache.internal.InMemoryCacheDecoratorFactory;
 import org.gradle.internal.serialize.Serializer;
 import org.gradle.internal.snapshot.ValueSnapshotter;
 import org.gradle.util.BuildCommencedTimeProvider;
 
+import java.time.Duration;
+
 public class ComponentMetadataSupplierRuleExecutor extends CrossBuildCachingRuleExecutor<ModuleVersionIdentifier, ComponentMetadataSupplierDetails, ComponentMetadata> {
-    private final static Transformer<String, ModuleVersionIdentifier> KEY_TO_SNAPSHOTTABLE = new Transformer<String, ModuleVersionIdentifier>() {
-        @Override
-        public String transform(ModuleVersionIdentifier moduleVersionIdentifier) {
-            return moduleVersionIdentifier.toString();
-        }
-    };
+    private final static Transformer<String, ModuleVersionIdentifier> KEY_TO_SNAPSHOTTABLE = Object::toString;
 
     public ComponentMetadataSupplierRuleExecutor(CacheRepository cacheRepository,
                                                  InMemoryCacheDecoratorFactory cacheDecoratorFactory,
@@ -44,14 +40,10 @@ public class ComponentMetadataSupplierRuleExecutor extends CrossBuildCachingRule
     }
 
     public static EntryValidator<ComponentMetadata> createValidator(final BuildCommencedTimeProvider timeProvider) {
-        return new CrossBuildCachingRuleExecutor.EntryValidator<ComponentMetadata>() {
-            @Override
-            public boolean isValid(CachePolicy policy, final CrossBuildCachingRuleExecutor.CachedEntry<ComponentMetadata> entry) {
-                long age = timeProvider.getCurrentTime() - entry.getTimestamp();
-                final ComponentMetadata result = entry.getResult();
-                boolean mustRefreshModule = policy.mustRefreshModule(new SimpleResolvedModuleVersion(result), age, result.isChanging());
-                return !mustRefreshModule;
-            }
+        return (policy, entry) -> {
+            Duration age = Duration.ofMillis(timeProvider.getCurrentTime() - entry.getTimestamp());
+            final ComponentMetadata result = entry.getResult();
+            return !policy.moduleExpiry(new SimpleResolvedModuleVersion(result), age, result.isChanging()).isMustCheck();
         };
     }
 

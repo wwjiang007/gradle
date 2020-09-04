@@ -15,6 +15,7 @@
  */
 package org.gradle.language.nativeplatform
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.Sample
 import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationSpec
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
@@ -30,7 +31,7 @@ import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.VISUALCPP
 
 @Requires(TestPrecondition.CAN_INSTALL_EXECUTABLE)
 class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainIntegrationSpec {
-    @Rule final TestNameTestDirectoryProvider testDirProvider = new TestNameTestDirectoryProvider()
+    @Rule final TestNameTestDirectoryProvider testDirProvider = new TestNameTestDirectoryProvider(getClass())
     @Rule public final Sample assembler = sample(testDirProvider, 'assembler')
     @Rule public final Sample c = sample(testDirProvider, 'c')
     @Rule public final Sample cpp = sample(testDirProvider, 'cpp')
@@ -43,10 +44,11 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
     @Rule public final Sample pch = sample(testDirProvider, 'pre-compiled-headers')
 
     private static Sample sample(TestDirectoryProvider testDirectoryProvider, String name) {
-        return new Sample(testDirectoryProvider, "native-binaries/${name}", name)
+        return new Sample(testDirectoryProvider, "native-binaries/${name}/groovy", name)
     }
 
     @RequiresInstalledToolChain(SUPPORTS_32_AND_64)
+    @ToBeFixedForConfigurationCache
     def "assembler"() {
         given:
         sample assembler
@@ -61,6 +63,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
         installation(assembler.dir.file("build/install/main")).exec().out == "5 + 7 = 12\n"
     }
 
+    @ToBeFixedForConfigurationCache
     def "c"() {
         given:
         sample c
@@ -76,6 +79,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
         installation(c.dir.file("build/install/main")).exec().out == "Hello world!"
     }
 
+    @ToBeFixedForConfigurationCache
     def "cpp"() {
         given:
         sample cpp
@@ -93,6 +97,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
 
     @RequiresInstalledToolChain(GCC_COMPATIBLE)
     @Requires(TestPrecondition.NOT_WINDOWS)
+    @ToBeFixedForConfigurationCache
     def "objectiveC"() {
         given:
         sample objectiveC
@@ -109,6 +114,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
 
     @RequiresInstalledToolChain(GCC_COMPATIBLE)
     @Requires(TestPrecondition.NOT_WINDOWS)
+    @ToBeFixedForConfigurationCache
     def "objectiveCpp"() {
         given:
         sample objectiveCpp
@@ -124,6 +130,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
     }
 
     @RequiresInstalledToolChain(VISUALCPP)
+    @ToBeFixedForConfigurationCache
     def "win rc"() {
         given:
         sample windowsResources
@@ -147,6 +154,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
         file(windowsResources.dir.file("build/libs/helloRes/shared/helloRes.dll")).assertExists()
     }
 
+    @ToBeFixedForConfigurationCache
     def "custom layout"() {
         given:
         sample customLayout
@@ -162,6 +170,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
         installation(customLayout.dir.file("build/install/main")).exec().out == "Hello world!"
     }
 
+    @ToBeFixedForConfigurationCache
     def "idl"() {
         given:
         sample idl
@@ -177,6 +186,7 @@ class NativeLanguageSamplesIntegrationTest extends AbstractInstalledToolChainInt
         installation(idl.dir.file("build/install/main")).exec().out == "Hello from generated source!!\n"
     }
 
+    @ToBeFixedForConfigurationCache
     def "pch"() {
         given:
         sample pch

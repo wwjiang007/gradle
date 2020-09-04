@@ -25,7 +25,7 @@ class StronglyTypedConfigurationAttributesResolveIntegrationTest extends Abstrac
         '''
             interface Flavor extends Named {
             }
-            
+
             enum BuildType {
                 debug,
                 release
@@ -116,10 +116,10 @@ class StronglyTypedConfigurationAttributesResolveIntegrationTest extends Abstrac
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
                 artifacts {
                     'default' file('b-default.jar')
@@ -206,15 +206,15 @@ class StronglyTypedConfigurationAttributesResolveIntegrationTest extends Abstrac
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task foo2Jar(type: Jar) {
-                   baseName = 'b-foo2'
+                   archiveBaseName = 'b-foo2'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     foo2 foo2Jar
@@ -281,15 +281,15 @@ class StronglyTypedConfigurationAttributesResolveIntegrationTest extends Abstrac
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task foo2Jar(type: Jar) {
-                   baseName = 'b-foo2'
+                   archiveBaseName = 'b-foo2'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     foo2 foo2Jar
@@ -367,16 +367,16 @@ class StronglyTypedConfigurationAttributesResolveIntegrationTest extends Abstrac
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task foo2Jar(type: Jar) {
-                   baseName = 'b-foo2'
+                   archiveBaseName = 'b-foo2'
                 }
                 task foo3Jar(type: Jar) {
-                   baseName = 'b-foo3'
+                   archiveBaseName = 'b-foo3'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
                 artifacts {
                     foo fooJar
@@ -391,18 +391,15 @@ class StronglyTypedConfigurationAttributesResolveIntegrationTest extends Abstrac
         fails ':a:checkDebug'
 
         then:
-        failure.assertHasCause """Cannot choose between the following variants of project :b:
+        failure.assertHasCause """The consumer was configured to find attribute 'flavor' with value 'free', attribute 'buildType' with value 'debug'. However we cannot choose between the following variants of project :b:
   - foo2
   - foo3
 All of them match the consumer attributes:
-  - Variant 'foo2' capability test:b:unspecified:
-      - Compatible attributes:
-          - Required buildType 'debug' and found compatible value 'debug'.
-          - Required flavor 'free' and found compatible value 'ONE'.
-  - Variant 'foo3' capability test:b:unspecified:
-      - Compatible attributes:
-          - Required buildType 'debug' and found compatible value 'debug'.
-          - Required flavor 'free' and found compatible value 'ONE'."""
+  - Variant 'foo2' capability test:b:unspecified declares attribute 'buildType' with value 'debug', attribute 'flavor' with value 'ONE'
+  - Variant 'foo3' capability test:b:unspecified declares attribute 'buildType' with value 'debug', attribute 'flavor' with value 'ONE'
+The following variants were also considered but didn't match the requested attributes:
+  - Variant 'bar' capability test:b:unspecified declares attribute 'flavor' with value 'ONE':
+      - Incompatible because this component declares attribute 'buildType' with value 'release' and the consumer needed attribute 'buildType' with value 'debug'"""
     }
 
     def "can select best compatible match when single best matches are found on individual attributes"() {
@@ -482,18 +479,18 @@ All of them match the consumer attributes:
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task foo2Jar(type: Jar) {
-                   baseName = 'b-foo2'
+                   archiveBaseName = 'b-foo2'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
                 task bar2Jar(type: Jar) {
-                   baseName = 'b-bar2'
+                   archiveBaseName = 'b-bar2'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     foo2 foo2Jar
@@ -525,9 +522,9 @@ All of them match the consumer attributes:
             class FlavorSelectionRule implements AttributeDisambiguationRule<Flavor> {
                 void execute(MultipleCandidatesDetails<Flavor> details) {
                     if (details.consumerValue == null) {
-                        details.closestMatch(details.candidateValues.find { it.name == 'ONE' }) 
+                        details.closestMatch(details.candidateValues.find { it.name == 'ONE' })
                     } else if (details.consumerValue.name == 'free') {
-                        details.closestMatch(details.candidateValues.find { it.name == 'TWO' }) 
+                        details.closestMatch(details.candidateValues.find { it.name == 'TWO' })
                     }
                 }
             }
@@ -571,12 +568,12 @@ All of them match the consumer attributes:
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task foo2Jar(type: Jar) {
-                   baseName = 'b-foo2'
+                   archiveBaseName = 'b-foo2'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     foo2 foo2Jar
@@ -651,12 +648,12 @@ All of them match the consumer attributes:
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     bar barJar
@@ -724,12 +721,12 @@ All of them match the consumer attributes:
                     }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     bar barJar
@@ -770,7 +767,7 @@ All of them match the consumer attributes:
                     }
                 }
             }
-            
+
             project(':b') {
                 dependencies.attributesSchema {
                     attribute(flavor) {
@@ -782,12 +779,12 @@ All of them match the consumer attributes:
                     bar.attributes { $paid; $debug }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     bar barJar
@@ -838,12 +835,12 @@ All of them match the consumer attributes:
                     bar.attributes { attribute(platform, 'a'); $debug }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     bar barJar
@@ -895,12 +892,12 @@ All of them match the consumer attributes:
                     bar.attributes { attribute(platform, 'a'); $debug }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     bar barJar
@@ -970,12 +967,12 @@ All of them match the consumer attributes:
                     bar.attributes { attribute(arch, Arch.arm64); attribute(dummy, 'dummy') }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     bar barJar
@@ -987,12 +984,12 @@ All of them match the consumer attributes:
                     bar.attributes { attribute(arch, Arch.arm64); attribute(dummy, 'dummy') }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'c-foo'
+                   archiveBaseName = 'c-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'c-bar'
+                   archiveBaseName = 'c-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 artifacts {
                     foo fooJar
                     bar barJar
@@ -1016,7 +1013,7 @@ All of them match the consumer attributes:
 
             class FlavorCompatibilityRule implements AttributeCompatibilityRule<Flavor> {
                 String value
-            
+
                 @javax.inject.Inject
                 FlavorCompatibilityRule(String value) { this.value = value }
 
@@ -1068,15 +1065,15 @@ All of them match the consumer attributes:
             }
             project(':b') {
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task foo2Jar(type: Jar) {
-                   baseName = 'b-foo2'
+                   archiveBaseName = 'b-foo2'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
-                tasks.withType(Jar) { destinationDir = buildDir }
+                tasks.withType(Jar) { destinationDirectory = buildDir }
                 configurations {
                     c1 { attributes { attribute(flavor, objects.named(Flavor, 'preview')); $debug } }
                     c2 { attributes { attribute(flavor, objects.named(Flavor, 'preview')); $release } }
@@ -1139,7 +1136,7 @@ All of them match the consumer attributes:
                     bar.attributes { $paid; $debug }
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
                 artifacts {
                     bar barJar
@@ -1157,7 +1154,7 @@ All of them match the consumer attributes:
         failure.assertHasCause("Could not resolve project :b.")
         failure.assertHasCause("Could not determine whether value paid is compatible with value free using FlavorCompatibilityRule.")
         failure.assertHasCause("Could not create an instance of type FlavorCompatibilityRule.")
-        failure.assertHasCause("The constructor for class FlavorCompatibilityRule should be annotated with @Inject.")
+        failure.assertHasCause("The constructor for type FlavorCompatibilityRule should be annotated with @Inject.")
     }
 
     def "user receives reasonable error message when compatibility rule fails"() {
@@ -1199,7 +1196,7 @@ All of them match the consumer attributes:
                     bar.attributes { $paid; $debug }
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
                 artifacts {
                     bar barJar
@@ -1267,10 +1264,10 @@ All of them match the consumer attributes:
                     bar.attributes { $paid; $debug }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
                 artifacts {
                     foo fooJar
@@ -1289,7 +1286,7 @@ All of them match the consumer attributes:
         failure.assertHasCause("Could not resolve project :b.")
         failure.assertHasCause("Could not select value from candidates [free, paid] using FlavorSelectionRule.")
         failure.assertHasCause("Could not create an instance of type FlavorSelectionRule.")
-        failure.assertHasCause("The constructor for class FlavorSelectionRule should be annotated with @Inject.")
+        failure.assertHasCause("The constructor for type FlavorSelectionRule should be annotated with @Inject.")
     }
 
     def "user receives reasonable error message when disambiguation rule fails"() {
@@ -1339,10 +1336,10 @@ All of them match the consumer attributes:
                     bar.attributes { $paid; $debug }
                 }
                 task fooJar(type: Jar) {
-                   baseName = 'b-foo'
+                   archiveBaseName = 'b-foo'
                 }
                 task barJar(type: Jar) {
-                   baseName = 'b-bar'
+                   archiveBaseName = 'b-bar'
                 }
                 artifacts {
                     foo fooJar

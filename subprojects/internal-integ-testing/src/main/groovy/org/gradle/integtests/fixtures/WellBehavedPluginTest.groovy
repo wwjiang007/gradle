@@ -17,6 +17,7 @@
 package org.gradle.integtests.fixtures
 
 import org.gradle.api.internal.plugins.DefaultPluginManager
+import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.util.GUtil
 import org.junit.Assume
 
@@ -40,6 +41,21 @@ abstract class WellBehavedPluginTest extends AbstractPluginIntegrationTest {
         return "assemble"
     }
 
+    @ToBeFixedForConfigurationCache(bottomSpecs = [
+        "HelpTasksPluginIntegrationTest",
+        "BuildDashboardPluginIntegrationTest",
+        "GroovyPluginGoodBehaviourTest",
+        "ScalaPluginGoodBehaviourTest",
+        "AntlrPluginIntegrationTest",
+        "PlayApplicationPluginGoodBehaviourIntegrationTest",
+        "CheckstylePluginIntegrationTest",
+        "CodeNarcPluginIntegrationTest",
+        "PmdPluginIntegrationTest",
+        "CppLibraryPluginIntegrationTest",
+        "CppApplicationPluginIntegrationTest",
+        "XcodePluginIntegrationTest",
+        "IdeaPluginGoodBehaviourTest"
+    ])
     def "can apply plugin unqualified"() {
         given:
         applyPluginUnqualified()
@@ -48,6 +64,7 @@ abstract class WellBehavedPluginTest extends AbstractPluginIntegrationTest {
         succeeds mainTask
     }
 
+    @ToBeFixedForConfigurationCache
     def "plugin does not force creation of build dir during configuration"() {
         given:
         applyPlugin()
@@ -59,6 +76,21 @@ abstract class WellBehavedPluginTest extends AbstractPluginIntegrationTest {
         !file("build").exists()
     }
 
+    @ToBeFixedForConfigurationCache(bottomSpecs = [
+        "HelpTasksPluginIntegrationTest",
+        "BuildDashboardPluginIntegrationTest",
+        "GroovyPluginGoodBehaviourTest",
+        "ScalaPluginGoodBehaviourTest",
+        "AntlrPluginIntegrationTest",
+        "PlayApplicationPluginGoodBehaviourIntegrationTest",
+        "CheckstylePluginIntegrationTest",
+        "CodeNarcPluginIntegrationTest",
+        "PmdPluginIntegrationTest",
+        "CppLibraryPluginIntegrationTest",
+        "CppApplicationPluginIntegrationTest",
+        "XcodePluginIntegrationTest",
+        "IdeaPluginGoodBehaviourTest"
+    ])
     def "plugin can build with empty project"() {
         given:
         applyPlugin()
@@ -91,18 +123,28 @@ abstract class WellBehavedPluginTest extends AbstractPluginIntegrationTest {
         applyPlugin()
 
         buildFile << """
-            def configuredTasks = []
             tasks.configureEach {
-                configuredTasks << it
-            }
-            
-            gradle.buildFinished {
-                def configuredTaskPaths = configuredTasks*.path
-                
-                assert configuredTaskPaths == [':help']
+                println("configuring \${it.path}")
             }
         """
-        expect:
+
+        when:
         succeeds("help")
+
+        then:
+        def appliesBasePlugin = !(pluginName in [
+            'build-dashboard', 'build-init', 'help-tasks', 'wrapper',
+            'ivy-publish', 'maven-publish', 'publishing',
+            'eclipse', 'idea',
+        ])
+        if (GradleContextualExecuter.isConfigCache() && appliesBasePlugin) {
+            assert output.count("configuring :") == 2
+            outputContains("configuring :help")
+            // because capturing registered outputs for stale output cleanup forces configuring clean
+            outputContains("configuring :clean")
+        } else {
+            assert output.count("configuring :") == 1
+            outputContains("configuring :help")
+        }
     }
 }

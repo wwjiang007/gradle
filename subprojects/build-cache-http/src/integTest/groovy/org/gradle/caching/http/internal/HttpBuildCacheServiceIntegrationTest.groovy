@@ -69,7 +69,9 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
     def "outputs are correctly loaded from cache"() {
         buildFile << """
             apply plugin: "application"
-            mainClassName = "Hello"
+            application {
+                mainClass = "Hello"
+            }
         """
         withBuildCache().run "run"
         withBuildCache().run "clean"
@@ -126,7 +128,7 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
                 @OutputFile outputFile
 
                 @TaskAction copy() {
-                    project.mkdir outputFile.parentFile
+                    outputFile.parentFile.mkdirs()
                     outputFile.text = inputFile.text
                 }
             }
@@ -239,6 +241,23 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
         skipped(":compileJava")
     }
 
+    def "produces deprecation warning when using plain HTTP"() {
+        httpBuildCacheServer.useHostname()
+        settingsFile.text = useHttpBuildCache(httpBuildCacheServer.uri)
+
+        when:
+        executer.expectDeprecationWarning()
+        withBuildCache().run "jar"
+        succeeds "clean"
+        executer.expectDocumentedDeprecationWarning("Using insecure protocols with remote build cache has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Switch remote build cache to a secure protocol (like HTTPS) or allow insecure protocols. " +
+            "See https://docs.gradle.org/current/dsl/org.gradle.caching.http.HttpBuildCache.html#org.gradle.caching.http.HttpBuildCache:allowInsecureProtocol for more details.")
+
+        then:
+        withBuildCache().run "jar"
+        skipped(":compileJava")
+    }
+
     def "ssl certificate is validated"() {
         def keyStore = TestKeyStore.init(file('ssl-keystore'))
         keyStore.enableSslWithServerCert(httpBuildCacheServer)
@@ -298,10 +317,10 @@ class HttpBuildCacheServiceIntegrationTest extends AbstractIntegrationSpec imple
     }
 
     def "unknown host causes the build cache to be disabled"() {
-        settingsFile << """        
+        settingsFile << """
             buildCache {
                 remote {
-                    url = "http://invalid.invalid/"
+                    url = "https://invalid.invalid/"
                 }
             }
         """

@@ -21,6 +21,7 @@ import org.custommonkey.xmlunit.XMLAssert
 import org.custommonkey.xmlunit.examples.RecursiveElementNameAndTextQualifier
 import org.gradle.integtests.fixtures.AbstractSampleIntegrationTest
 import org.gradle.integtests.fixtures.Sample
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.Resources
 import org.hamcrest.CoreMatchers
@@ -28,6 +29,7 @@ import org.junit.Assert
 import org.junit.Rule
 import spock.lang.Unroll
 
+@UnsupportedWithConfigurationCache(because = "legacy maven plugin")
 class SamplesMavenPomGenerationIntegrationTest extends AbstractSampleIntegrationTest {
 
     @Rule
@@ -37,7 +39,8 @@ class SamplesMavenPomGenerationIntegrationTest extends AbstractSampleIntegration
     public final Sample sample = new Sample(testDirectoryProvider, 'maven/pomGeneration')
 
     def setup() {
-        executer.requireGradleDistribution()
+        // the OLD publish plugins work with the OLD deprecated Java plugin configuration (compile/runtime)
+        executer.noDeprecationChecks()
         using m2 //uploadArchives leaks into local ~/.m2
     }
 

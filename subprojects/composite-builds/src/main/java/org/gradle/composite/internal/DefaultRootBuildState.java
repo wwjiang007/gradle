@@ -20,6 +20,7 @@ import org.gradle.StartParameter;
 import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.component.BuildIdentifier;
 import org.gradle.api.internal.BuildDefinition;
+import org.gradle.api.internal.GradleInternal;
 import org.gradle.api.internal.SettingsInternal;
 import org.gradle.api.internal.artifacts.DefaultBuildIdentifier;
 import org.gradle.initialization.GradleLauncher;
@@ -29,20 +30,22 @@ import org.gradle.initialization.NestedBuildFactory;
 import org.gradle.initialization.RootBuildLifecycleListener;
 import org.gradle.internal.build.AbstractBuildState;
 import org.gradle.internal.build.RootBuildState;
+import org.gradle.internal.buildtree.BuildTreeState;
 import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.invocation.BuildController;
 import org.gradle.internal.invocation.GradleBuildController;
-import org.gradle.internal.service.scopes.BuildTreeScopeServices;
 import org.gradle.util.Path;
+
+import java.io.File;
 
 class DefaultRootBuildState extends AbstractBuildState implements RootBuildState, Stoppable {
     private final ListenerManager listenerManager;
     private final GradleLauncher gradleLauncher;
 
-    DefaultRootBuildState(BuildDefinition buildDefinition, GradleLauncherFactory gradleLauncherFactory, ListenerManager listenerManager, BuildTreeScopeServices parentServices) {
+    DefaultRootBuildState(BuildDefinition buildDefinition, GradleLauncherFactory gradleLauncherFactory, ListenerManager listenerManager, BuildTreeState owner) {
         this.listenerManager = listenerManager;
-        gradleLauncher = gradleLauncherFactory.newInstance(buildDefinition, this, parentServices);
+        this.gradleLauncher = gradleLauncherFactory.newInstance(buildDefinition, this, owner);
     }
 
     @Override
@@ -65,6 +68,11 @@ class DefaultRootBuildState extends AbstractBuildState implements RootBuildState
     }
 
     @Override
+    public File getBuildRootDir() {
+        return gradleLauncher.getBuildRootDir();
+    }
+
+    @Override
     public void stop() {
         gradleLauncher.stop();
     }
@@ -73,11 +81,12 @@ class DefaultRootBuildState extends AbstractBuildState implements RootBuildState
     public <T> T run(Transformer<T, ? super BuildController> buildAction) {
         final GradleBuildController buildController = new GradleBuildController(gradleLauncher);
         RootBuildLifecycleListener buildLifecycleListener = listenerManager.getBroadcaster(RootBuildLifecycleListener.class);
-        buildLifecycleListener.afterStart();
+        GradleInternal gradle = buildController.getGradle();
+        buildLifecycleListener.afterStart(gradle);
         try {
             return buildAction.transform(buildController);
         } finally {
-            buildLifecycleListener.beforeComplete();
+            buildLifecycleListener.beforeComplete(gradle);
         }
     }
 

@@ -33,12 +33,12 @@ class SettingsScriptExecutionIntegrationTest extends AbstractIntegrationSpec {
         """
 
         when:
-        executer.expectDeprecationWarning()
-        succeeds()
+        executer.expectDocumentedDeprecationWarning("enableFeaturePreview('$feature') has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "The feature flag is no longer relevant, please remove it from your settings file. " +
+            "See https://docs.gradle.org/current/userguide/feature_lifecycle.html#feature_preview for more details.")
 
         then:
-        outputContains("enableFeaturePreview('$feature') has been deprecated.")
-        outputContains("The feature flag is no longer relevant, please remove it from your settings file.")
+        succeeds()
 
         where:
         feature << FeaturePreviewsActivationFixture.inactiveFeatures()
@@ -109,12 +109,12 @@ buildscript {
     dependencies { classpath files('repo/test-1.3.jar') }
 }
 new org.gradle.test.BuildClass()
-new BuildSrcClass();
+
 println 'quiet message'
 logging.captureStandardOutput(LogLevel.ERROR)
 println 'error message'
 assert settings != null
-// TODO:instant-execution consider restoring assertion on the relationship
+// TODO:configuration-cache consider restoring assertion on the relationship
 //  between buildscript.classLoader and getClas().classLoader
 assert getClass().classLoader.parent == Thread.currentThread().contextClassLoader
 Gradle.class.classLoader.loadClass('${implClassName}')
@@ -128,16 +128,21 @@ try {
         buildscript.classLoader.close()
     }
 }
+
+try {
+    buildscript.classLoader.loadClass('BuildSrcClass')
+    assert false: 'should fail'
+} catch (ClassNotFoundException e) {
+    // expected
+}
 """
         buildFile << 'task doStuff'
 
         when:
-        executer.expectDeprecationWarning()
         run('doStuff')
 
         then:
         output.contains('quiet message')
-        output.contains("Access to the buildSrc project and its dependencies in settings scripts has been deprecated.")
         errorOutput.contains('error message')
     }
 

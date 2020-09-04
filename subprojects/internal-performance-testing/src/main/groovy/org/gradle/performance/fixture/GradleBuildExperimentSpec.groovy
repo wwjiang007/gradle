@@ -25,14 +25,20 @@ import java.util.function.Function
 
 class GradleBuildExperimentSpec extends BuildExperimentSpec {
     final GradleInvocationSpec invocation
-    final ImmutableList<Function<InvocationSettings, BuildMutator>> buildMutators
     final ImmutableList<String> measuredBuildOperations
 
-    GradleBuildExperimentSpec(String displayName, String projectName, File workingDirectory, GradleInvocationSpec invocation, Integer warmUpCount, Integer invocationCount, BuildExperimentListener listener, InvocationCustomizer invocationCustomizer, List<Function<InvocationSettings, BuildMutator>> buildMutators, ImmutableList<String> measuredBuildOperations) {
-        super(displayName, projectName, workingDirectory, warmUpCount, invocationCount, listener, invocationCustomizer)
-        this.invocation = invocation
-        this.buildMutators = buildMutators
+    GradleBuildExperimentSpec(String displayName,
+                              String projectName,
+                              File workingDirectory,
+                              GradleInvocationSpec invocation,
+                              Integer warmUpCount,
+                              Integer invocationCount,
+                              InvocationCustomizer invocationCustomizer,
+                              ImmutableList<Function<InvocationSettings, BuildMutator>> buildMutators,
+                              ImmutableList<String> measuredBuildOperations) {
+        super(displayName, projectName, workingDirectory, warmUpCount, invocationCount, invocationCustomizer, buildMutators)
         this.measuredBuildOperations = measuredBuildOperations
+        this.invocation = invocation
     }
 
     static GradleBuilder builder() {
@@ -51,9 +57,8 @@ class GradleBuildExperimentSpec extends BuildExperimentSpec {
         GradleInvocationSpec.InvocationBuilder invocation = GradleInvocationSpec.builder()
         Integer warmUpCount
         Integer invocationCount
-        BuildExperimentListener listener
-        List<Function<InvocationSettings, BuildMutator>> buildMutators
-        ImmutableList<String> measuredBuildOperations
+        final List<Function<InvocationSettings, BuildMutator>> buildMutators = []
+        final List<String> measuredBuildOperations = []
         InvocationCustomizer invocationCustomizer
 
         GradleBuilder displayName(String displayName) {
@@ -81,18 +86,20 @@ class GradleBuildExperimentSpec extends BuildExperimentSpec {
             this
         }
 
-        GradleBuilder listener(BuildExperimentListener listener) {
-            this.listener = listener
+        GradleBuilder buildMutators(List<Function<InvocationSettings, BuildMutator>> mutators) {
+            this.buildMutators.clear()
+            this.buildMutators.addAll(mutators)
             this
         }
 
-        GradleBuilder buildMutators(List<Function<InvocationSettings, BuildMutator>> mutators) {
-            this.buildMutators = ImmutableList.copyOf(mutators)
+        GradleBuilder addBuildMutator(Function<InvocationSettings, BuildMutator> buildMutator) {
+            this.buildMutators.add(buildMutator)
             this
         }
 
         GradleBuilder measuredBuildOperations(List<String> measuredBuildOperations) {
-            this.measuredBuildOperations = ImmutableList.copyOf(measuredBuildOperations)
+            this.measuredBuildOperations.clear()
+            this.measuredBuildOperations.addAll(measuredBuildOperations)
             this
         }
 
@@ -106,7 +113,7 @@ class GradleBuildExperimentSpec extends BuildExperimentSpec {
             assert displayName != null
             assert invocation != null
 
-            new GradleBuildExperimentSpec(displayName, projectName, workingDirectory, invocation.build(), warmUpCount, invocationCount, listener, invocationCustomizer, buildMutators, measuredBuildOperations)
+            new GradleBuildExperimentSpec(displayName, projectName, workingDirectory, invocation.build(), warmUpCount, invocationCount, invocationCustomizer, ImmutableList.copyOf(buildMutators), ImmutableList.copyOf(measuredBuildOperations))
         }
     }
 }

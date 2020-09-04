@@ -15,17 +15,24 @@
  */
 package org.gradle.internal.service.scopes;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import groovy.lang.GroovyObject;
 import groovy.transform.Generated;
 import org.gradle.api.DefaultTask;
+import org.gradle.api.Describable;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.transform.CacheableTransform;
 import org.gradle.api.artifacts.transform.InputArtifact;
 import org.gradle.api.artifacts.transform.InputArtifactDependencies;
 import org.gradle.api.file.ConfigurableFileCollection;
-import org.gradle.api.internal.AbstractTask;
 import org.gradle.api.internal.ConventionTask;
+import org.gradle.api.internal.DefaultDomainObjectCollection;
+import org.gradle.api.internal.DefaultDomainObjectSet;
+import org.gradle.api.internal.DefaultNamedDomainObjectCollection;
+import org.gradle.api.internal.DefaultNamedDomainObjectList;
+import org.gradle.api.internal.DefaultNamedDomainObjectSet;
+import org.gradle.api.internal.DefaultPolymorphicDomainObjectContainer;
 import org.gradle.api.internal.DynamicObjectAware;
 import org.gradle.api.internal.HasConvention;
 import org.gradle.api.internal.IConventionAware;
@@ -80,47 +87,71 @@ import org.gradle.internal.instantiation.InstantiatorFactory;
 import org.gradle.internal.reflect.annotations.TypeAnnotationMetadataStore;
 import org.gradle.internal.reflect.annotations.impl.DefaultTypeAnnotationMetadataStore;
 import org.gradle.internal.scripts.ScriptOrigin;
+import org.gradle.util.ClosureBackedAction;
+import org.gradle.util.ConfigureUtil;
 import org.gradle.work.Incremental;
 
-import java.lang.reflect.Method;
+import java.lang.annotation.Annotation;
 import java.util.List;
-import java.util.function.Predicate;
 
+@SuppressWarnings("unused")
 public class ExecutionGlobalServices {
+    @VisibleForTesting
+    public static final ImmutableSet<Class<? extends Annotation>> PROPERTY_TYPE_ANNOTATIONS = ImmutableSet.of(
+        Console.class,
+        Destroys.class,
+        Input.class,
+        InputArtifact.class,
+        InputArtifactDependencies.class,
+        InputDirectory.class,
+        InputFile.class,
+        InputFiles.class,
+        LocalState.class,
+        Nested.class,
+        OptionValues.class,
+        OutputDirectories.class,
+        OutputDirectory.class,
+        OutputFile.class,
+        OutputFiles.class
+    );
+
+    @VisibleForTesting
+    public static final ImmutableSet<Class<? extends Annotation>> IGNORED_METHOD_ANNOTATIONS = ImmutableSet.of(
+        Internal.class,
+        ReplacedBy.class
+    );
+
     TypeAnnotationMetadataStore createAnnotationMetadataStore(CrossBuildInMemoryCacheFactory cacheFactory) {
+        @SuppressWarnings("deprecation")
+        Class<?> deprecatedAbstractTask = org.gradle.api.internal.AbstractTask.class;
         return new DefaultTypeAnnotationMetadataStore(
             ImmutableSet.of(
                 CacheableTask.class,
                 CacheableTransform.class
             ),
-            ModifierAnnotationCategory.asMap(
-                Console.class,
-                Destroys.class,
-                Input.class,
-                InputArtifact.class,
-                InputArtifactDependencies.class,
-                InputDirectory.class,
-                InputFile.class,
-                InputFiles.class,
-                LocalState.class,
-                Nested.class,
-                OptionValues.class,
-                OutputDirectories.class,
-                OutputDirectory.class,
-                OutputFile.class,
-                OutputFiles.class,
-                ReplacedBy.class
+            ModifierAnnotationCategory.asMap(PROPERTY_TYPE_ANNOTATIONS),
+            ImmutableSet.of(
+                "java",
+                "groovy",
+                "kotlin"
             ),
             ImmutableSet.of(
-                AbstractTask.class,
+                deprecatedAbstractTask,
+                ClosureBackedAction.class,
+                ConfigureUtil.WrappedConfigureAction.class,
                 ConventionTask.class,
+                Describable.class,
+                DefaultDomainObjectCollection.class,
+                DefaultDomainObjectSet.class,
+                DefaultNamedDomainObjectCollection.class,
+                DefaultNamedDomainObjectList.class,
+                DefaultNamedDomainObjectSet.class,
+                DefaultPolymorphicDomainObjectContainer.class,
                 DefaultTask.class,
                 DynamicObjectAware.class,
                 ExtensionAware.class,
-                GroovyObject.class,
                 HasConvention.class,
                 IConventionAware.class,
-                Object.class,
                 ScriptOrigin.class,
                 Task.class
             ),
@@ -133,13 +164,8 @@ public class ExecutionGlobalServices {
                 ConfigurableFileCollection.class,
                 Property.class
             ),
-            Internal.class,
-            new Predicate<Method>() {
-                @Override
-                public boolean test(Method method) {
-                    return method.isAnnotationPresent(Generated.class);
-                }
-            },
+            IGNORED_METHOD_ANNOTATIONS,
+            method -> method.isAnnotationPresent(Generated.class),
             cacheFactory);
     }
 
@@ -228,19 +254,19 @@ public class ExecutionGlobalServices {
         return new InputDirectoryPropertyAnnotationHandler();
     }
 
-    PropertyAnnotationHandler createOutputFilePropertyAnnotationHandler() {
+    OutputFilePropertyAnnotationHandler createOutputFilePropertyAnnotationHandler() {
         return new OutputFilePropertyAnnotationHandler();
     }
 
-    PropertyAnnotationHandler createOutputFilesPropertyAnnotationHandler() {
+    OutputFilesPropertyAnnotationHandler createOutputFilesPropertyAnnotationHandler() {
         return new OutputFilesPropertyAnnotationHandler();
     }
 
-    PropertyAnnotationHandler createOutputDirectoryPropertyAnnotationHandler() {
+    OutputDirectoryPropertyAnnotationHandler createOutputDirectoryPropertyAnnotationHandler() {
         return new OutputDirectoryPropertyAnnotationHandler();
     }
 
-    PropertyAnnotationHandler createOutputDirectoriesPropertyAnnotationHandler() {
+    OutputDirectoriesPropertyAnnotationHandler createOutputDirectoriesPropertyAnnotationHandler() {
         return new OutputDirectoriesPropertyAnnotationHandler();
     }
 

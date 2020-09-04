@@ -76,9 +76,9 @@ public class DefaultArtifactResolutionQuery implements ArtifactResolutionQuery {
     private final ImmutableAttributesFactory attributesFactory;
     private final ComponentMetadataSupplierRuleExecutor componentMetadataSupplierRuleExecutor;
 
-    private Set<ComponentIdentifier> componentIds = Sets.newLinkedHashSet();
+    private final Set<ComponentIdentifier> componentIds = Sets.newLinkedHashSet();
     private Class<? extends Component> componentType;
-    private Set<Class<? extends Artifact>> artifactTypes = Sets.newLinkedHashSet();
+    private final Set<Class<? extends Artifact>> artifactTypes = Sets.newLinkedHashSet();
 
     public DefaultArtifactResolutionQuery(ConfigurationContainerInternal configurationContainer, RepositoryHandler repositoryHandler,
                                           ResolveIvyFactory ivyFactory, GlobalDependencyResolutionRules metadataHandler,
@@ -113,6 +113,7 @@ public class DefaultArtifactResolutionQuery implements ArtifactResolutionQuery {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public ArtifactResolutionQuery withArtifacts(Class<? extends Component> componentType, Class<? extends Artifact>... artifactTypes) {
         return withArtifacts(componentType, Arrays.asList(artifactTypes));
     }
@@ -169,7 +170,7 @@ public class DefaultArtifactResolutionQuery implements ArtifactResolutionQuery {
 
     private ComponentArtifactsResult buildComponentResult(ComponentIdentifier componentId, ComponentMetaDataResolver componentMetaDataResolver, ArtifactResolver artifactResolver) {
         BuildableComponentResolveResult moduleResolveResult = new DefaultBuildableComponentResolveResult();
-        componentMetaDataResolver.resolve(componentId, new DefaultComponentOverrideMetadata(), moduleResolveResult);
+        componentMetaDataResolver.resolve(componentId, DefaultComponentOverrideMetadata.EMPTY, moduleResolveResult);
         ComponentResolveMetadata component = moduleResolveResult.getMetadata();
         DefaultComponentArtifactsResult componentResult = new DefaultComponentArtifactsResult(component.getId());
         for (Class<? extends Artifact> artifactType : artifactTypes) {
@@ -184,11 +185,11 @@ public class DefaultArtifactResolutionQuery implements ArtifactResolutionQuery {
 
         for (ComponentArtifactMetadata artifactMetaData : artifactSetResolveResult.getResult()) {
             BuildableArtifactResolveResult resolveResult = new DefaultBuildableArtifactResolveResult();
-            artifactResolver.resolveArtifact(artifactMetaData, component.getSource(), resolveResult);
+            artifactResolver.resolveArtifact(artifactMetaData, component.getSources(), resolveResult);
             if (resolveResult.getFailure() != null) {
                 artifacts.addArtifact(new DefaultUnresolvedArtifactResult(artifactMetaData.getId(), type, resolveResult.getFailure()));
             } else {
-                artifacts.addArtifact(new DefaultResolvedArtifactResult(artifactMetaData.getId(), ImmutableAttributes.EMPTY, Describables.of(component.getId().getDisplayName()), type, resolveResult.getResult()));
+                artifacts.addArtifact(ivyFactory.verifiedArtifact(new DefaultResolvedArtifactResult(artifactMetaData.getId(), ImmutableAttributes.EMPTY, Describables.of(component.getId().getDisplayName()), type, resolveResult.getResult())));
             }
         }
     }

@@ -30,7 +30,6 @@ class JavaGradlePluginPluginTestKitSetupIntegrationTest extends AbstractIntegrat
     private static final String PLUGIN_UNDER_TEST_METADATA_TASK_PATH = ":$PLUGIN_UNDER_TEST_METADATA_TASK_NAME"
 
     def setup() {
-        requireGradleDistribution()
         buildFile << """
             apply plugin: 'java-gradle-plugin'
         """
@@ -39,8 +38,10 @@ class JavaGradlePluginPluginTestKitSetupIntegrationTest extends AbstractIntegrat
     def "has default conventions"() {
         buildFile << """
             task assertHasTestKit() {
+                def testRuntimeClasspath = project.sourceSets.test.runtimeClasspath
+                def testKit = dependencies.gradleTestKit().files
                 doLast {
-                    assert project.sourceSets.test.runtimeClasspath.files.containsAll(dependencies.gradleTestKit().files.files)
+                    assert testRuntimeClasspath.files.containsAll(testKit.files)
                 }
             }
         """
@@ -73,6 +74,7 @@ class JavaGradlePluginPluginTestKitSetupIntegrationTest extends AbstractIntegrat
                 custom {
                     java {
                         srcDir 'src'
+                        compileClasspath = configurations.compileClasspath
                     }
                     resources {
                         srcDir 'resources'

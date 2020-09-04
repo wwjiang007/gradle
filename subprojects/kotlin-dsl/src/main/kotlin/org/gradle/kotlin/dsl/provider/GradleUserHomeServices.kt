@@ -15,6 +15,7 @@
  */
 package org.gradle.kotlin.dsl.provider
 
+import org.gradle.cache.CacheRepository
 import org.gradle.cache.internal.CrossBuildInMemoryCacheFactory
 
 
@@ -25,4 +26,9 @@ object GradleUserHomeServices {
     fun createKotlinScriptClassloadingCache(
         cacheFactory: CrossBuildInMemoryCacheFactory
     ) = KotlinScriptClassloadingCache(cacheFactory)
+
+    @Suppress("unused")
+    fun createScriptCacheRepository(
+        cacheRepository: CacheRepository
+    ) = ScriptCacheRepository(cacheRepository)
 }

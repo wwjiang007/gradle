@@ -63,6 +63,22 @@ class IsolatingIncrementalAnnotationProcessingIntegrationTest extends AbstractIn
         outputs.recompiledFiles("A", "AHelper", "AHelperResource.txt")
     }
 
+    def "incremental processing works on subsequent incremental compilations"() {
+        given:
+        def a = java "@Helper class A {}"
+        java "class Unrelated {}"
+        run "compileJava"
+        a.text = "@Helper class A { public void foo() {} }"
+        outputs.snapshot { run "compileJava" }
+
+        when:
+        a.text = "@Helper class A { public void bar() {} }"
+        run "compileJava"
+
+        then:
+        outputs.recompiledFiles("A", "AHelper", "AHelperResource.txt")
+    }
+
     def "annotated files are not recompiled on unrelated changes"() {
         given:
         java "@Helper class A {}"
@@ -93,7 +109,7 @@ class IsolatingIncrementalAnnotationProcessingIntegrationTest extends AbstractIn
         run "compileJava"
 
         then:
-        outputs.recompiledFiles("A", "AHelper", "Dependent", "AHelperResource.txt")
+        outputs.recompiledFiles("A", "AHelper", "AHelperResource.txt")
     }
 
     def "source file is recompiled when dependency of generated file changes"() {
@@ -328,10 +344,6 @@ class IsolatingIncrementalAnnotationProcessingIntegrationTest extends AbstractIn
 
     def "processors can generate identical resources in different locations"() {
         given:
-        // Have to configure a native header output directory otherwise there will be errors; javac NPEs when files are created in NATIVE_HEADER_OUTPUT without any location set.
-        buildFile << '''
-compileJava.options.headerOutputDirectory = file("build/headers/java/main")
-'''
         def locations = [StandardLocation.SOURCE_OUTPUT.toString(), StandardLocation.NATIVE_HEADER_OUTPUT.toString(), StandardLocation.CLASS_OUTPUT.toString()]
         withProcessor(new ResourceGeneratingProcessorFixture().withOutputLocations(locations).withDeclaredType(IncrementalAnnotationProcessorType.ISOLATING))
         def a = java "@Thing class A {}"
@@ -342,7 +354,7 @@ compileJava.options.headerOutputDirectory = file("build/headers/java/main")
 
         then:
         file("build/generated/sources/annotationProcessor/java/main/A.txt").exists()
-        file("build/headers/java/main/A.txt").exists()
+        file("build/generated/sources/headers/java/main/A.txt").exists()
         file("build/classes/java/main/A.txt").exists()
 
         when:
@@ -352,7 +364,7 @@ compileJava.options.headerOutputDirectory = file("build/headers/java/main")
         then: "they all get cleaned"
         outputs.deletedClasses("A")
         !file("build/generated/sources/annotationProcessor/java/main/A.txt").exists()
-        !file("build/headers/java/main/A.txt").exists()
+        !file("build/generated/sources/headers/java/main/A.txt").exists()
         !file("build/classes/java/main/A.txt").exists()
     }
 

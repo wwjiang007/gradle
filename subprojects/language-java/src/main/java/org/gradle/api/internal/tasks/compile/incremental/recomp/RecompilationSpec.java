@@ -24,9 +24,9 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 public class RecompilationSpec {
-    private final Collection<String> classesToCompile = new NormalizingClassNamesSet();
-    private final Collection<String> classesToProcess = new NormalizingClassNamesSet();
-    private final Collection<GeneratedResource> resourcesToGenerate = new LinkedHashSet<GeneratedResource>();
+    private final Collection<String> classesToCompile = new LinkedHashSet<>();
+    private final Collection<String> classesToProcess = new LinkedHashSet<>();
+    private final Collection<GeneratedResource> resourcesToGenerate = new LinkedHashSet<>();
     private final Set<String> relativeSourcePathsToCompile = new LinkedHashSet<>();
     private String fullRebuildCause;
 
@@ -78,23 +78,4 @@ public class RecompilationSpec {
         fullRebuildCause = description != null ? description : "'" + file.getName() + "' was changed";
     }
 
-    private static class NormalizingClassNamesSet extends LinkedHashSet<String> {
-        @Override
-        public boolean add(String className) {
-            int idx = className.indexOf('$');
-            if (idx > 0) {
-                className = className.substring(0, idx);
-            }
-            return super.add(className);
-        }
-
-        @Override
-        public boolean addAll(Collection<? extends String> classNames) {
-            boolean added = false;
-            for (String cn : classNames) {
-                added |= add(cn);
-            }
-            return added;
-        }
-    }
 }

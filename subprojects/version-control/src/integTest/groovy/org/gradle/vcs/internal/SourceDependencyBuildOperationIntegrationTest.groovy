@@ -22,6 +22,7 @@ import org.gradle.initialization.ConfigureBuildBuildOperationType
 import org.gradle.initialization.LoadBuildBuildOperationType
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.internal.taskgraph.CalculateTaskGraphBuildOperationType
 import org.gradle.launcher.exec.RunBuildBuildOperationType
 import org.gradle.vcs.fixtures.GitFileRepository
@@ -36,6 +37,7 @@ class SourceDependencyBuildOperationIntegrationTest extends AbstractIntegrationS
     def operations = new BuildOperationsFixture(executer, temporaryFolder)
 
     @Unroll
+    @ToBeFixedForConfigurationCache
     def "generates configure, task graph and run tasks operations for source dependency build with #display"() {
         given:
         repo.file("settings.gradle") << """
@@ -52,7 +54,7 @@ class SourceDependencyBuildOperationIntegrationTest extends AbstractIntegrationS
         settingsFile << """
             sourceControl {
                 vcsMappings {
-                    withModule("org.test:${buildName}") {
+                    withModule("org.test:${dependencyName}") {
                         from(GitVersionControlSpec) {
                             url = uri("${repo.url}")
                         }
@@ -62,7 +64,7 @@ class SourceDependencyBuildOperationIntegrationTest extends AbstractIntegrationS
         """
         buildFile << """
             apply plugin: 'java'
-            dependencies { implementation 'org.test:${buildName}:1.2' }
+            dependencies { implementation 'org.test:${dependencyName}:1.2' }
         """
 
         when:
@@ -79,15 +81,18 @@ class SourceDependencyBuildOperationIntegrationTest extends AbstractIntegrationS
         loadOps[0].displayName == "Load build"
         loadOps[0].details.buildPath == ":"
         loadOps[0].parentId == root.id
-        loadOps[1].displayName == "Load build (buildB)"
-        // TODO - should have a buildPath associated
+        loadOps[1].displayName == "Load build (:buildB)"
+        loadOps[1].details.buildPath == ":buildB"
         loadOps[1].parentId == resolve.id
+
+        def buildTreeOp = operations.only(/Prepare build tree/)
+        buildTreeOp.parentId == root.id
 
         def configureOps = operations.all(ConfigureBuildBuildOperationType)
         configureOps.size() == 2
         configureOps[0].displayName == "Configure build"
         configureOps[0].details.buildPath == ":"
-        configureOps[0].parentId == root.id
+        configureOps[0].parentId == buildTreeOp.id
         configureOps[1].displayName == "Configure build (:${buildName})"
         configureOps[1].details.buildPath == ":${buildName}"
         configureOps[1].parentId == resolve.id
@@ -113,14 +118,14 @@ class SourceDependencyBuildOperationIntegrationTest extends AbstractIntegrationS
         graphNotifyOps.size() == 2
         graphNotifyOps[0].displayName == 'Notify task graph whenReady listeners'
         graphNotifyOps[0].details.buildPath == ':'
-        graphNotifyOps[0].parentId == runTasksOps[0].id
+        graphNotifyOps[0].parentId == taskGraphOps[0].id
         graphNotifyOps[1].displayName == "Notify task graph whenReady listeners (:${buildName})"
         graphNotifyOps[1].details.buildPath == ":${buildName}"
-        graphNotifyOps[1].parentId == runTasksOps[1].id
+        graphNotifyOps[1].parentId == taskGraphOps[1].id
 
         where:
-        settings                     | buildName | display
-        ""                           | "buildB"  | "default root project name"
-        "rootProject.name='someLib'" | "someLib" | "configured root project name"
+        settings                     | buildName | dependencyName | display
+        ""                           | "buildB"  | "buildB"       | "default root project name"
+        "rootProject.name='someLib'" | "buildB"  | "someLib"      | "configured root project name"
     }
 }

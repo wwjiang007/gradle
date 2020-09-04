@@ -30,7 +30,8 @@ import spock.lang.Issue
 @TargetGradleVersion(">=3.5")
 class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
 
-    @Rule public final RepositoryHttpServer server = new RepositoryHttpServer(temporaryFolder, targetDist.version.version)
+    @Rule
+    public final RepositoryHttpServer server = new RepositoryHttpServer(temporaryFolder, targetDist.version.version)
 
     @TargetGradleVersion(">=3.5 <4.0")
     def "generates events for interleaved project configuration and dependency resolution"() {
@@ -155,13 +156,13 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         def resolveArtifactB = events.operation("Resolve artifact projectB.jar (group:projectB:1.0)")
         def resolveArtifactC = events.operation("Resolve artifact projectC.jar (group:projectC:1.5)")
         def resolveArtifactD = events.operation("Resolve artifact projectD.jar (group:projectD:2.0-SNAPSHOT)")
-        def downloadBMetadata = events.operation("Download http://localhost:${server.port}${projectB.pomPath}")
-        def downloadBArtifact = events.operation("Download http://localhost:${server.port}${projectB.artifactPath}")
-        def downloadCRootMetadata = events.operation("Download http://localhost:${server.port}/repo/group/projectC/maven-metadata.xml")
-        def downloadCPom = events.operation("Download http://localhost:${server.port}${projectC.pomPath}")
-        def downloadCArtifact = events.operation("Download http://localhost:${server.port}${projectC.artifactPath}")
-        def downloadDPom = events.operation("Download http://localhost:${server.port}${projectD.pomPath}")
-        def downloadDMavenMetadata = events.operation("Download http://localhost:${server.port}${projectD.metaDataPath}")
+        def downloadBMetadata = events.operation("Download ${server.uri}${projectB.pomPath}")
+        def downloadBArtifact = events.operation("Download ${server.uri}${projectB.artifactPath}")
+        def downloadCRootMetadata = events.operation("Download ${server.uri}/repo/group/projectC/maven-metadata.xml")
+        def downloadCPom = events.operation("Download ${server.uri}${projectC.pomPath}")
+        def downloadCArtifact = events.operation("Download ${server.uri}${projectC.artifactPath}")
+        def downloadDPom = events.operation("Download ${server.uri}${projectD.pomPath}")
+        def downloadDMavenMetadata = events.operation("Download ${server.uri}${projectD.metaDataPath}")
         resolveCompile.parent == configureRoot
         configureRoot.children == [resolveCompile, resolveArtifactA, resolveArtifactB, resolveArtifactC, resolveArtifactD]
 
@@ -178,20 +179,24 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
     def "generates download events during maven publish"() {
         given:
         toolingApi.requireIsolatedUserHome()
-        if (targetDist.version.version == "3.5-rc-1") { return }
+        if (targetDist.version.version == "3.5-rc-1") {
+            return
+        }
         def module = mavenHttpRepo.module('group', 'publish', '1')
+
+        module.withoutExtraChecksums()
 
         // module is published
         module.publish()
 
         // module will be published a second time via 'maven-publish'
-        module.artifact.expectPublish()
-        module.pom.expectPublish()
+        module.artifact.expectPublish(false)
+        module.pom.expectPublish(false)
         module.rootMetaData.expectGet()
         module.rootMetaData.sha1.expectGet()
         module.rootMetaData.expectGet()
         module.rootMetaData.sha1.expectGet()
-        module.rootMetaData.expectPublish()
+        module.rootMetaData.expectPublish(false)
 
         settingsFile << 'rootProject.name = "publish"'
         buildFile << """

@@ -19,7 +19,6 @@ package org.gradle.integtests.tooling.r40
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
 import org.gradle.integtests.tooling.fixture.ProgressEvents
 import org.gradle.integtests.tooling.fixture.TargetGradleVersion
-import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
 import org.gradle.test.fixtures.maven.MavenFileRepository
 import org.gradle.test.fixtures.server.http.MavenHttpRepository
 import org.gradle.test.fixtures.server.http.RepositoryHttpServer
@@ -29,7 +28,7 @@ import spock.lang.Issue
 
 @IntegrationTestTimeout(300)
 @TargetGradleVersion(">=4.0")
-class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
+class BuildProgressCrossVersionSpec extends AbstractProgressCrossVersionSpec {
     @Rule
     public final RepositoryHttpServer server = new RepositoryHttpServer(temporaryFolder, targetDist.version.version)
 
@@ -54,8 +53,8 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
 
         and:
         events.operation('Run init scripts').with {
-            it.child "Apply script init1.gradle to build"
-            it.child "Apply script init2.gradle to build"
+            it.child applyInitScript(initScript1)
+            it.child applyInitScript(initScript2)
         }
     }
 
@@ -66,18 +65,19 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         toolingApi.requireIsolatedUserHome()
 
         def module = mavenHttpRepo.module('group', 'publish', '1')
+        module.withoutExtraChecksums()
 
         // module is published
         module.publish()
 
         // module will be published a second time via 'maven-publish'
-        module.artifact.expectPublish()
-        module.pom.expectPublish()
+        module.artifact.expectPublish(false)
+        module.pom.expectPublish(false)
         module.rootMetaData.expectGet()
         module.rootMetaData.sha1.expectGet()
         module.rootMetaData.expectGet()
         module.rootMetaData.sha1.expectGet()
-        module.rootMetaData.expectPublish()
+        module.rootMetaData.expectPublish(false)
 
         settingsFile << 'rootProject.name = "publish"'
         buildFile << """

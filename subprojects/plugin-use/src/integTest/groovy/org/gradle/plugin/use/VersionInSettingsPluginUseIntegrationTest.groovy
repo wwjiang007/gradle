@@ -32,6 +32,8 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
     MavenHttpPluginRepository pluginRepo = MavenHttpPluginRepository.asGradlePluginPortal(executer, mavenRepo)
 
     def setup() {
+        // https://github.com/gradle/build-tool-flaky-tests/issues/49
+        executer.requireOwnGradleUserHomeDir()
         publishPlugin("1.0")
         publishPlugin("2.0")
         withSettings """
@@ -40,7 +42,7 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     id '$PLUGIN_ID' version '1.0'
                 }
             }
-"""
+        """
     }
 
     def "can define plugin version in settings script"() {
@@ -60,16 +62,17 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     id("$PLUGIN_ID") version "2.0"
                 }
             }
-"""
+        """
         buildKotlinFile << """
             plugins { id("$PLUGIN_ID") }
             tasks.register("verify") {
+                val pluginVersion: String by project
+                val pluginVersionValue = pluginVersion
                 doLast {
-                    val pluginVersion: String by project
-                    assert(pluginVersion == "2.0")
+                    assert(pluginVersionValue == "2.0")
                 }
             }
-"""
+        """
 
         then:
         succeeds("verify")
@@ -83,7 +86,7 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     id '$PLUGIN_ID' version '1.0' apply false
                 }
             }
-"""
+        """
         buildScript "plugins { id '$PLUGIN_ID' }"
 
         then:
@@ -99,7 +102,7 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     id '$PLUGIN_ID' version "\${myPluginVersion}"
                 }
             }
-"""
+        """
         buildScript "plugins { id '$PLUGIN_ID' }"
 
         then:
@@ -119,17 +122,17 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
         settingsFile << "include 'p1', 'p2'"
 
         file("p1/build.gradle") << """
-            plugins { 
-                id '$PLUGIN_ID' 
+            plugins {
+                id '$PLUGIN_ID'
             }
             ${verifyPluginTask('1.0')}
-"""
+        """
         file("p2/build.gradle") << """
-            plugins { 
+            plugins {
                 id '$PLUGIN_ID' version '2.0'
             }
             ${verifyPluginTask('2.0')}
-"""
+        """
 
         then:
         succeeds "verify"
@@ -140,17 +143,17 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
         settingsFile << "include 'p1'"
 
         buildFile << """
-            plugins { 
+            plugins {
                 id '$PLUGIN_ID' version '2.0'
             }
             ${verifyPluginTask('2.0')}
-"""
+        """
         file("p1/build.gradle") << """
-            plugins { 
+            plugins {
                 id '$PLUGIN_ID'
             }
             ${verifyPluginTask('2.0')}
-"""
+        """
 
         then:
         succeeds "verify"
@@ -164,10 +167,10 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     classpath "my:plugin:2.0"
                 }
             }
-            plugins { 
+            plugins {
                 id '$PLUGIN_ID'
             }
-"""
+        """
 
         then:
         verifyPluginApplied('2.0')
@@ -182,12 +185,12 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
             dependencies {
                 implementation "my:plugin:2.0"
             }
-"""
+        """
         buildFile << """
-            plugins { 
+            plugins {
                 id '$PLUGIN_ID'
             }
-"""
+        """
 
         then:
         verifyPluginApplied('2.0')
@@ -201,7 +204,7 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     id '$PLUGIN_ID' version '1.0' apply true
                 }
             }
-"""
+        """
 
         then:
         fails "help"
@@ -217,7 +220,7 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     id '$PLUGIN_ID' version '2.0'
                 }
             }
-"""
+        """
 
         then:
         fails "help"
@@ -229,7 +232,7 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
                     id('$PLUGIN_ID').version('1.0').version('2.0')
                 }
             }
-"""
+        """
 
         then:
         fails "help"
@@ -249,11 +252,12 @@ class VersionInSettingsPluginUseIntegrationTest extends AbstractIntegrationSpec 
     def verifyPluginTask(String version) {
         """
             task verify {
+                String pluginVersion = project.pluginVersion
                 doLast {
-                    assert project.pluginVersion == "$version"
+                    assert pluginVersion == "$version"
                 }
             }
-"""
+        """
     }
 
     void publishPlugin(String version) {

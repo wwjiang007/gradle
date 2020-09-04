@@ -45,7 +45,6 @@ public class InitialPassStatementTransformer implements StatementTransformer {
 
     private boolean seenNonClasspathStatement;
     private boolean seenPluginsBlock;
-    private int pluginsBlockLineNumber = 0;
     private boolean seenPluginManagementBlock;
     private boolean seenClasspathBlock;
 
@@ -87,7 +86,7 @@ public class InitialPassStatementTransformer implements StatementTransformer {
         String failMessage = null;
 
         if (!scriptTarget.getSupportsPluginsBlock()) {
-            failMessage = pluginBlockMetadataCompiler.formatErrorMessage("Only Project build scripts can contain plugins {} blocks");
+            failMessage = pluginBlockMetadataCompiler.formatErrorMessage("Only Project and Settings build scripts can contain plugins {} blocks");
         } else {
             seenPluginsBlock = true;
 

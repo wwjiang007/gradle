@@ -19,7 +19,6 @@ package org.gradle.plugins.ide.eclipse.model;
 import com.google.common.base.Preconditions;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.Project;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.tasks.DefaultTaskDependency;
@@ -39,9 +38,11 @@ import static org.gradle.util.ConfigureUtil.configure;
  * First point of entry for customizing Eclipse project generation.
  *
  * <pre class='autoTested'>
- * apply plugin: 'java'
- * apply plugin: 'eclipse'
- * apply plugin: 'eclipse-wtp' //for web projects only
+ * plugins {
+ *     id 'java'
+ *     id 'eclipse'
+ *     id 'eclipse-wtp' // for web projects only
+ * }
  *
  * eclipse {
  *   pathVariables 'GRADLE_HOME': file('/best/software/gradle'), 'TOMCAT_HOME': file('../tomcat')
@@ -86,7 +87,6 @@ public class EclipseModel {
      *
      * @since 5.4
      */
-    @Incubating
     public EclipseModel(Project project) {
         this.synchronizationTasks = new DefaultTaskDependency(((ProjectInternal) project).getTasks());
         this.autoBuildTasks = new DefaultTaskDependency(((ProjectInternal) project).getTasks());
@@ -252,7 +252,6 @@ public class EclipseModel {
      * @return the tasks names
      * @since 5.4
      */
-    @Incubating
     public TaskDependency getSynchronizationTasks() {
         return synchronizationTasks;
     }
@@ -263,7 +262,6 @@ public class EclipseModel {
      * @see #getSynchronizationTasks()
      * @since 5.4
      */
-    @Incubating
     public void synchronizationTasks(Object... synchronizationTasks) {
         this.synchronizationTasks.add(synchronizationTasks);
     }
@@ -277,7 +275,7 @@ public class EclipseModel {
      * @return the tasks names
      * @since 5.4
      */
-    @Incubating
+
     public TaskDependency getAutoBuildTasks() {
         return autoBuildTasks;
     }
@@ -288,7 +286,7 @@ public class EclipseModel {
      * @see #getAutoBuildTasks()
      * @since 5.4
      */
-    @Incubating
+
     public void autoBuildTasks(Object... autoBuildTasks) {
         this.autoBuildTasks.add(autoBuildTasks);
     }

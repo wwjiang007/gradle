@@ -25,6 +25,7 @@ import org.gradle.initialization.BuildRequestMetaData;
 import org.gradle.internal.buildevents.BuildLogger;
 import org.gradle.internal.buildevents.BuildStartedTime;
 import org.gradle.internal.buildevents.TaskExecutionStatisticsReporter;
+import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.invocation.BuildAction;
 import org.gradle.internal.invocation.BuildActionRunner;
@@ -32,7 +33,6 @@ import org.gradle.internal.invocation.BuildController;
 import org.gradle.internal.logging.text.StyledTextOutputFactory;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.time.Clock;
-import org.gradle.util.SingleMessageLogger;
 
 import java.util.List;
 
@@ -40,9 +40,9 @@ public class BuildOutcomeReportingBuildActionRunner implements BuildActionRunner
     private final BuildActionRunner delegate;
     private final StyledTextOutputFactory styledTextOutputFactory;
 
-    public BuildOutcomeReportingBuildActionRunner(BuildActionRunner delegate, StyledTextOutputFactory styledTextOutputFactory) {
-        this.delegate = delegate;
+    public BuildOutcomeReportingBuildActionRunner(StyledTextOutputFactory styledTextOutputFactory, BuildActionRunner delegate) {
         this.styledTextOutputFactory = styledTextOutputFactory;
+        this.delegate = delegate;
     }
 
     @Override
@@ -62,7 +62,7 @@ public class BuildOutcomeReportingBuildActionRunner implements BuildActionRunner
 
         Result result = delegate.run(action, buildController);
 
-        Throwable failure = SingleMessageLogger.getDeprecationFailure();
+        Throwable failure = DeprecationLogger.getDeprecationFailure();
         if (failure != null) {
             // Replace result if we fail on warning
             result = computeUpdatedResult(result, failure);

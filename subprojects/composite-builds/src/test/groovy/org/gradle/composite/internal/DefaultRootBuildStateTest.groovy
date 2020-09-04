@@ -24,10 +24,11 @@ import org.gradle.api.internal.project.ProjectStateRegistry
 import org.gradle.initialization.GradleLauncher
 import org.gradle.initialization.GradleLauncherFactory
 import org.gradle.initialization.RootBuildLifecycleListener
+import org.gradle.internal.buildtree.BuildTreeState
 import org.gradle.internal.event.ListenerManager
 import org.gradle.internal.invocation.BuildController
 import org.gradle.internal.operations.BuildOperationExecutor
-import org.gradle.internal.service.scopes.BuildTreeScopeServices
+import org.gradle.internal.service.ServiceRegistry
 import org.gradle.internal.work.WorkerLeaseService
 import org.gradle.test.fixtures.work.TestWorkerLeaseService
 import spock.lang.Specification
@@ -39,13 +40,14 @@ class DefaultRootBuildStateTest extends Specification {
     def listenerManager = Mock(ListenerManager)
     def lifecycleListener = Mock(RootBuildLifecycleListener)
     def action = Mock(Transformer)
-    def sessionServices = Mock(BuildTreeScopeServices)
+    def buildTree = Mock(BuildTreeState)
+    def sessionServices = Mock(ServiceRegistry)
     def buildDefinition = Mock(BuildDefinition)
     def projectStateRegistry = Mock(ProjectStateRegistry)
     DefaultRootBuildState build
 
     def setup() {
-        _ * factory.newInstance(buildDefinition, _, sessionServices) >> launcher
+        _ * factory.newInstance(buildDefinition, _, buildTree) >> launcher
         _ * listenerManager.getBroadcaster(RootBuildLifecycleListener) >> lifecycleListener
         _ * sessionServices.get(ProjectStateRegistry) >> projectStateRegistry
         _ * sessionServices.get(BuildOperationExecutor) >> Stub(BuildOperationExecutor)
@@ -54,7 +56,7 @@ class DefaultRootBuildStateTest extends Specification {
         _ * gradle.services >> sessionServices
         _ * projectStateRegistry.withLenientState(_) >> { args -> return args[0].create() }
 
-        build = new DefaultRootBuildState(buildDefinition, factory, listenerManager, sessionServices)
+        build = new DefaultRootBuildState(buildDefinition, factory, listenerManager, buildTree)
     }
 
     def "has identifier"() {
@@ -78,7 +80,7 @@ class DefaultRootBuildStateTest extends Specification {
         result == '<result>'
 
         then:
-        1 * lifecycleListener.afterStart()
+        1 * lifecycleListener.afterStart(_ as GradleInternal)
 
         then:
         1 * action.transform(!null) >> { BuildController controller ->
@@ -86,7 +88,7 @@ class DefaultRootBuildStateTest extends Specification {
         }
 
         then:
-        1 * lifecycleListener.beforeComplete()
+        1 * lifecycleListener.beforeComplete(_ as GradleInternal)
     }
 
     def "can have null result"() {
@@ -162,7 +164,7 @@ class DefaultRootBuildStateTest extends Specification {
 
         and:
         1 * action.transform(!null) >> { BuildController controller -> throw failure }
-        1 * lifecycleListener.beforeComplete()
+        1 * lifecycleListener.beforeComplete(_ as GradleInternal)
     }
 
     def "forwards build failure and cleans up"() {
@@ -180,7 +182,7 @@ class DefaultRootBuildStateTest extends Specification {
         1 * action.transform(!null) >> { BuildController controller ->
             controller.run()
         }
-        1 * lifecycleListener.beforeComplete()
+        1 * lifecycleListener.beforeComplete(_ as GradleInternal)
     }
 
     def "forwards configure failure and cleans up"() {
@@ -198,7 +200,7 @@ class DefaultRootBuildStateTest extends Specification {
         1 * action.transform(!null) >> { BuildController controller ->
             controller.configure()
         }
-        1 * lifecycleListener.beforeComplete()
+        1 * lifecycleListener.beforeComplete(_ as GradleInternal)
     }
 
     def "cannot run after configuration failure"() {
@@ -219,6 +221,6 @@ class DefaultRootBuildStateTest extends Specification {
             }
             controller.run()
         }
-        1 * lifecycleListener.beforeComplete()
+        1 * lifecycleListener.beforeComplete(_ as GradleInternal)
     }
 }

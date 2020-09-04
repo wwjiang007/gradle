@@ -21,11 +21,10 @@ import org.apache.maven.artifact.repository.metadata.Snapshot;
 import org.apache.maven.artifact.repository.metadata.SnapshotVersion;
 import org.apache.maven.artifact.repository.metadata.Versioning;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
+import org.gradle.api.internal.artifacts.repositories.DefaultMavenArtifactRepository;
 import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransport;
-import org.gradle.api.internal.artifacts.repositories.transport.RepositoryTransportFactory;
 import org.gradle.api.publish.maven.MavenArtifact;
 import org.gradle.internal.Factory;
-import org.gradle.internal.artifacts.repositories.AuthenticationSupportedInternal;
 import org.gradle.internal.resource.ExternalResourceName;
 import org.gradle.internal.resource.ExternalResourceReadResult;
 import org.gradle.internal.resource.ExternalResourceRepository;
@@ -42,27 +41,24 @@ import java.util.TimeZone;
 
 public class MavenRemotePublisher extends AbstractMavenPublisher {
     private static final Logger LOGGER = LoggerFactory.getLogger(MavenRemotePublisher.class);
-    private final RepositoryTransportFactory repositoryTransportFactory;
     private final BuildCommencedTimeProvider timeProvider;
 
-    public MavenRemotePublisher(Factory<File> temporaryDirFactory, RepositoryTransportFactory repositoryTransportFactory, BuildCommencedTimeProvider timeProvider) {
+    public MavenRemotePublisher(Factory<File> temporaryDirFactory, BuildCommencedTimeProvider timeProvider) {
         super(temporaryDirFactory);
-        this.repositoryTransportFactory = repositoryTransportFactory;
         this.timeProvider = timeProvider;
     }
 
     @Override
     public void publish(MavenNormalizedPublication publication, MavenArtifactRepository artifactRepository) {
-        LOGGER.info("Publishing to repository '{}' ({})", artifactRepository.getName(), artifactRepository.getUrl());
+        URI repositoryUrl = artifactRepository.getUrl();
+        LOGGER.info("Publishing to repository '{}' ({})", artifactRepository.getName(), repositoryUrl);
 
-        String protocol = artifactRepository.getUrl().getScheme().toLowerCase();
-        RepositoryTransport transport = repositoryTransportFactory.createTransport(protocol, artifactRepository.getName(),
-                ((AuthenticationSupportedInternal) artifactRepository).getConfiguredAuthentication());
+        String protocol = repositoryUrl.getScheme().toLowerCase();
+        DefaultMavenArtifactRepository realRepository = (DefaultMavenArtifactRepository) artifactRepository;
+        RepositoryTransport transport = realRepository.getTransport(protocol);
         ExternalResourceRepository repository = transport.getRepository();
 
-        URI rootUri = artifactRepository.getUrl();
-
-        publish(publication, repository, rootUri, false);
+        publish(publication, repository, repositoryUrl, false);
     }
 
     @Override

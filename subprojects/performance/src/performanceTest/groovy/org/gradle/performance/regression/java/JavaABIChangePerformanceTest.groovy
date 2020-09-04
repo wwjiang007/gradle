@@ -16,9 +16,9 @@
 
 package org.gradle.performance.regression.java
 
-
-import org.gradle.performance.AbstractCrossVersionGradleInternalPerformanceTest
-import org.gradle.performance.mutator.ApplyAbiChangeToJavaSourceFileMutator
+import org.gradle.performance.AbstractCrossVersionGradleProfilerPerformanceTest
+import org.gradle.performance.mutator.ApplyAbiChangeToGroovySourceFileMutator
+import org.gradle.profiler.mutations.ApplyAbiChangeToJavaSourceFileMutator
 import spock.lang.Unroll
 
 import static org.gradle.performance.generator.JavaTestProject.LARGE_GROOVY_MULTI_PROJECT
@@ -26,7 +26,7 @@ import static org.gradle.performance.generator.JavaTestProject.LARGE_JAVA_MULTI_
 import static org.gradle.performance.generator.JavaTestProject.LARGE_MONOLITHIC_GROOVY_PROJECT
 import static org.gradle.performance.generator.JavaTestProject.LARGE_MONOLITHIC_JAVA_PROJECT
 
-class JavaABIChangePerformanceTest extends AbstractCrossVersionGradleInternalPerformanceTest {
+class JavaABIChangePerformanceTest extends AbstractCrossVersionGradleProfilerPerformanceTest {
 
     @Unroll
     def "assemble for abi change on #testProject"() {
@@ -34,10 +34,14 @@ class JavaABIChangePerformanceTest extends AbstractCrossVersionGradleInternalPer
         runner.testProject = testProject
         runner.gradleOpts = ["-Xms${testProject.daemonMemory}", "-Xmx${testProject.daemonMemory}"]
         runner.tasksToRun = ['assemble']
-        runner.addBuildExperimentListener(new ApplyAbiChangeToJavaSourceFileMutator(testProject.config.fileToChangeByScenario['assemble']))
-        runner.targetVersions = ["5.7-20190811220031+0000"]
-        if (testProject.name().contains("GROOVY")) {
-            runner.minimumVersion = '5.0'
+        boolean isGroovyProject = testProject.name().contains("GROOVY")
+        runner.addBuildMutator {
+            def fileToChange = new File(it.projectDir, testProject.config.fileToChangeByScenario['assemble'])
+            return isGroovyProject ? new ApplyAbiChangeToGroovySourceFileMutator(fileToChange) : new ApplyAbiChangeToJavaSourceFileMutator(fileToChange)
+        }
+        runner.targetVersions = ["6.7-20200824220048+0000"]
+        if (isGroovyProject) {
+            runner.minimumBaseVersion = '5.0'
         }
 
         when:

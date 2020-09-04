@@ -17,11 +17,18 @@ package org.gradle.api.internal.artifacts.repositories;
 
 import org.gradle.api.Action;
 import org.gradle.api.artifacts.repositories.MavenRepositoryContentDescriptor;
+import org.gradle.api.internal.FeaturePreviews;
 import org.gradle.internal.Actions;
+
+import java.util.function.Supplier;
 
 class DefaultMavenRepositoryContentDescriptor extends DefaultRepositoryContentDescriptor implements MavenRepositoryContentDescriptor {
     private boolean snapshots = true;
     private boolean releases = true;
+
+    public DefaultMavenRepositoryContentDescriptor(Supplier<String> repositoryNameSupplier, FeaturePreviews featurePreviews) {
+        super(repositoryNameSupplier, featurePreviews);
+    }
 
     @Override
     public void releasesOnly() {
@@ -39,23 +46,19 @@ class DefaultMavenRepositoryContentDescriptor extends DefaultRepositoryContentDe
     public Action<? super ArtifactResolutionDetails> toContentFilter() {
         Action<? super ArtifactResolutionDetails> filter = super.toContentFilter();
         if (!snapshots || !releases) {
-            Action<? super ArtifactResolutionDetails> action = new Action<ArtifactResolutionDetails>() {
-                @Override
-                public void execute(ArtifactResolutionDetails details) {
-                    if (!details.isVersionListing()) {
-                        String version = details.getComponentId().getVersion();
-                        if (snapshots && !version.endsWith("-SNAPSHOT")) {
-                            details.notFound();
-                            return;
-                        }
-                        if (releases && version.endsWith("-SNAPSHOT")) {
-                            details.notFound();
-                            return;
-                        }
+            Action<? super ArtifactResolutionDetails> action = details -> {
+                if (!details.isVersionListing()) {
+                    String version = details.getComponentId().getVersion();
+                    if (snapshots && !version.endsWith("-SNAPSHOT")) {
+                        details.notFound();
+                        return;
+                    }
+                    if (releases && version.endsWith("-SNAPSHOT")) {
+                        details.notFound();
                     }
                 }
             };
-            if (filter == null) {
+            if (filter == Actions.doNothing()) {
                 return action;
             }
             return Actions.composite(filter, action);

@@ -28,13 +28,13 @@ class SecurityManagerIntegrationTest extends AbstractIntegrationSpec {
     @IntegrationTestTimeout(120)
     def "should not hang when running with security manager"() {
         given:
-        buildFile << """ 
+        buildFile << """
 apply plugin:"java"
 
 ${mavenCentralRepository()}
 
 dependencies {
-    testImplementation 'junit:junit:4.12'
+    testImplementation 'junit:junit:4.13'
 }
 """
         file('src/test/java/SecurityManagerTest.java') << '''
@@ -60,7 +60,7 @@ public class SecurityManagerTest {
         // cause connection errors to show up in stderr.
         executer.withStackTraceChecksDisabled()
         fails('test')
-        failure.assertThatCause(matchesRegexp(".*Process 'Gradle Test Executor \\d' finished with non-zero exit value 1.*"))
+        failure.assertThatCause(matchesRegexp(".*Process 'Gradle Test Executor \\d+' finished with non-zero exit value 1.*"))
         failure.assertThatCause(containsText("This problem might be caused by incorrect test process configuration."))
         failure.assertThatCause(containsText("Please refer to the test execution section in the User Manual at https://docs.gradle.org/${GradleVersion.current().version}/userguide/java_testing.html#sec:test_execution"))
     }

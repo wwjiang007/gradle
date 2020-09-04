@@ -22,6 +22,7 @@ import org.gradle.integtests.fixtures.BuildOperationsFixture
 import org.gradle.integtests.fixtures.DirectoryBuildCacheFixture
 import org.gradle.integtests.fixtures.cache.FileAccessTimeJournalFixture
 import org.gradle.integtests.fixtures.executer.ExecutionResult
+import org.gradle.internal.hash.Hashing
 import spock.lang.Ignore
 import spock.lang.Unroll
 
@@ -40,19 +41,20 @@ class DirectoryBuildCacheCleanupIntegrationTest extends AbstractIntegrationSpec 
 
         buildFile << """
             @CacheableTask
-            class CustomTask extends DefaultTask {
+            abstract class CustomTask extends DefaultTask {
                 @OutputFile File outputFile = new File(temporaryDir, "output.txt")
                 @Input String run = project.findProperty("run") ?: ""
-                @TaskAction 
+                @javax.inject.Inject abstract FileSystemOperations getFs()
+                @TaskAction
                 void generate() {
                     logger.warn("Run " + run)
-                    project.copy {
+                    fs.copy {
                         from("output.txt")
                         into temporaryDir
                     }
                 }
             }
-            
+
             task cacheable(type: CustomTask) {
                 description = "Generates a 1MB file"
             }
@@ -76,9 +78,11 @@ class DirectoryBuildCacheCleanupIntegrationTest extends AbstractIntegrationSpec 
         run '--stop' // ensure daemon does not cache file access times in memory
         def lastCleanupCheck = gcFile().makeOlder().lastModified()
 
+        def hashStringLength = Hashing.defaultFunction().hexDigits
+
         when:
-        def newTrashFile = cacheDir.file("0" * 32).createFile()
-        def oldTrashFile = cacheDir.file("1" * 32).createFile()
+        def newTrashFile = cacheDir.file("0" * hashStringLength).createFile()
+        def oldTrashFile = cacheDir.file("1" * hashStringLength).createFile()
         writeLastFileAccessTimeToJournal(newTrashFile, System.currentTimeMillis())
         writeLastFileAccessTimeToJournal(oldTrashFile, daysAgo(MAX_CACHE_AGE_IN_DAYS + 1))
         run()
@@ -182,7 +186,7 @@ class DirectoryBuildCacheCleanupIntegrationTest extends AbstractIntegrationSpec 
                 dir = file("included/")
                 tasks = [ "build" ]
             }
-            
+
             cacheable {
                 dependsOn gradleBuild
             }

@@ -17,7 +17,6 @@
 package org.gradle.api.internal.tasks.properties.annotations;
 
 import com.google.common.collect.ImmutableSet;
-import org.gradle.api.Task;
 import org.gradle.api.internal.tasks.TaskDependencyContainer;
 import org.gradle.api.internal.tasks.properties.BeanPropertyContext;
 import org.gradle.api.internal.tasks.properties.PropertyValue;
@@ -27,7 +26,6 @@ import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.reflect.AnnotationCategory;
-import org.gradle.internal.reflect.ParameterValidationContext;
 import org.gradle.internal.reflect.PropertyMetadata;
 
 import javax.annotation.Nullable;
@@ -54,7 +52,7 @@ public class NestedBeanAnnotationHandler implements PropertyAnnotationHandler {
 
     @Override
     public boolean shouldVisit(PropertyVisitor visitor) {
-        return !visitor.visitOutputFilePropertiesOnly();
+        return true;
     }
 
     @Override
@@ -71,10 +69,6 @@ public class NestedBeanAnnotationHandler implements PropertyAnnotationHandler {
         } else if (!propertyMetadata.isAnnotationPresent(Optional.class)) {
             visitor.visitInputProperty(propertyName, new AbsentValue(), false);
         }
-    }
-
-    @Override
-    public void validatePropertyMetadata(PropertyMetadata propertyMetadata, ParameterValidationContext visitor) {
     }
 
     @Nullable
@@ -112,11 +106,6 @@ public class NestedBeanAnnotationHandler implements PropertyAnnotationHandler {
         }
 
         @Override
-        public void attachProducer(Task producer) {
-            // Ignore
-        }
-
-        @Override
         public void maybeFinalizeValue() {
             // Ignore
         }
@@ -139,11 +128,6 @@ public class NestedBeanAnnotationHandler implements PropertyAnnotationHandler {
         public TaskDependencyContainer getTaskDependencies() {
             // Ignore
             return TaskDependencyContainer.EMPTY;
-        }
-
-        @Override
-        public void attachProducer(Task producer) {
-            // Ignore
         }
 
         @Override

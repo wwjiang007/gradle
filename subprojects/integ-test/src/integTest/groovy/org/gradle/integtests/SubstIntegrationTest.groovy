@@ -22,7 +22,7 @@ import org.gradle.util.TextUtil
 
 @Requires(TestPrecondition.WINDOWS)
 class SubstIntegrationTest extends AbstractIntegrationSpec {
-    def "up to date check works from filesystem's root - intput folder to output file"() {
+    def "up to date check works from filesystem's root - input folder to output file"() {
         def drive = 'X:'
         def root = substRoot(drive)
 
@@ -32,18 +32,18 @@ class SubstIntegrationTest extends AbstractIntegrationSpec {
         def outputFile = file("output.txt")
 
         def taskName = 'inputFromFilesystemRoot'
-        def script = /*language=Groovy*/ """
+        def script = """
             class InputDirectoryContentToOutputFileAction extends DefaultTask {
                 @InputDirectory File inputDirectory
                 @OutputFile File output
-                
+
                 @TaskAction def execute() {
                     output.text = inputDirectory.list().join()
                 }
             }
-            
+
             task ${taskName}(type: InputDirectoryContentToOutputFileAction) {
-                inputDirectory = new File("${drive}\\\\") 
+                inputDirectory = new File("${drive}\\\\")
                 output = file("${TextUtil.escapeString(outputFile.absolutePath)}")
             }
         """
@@ -58,7 +58,7 @@ class SubstIntegrationTest extends AbstractIntegrationSpec {
         cleanupSubst(drive)
     }
 
-    def "up to date check works from filesystem's root - intput file to output folder copy"() {
+    def "up to date check works from filesystem's root - input file to output folder copy"() {
         def drive = 'Y:'
         substRoot(drive)
 
@@ -69,18 +69,18 @@ class SubstIntegrationTest extends AbstractIntegrationSpec {
         def outputDirectory = new File(drive)
 
         def taskName = 'outputFromFilesystemRoot'
-        def script = /*language=Groovy*/ """
+        def script = """
             class InputFileToOutputDirectoryCopyAction extends DefaultTask {
                 @InputFile File input
                 @OutputDirectory File outputDirectory
-                
+
                 @TaskAction def execute() {
                     new File(outputDirectory, "${inputFileName}") << input.text
                 }
             }
-            
+
             task ${taskName}(type: InputFileToOutputDirectoryCopyAction) {
-                input = file("${TextUtil.escapeString(inputFile.absolutePath)}") 
+                input = file("${TextUtil.escapeString(inputFile.absolutePath)}")
                 outputDirectory = new File("${drive}\\\\")
             }
         """

@@ -17,15 +17,14 @@
 package org.gradle.internal.service.scopes;
 
 import com.google.common.collect.Iterables;
-import org.gradle.api.execution.internal.DefaultTaskInputsListener;
-import org.gradle.api.execution.internal.TaskInputsListener;
+import org.gradle.api.execution.internal.DefaultTaskInputsListeners;
+import org.gradle.api.execution.internal.TaskInputsListeners;
 import org.gradle.api.internal.ClassPathRegistry;
 import org.gradle.api.internal.CollectionCallbackActionDecorator;
 import org.gradle.api.internal.DefaultClassPathProvider;
 import org.gradle.api.internal.DefaultClassPathRegistry;
 import org.gradle.api.internal.DynamicModulesClassPathProvider;
 import org.gradle.api.internal.MutationGuards;
-import org.gradle.api.internal.StartParameterInternal;
 import org.gradle.api.internal.cache.StringInterner;
 import org.gradle.api.internal.classpath.DefaultModuleRegistry;
 import org.gradle.api.internal.classpath.DefaultPluginModuleRegistry;
@@ -33,32 +32,27 @@ import org.gradle.api.internal.classpath.ModuleRegistry;
 import org.gradle.api.internal.classpath.PluginModuleRegistry;
 import org.gradle.api.internal.collections.DefaultDomainObjectCollectionFactory;
 import org.gradle.api.internal.collections.DomainObjectCollectionFactory;
-import org.gradle.api.internal.file.DefaultFilePropertyFactory;
 import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.api.internal.file.FilePropertyFactory;
-import org.gradle.api.internal.file.FileResolver;
-import org.gradle.api.internal.file.TemporaryFileProvider;
-import org.gradle.api.internal.file.TmpDirTemporaryFileProvider;
-import org.gradle.api.internal.file.collections.DefaultDirectoryFileTreeFactory;
 import org.gradle.api.internal.file.collections.DirectoryFileTreeFactory;
 import org.gradle.api.internal.model.DefaultObjectFactory;
 import org.gradle.api.internal.model.NamedObjectInstantiator;
-import org.gradle.api.internal.provider.DefaultProviderFactory;
+import org.gradle.api.internal.provider.PropertyFactory;
+import org.gradle.api.internal.tasks.properties.annotations.AbstractOutputPropertyAnnotationHandler;
+import org.gradle.api.internal.tasks.properties.annotations.OutputPropertyRoleAnnotationHandler;
 import org.gradle.api.model.ObjectFactory;
-import org.gradle.api.provider.ProviderFactory;
 import org.gradle.api.tasks.util.PatternSet;
 import org.gradle.api.tasks.util.internal.CachingPatternSpecFactory;
 import org.gradle.api.tasks.util.internal.PatternSpecFactory;
+import org.gradle.cache.internal.CleaningInMemoryCacheDecoratorFactory;
 import org.gradle.cache.internal.CrossBuildInMemoryCacheFactory;
 import org.gradle.cache.internal.InMemoryCacheDecoratorFactory;
-import org.gradle.cli.CommandLineConverter;
 import org.gradle.configuration.DefaultImportsReader;
 import org.gradle.configuration.ImportsReader;
 import org.gradle.initialization.ClassLoaderRegistry;
+import org.gradle.initialization.ClassLoaderScopeListeners;
 import org.gradle.initialization.DefaultClassLoaderRegistry;
-import org.gradle.initialization.DefaultCommandLineConverter;
 import org.gradle.initialization.DefaultJdkToolsInitializer;
-import org.gradle.initialization.DefaultParallelismConfigurationManager;
 import org.gradle.initialization.FlatClassLoaderRegistry;
 import org.gradle.initialization.JdkToolsInitializer;
 import org.gradle.initialization.LegacyTypesSupport;
@@ -67,32 +61,29 @@ import org.gradle.internal.Factory;
 import org.gradle.internal.classloader.DefaultClassLoaderFactory;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.concurrent.ExecutorFactory;
-import org.gradle.internal.concurrent.ParallelismConfigurationManager;
+import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.environment.GradleBuildEnvironment;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.execution.history.changes.DefaultExecutionStateChangeDetector;
 import org.gradle.internal.execution.history.changes.ExecutionStateChangeDetector;
-import org.gradle.internal.file.impl.DefaultDeleter;
-import org.gradle.internal.file.impl.Deleter;
+import org.gradle.internal.execution.steps.ValidateStep;
 import org.gradle.internal.filewatch.DefaultFileWatcherFactory;
 import org.gradle.internal.filewatch.FileWatcherFactory;
 import org.gradle.internal.fingerprint.overlap.OverlappingOutputDetector;
 import org.gradle.internal.fingerprint.overlap.impl.DefaultOverlappingOutputDetector;
-import org.gradle.internal.hash.DefaultStreamHasher;
-import org.gradle.internal.hash.StreamHasher;
 import org.gradle.internal.installation.CurrentGradleInstallation;
 import org.gradle.internal.installation.GradleRuntimeShadedJarDetector;
-import org.gradle.internal.instantiation.DefaultInstantiatorFactory;
 import org.gradle.internal.instantiation.InjectAnnotationHandler;
+import org.gradle.internal.instantiation.InstanceGenerator;
 import org.gradle.internal.instantiation.InstantiatorFactory;
+import org.gradle.internal.instantiation.generator.DefaultInstantiatorFactory;
 import org.gradle.internal.logging.LoggingManagerInternal;
 import org.gradle.internal.nativeintegration.filesystem.FileSystem;
 import org.gradle.internal.operations.BuildOperationListenerManager;
+import org.gradle.internal.operations.BuildOperationProgressEventEmitter;
 import org.gradle.internal.operations.CurrentBuildOperationRef;
 import org.gradle.internal.operations.DefaultBuildOperationListenerManager;
-import org.gradle.internal.os.OperatingSystem;
 import org.gradle.internal.reflect.DirectInstantiator;
-import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.resources.DefaultResourceLockCoordinationService;
 import org.gradle.internal.resources.ResourceLockCoordinationService;
 import org.gradle.internal.service.CachingServiceLocator;
@@ -125,7 +116,7 @@ import java.util.List;
 
 /**
  * Defines the extended global services of a given process. This includes the CLI, daemon and tooling API provider. The CLI
- * only needs these advances services if it is running in --no-daemon mode.
+ * only needs these services if it is running in --no-daemon mode.
  */
 public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
 
@@ -139,15 +130,11 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
     public GlobalScopeServices(final boolean longLiving, ClassPath additionalModuleClassPath) {
         super();
         this.additionalModuleClassPath = additionalModuleClassPath;
-        this.environment = new GradleBuildEnvironment() {
-            @Override
-            public boolean isLongLivingProcess() {
-                return longLiving;
-            }
-        };
+        this.environment = () -> longLiving;
     }
 
     void configure(ServiceRegistration registration, ClassLoaderRegistry classLoaderRegistry) {
+        registration.add(ClassLoaderScopeListeners.class);
         final List<PluginServiceRegistry> pluginServiceFactories = new DefaultServiceLocator(classLoaderRegistry.getRuntimeClassLoader(), classLoaderRegistry.getPluginsClassLoader()).getAll(PluginServiceRegistry.class);
         for (PluginServiceRegistry pluginServiceRegistry : pluginServiceFactories) {
             registration.add(PluginServiceRegistry.class, pluginServiceRegistry);
@@ -163,20 +150,24 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
         return CurrentBuildOperationRef.instance();
     }
 
-    BuildOperationListenerManager createBuildOperationService() {
+    BuildOperationListenerManager createBuildOperationListenerManager() {
         return new DefaultBuildOperationListenerManager();
     }
 
-    TemporaryFileProvider createTemporaryFileProvider() {
-        return new TmpDirTemporaryFileProvider();
+    BuildOperationProgressEventEmitter createBuildOperationProgressEventEmitter(
+        Clock clock,
+        CurrentBuildOperationRef currentBuildOperationRef,
+        BuildOperationListenerManager listenerManager
+    ) {
+        return new BuildOperationProgressEventEmitter(
+            clock,
+            currentBuildOperationRef,
+            listenerManager.getBroadcaster()
+        );
     }
 
     GradleBuildEnvironment createGradleBuildEnvironment() {
         return environment;
-    }
-
-    CommandLineConverter<StartParameterInternal> createCommandLine2StartParameterConverter() {
-        return new DefaultCommandLineConverter();
     }
 
     CachingServiceLocator createPluginsServiceLocator(ClassLoaderRegistry registry) {
@@ -189,16 +180,12 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
         return new DefaultJdkToolsInitializer(new DefaultClassLoaderFactory());
     }
 
-    Instantiator createInstantiator(InstantiatorFactory instantiatorFactory) {
+    InstanceGenerator createInstantiator(InstantiatorFactory instantiatorFactory) {
         return instantiatorFactory.decorateLenient();
     }
 
     InMemoryCacheDecoratorFactory createInMemoryTaskArtifactCache(CrossBuildInMemoryCacheFactory cacheFactory) {
-        return new InMemoryCacheDecoratorFactory(environment.isLongLivingProcess(), cacheFactory);
-    }
-
-    DirectoryFileTreeFactory createDirectoryFileTreeFactory(Factory<PatternSet> patternSetFactory, FileSystem fileSystem) {
-        return new DefaultDirectoryFileTreeFactory(patternSetFactory, fileSystem);
+        return new CleaningInMemoryCacheDecoratorFactory(environment.isLongLivingProcess(), cacheFactory);
     }
 
     ModelRuleExtractor createModelRuleInspector(List<MethodModelRuleExtractor> extractors, ModelSchemaStore modelSchemaStore, StructBindingsStore structBindingsStore, ManagedProxyFactory managedProxyFactory) {
@@ -242,8 +229,8 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
         return new StringInterner();
     }
 
-    InstantiatorFactory createInstantiatorFactory(CrossBuildInMemoryCacheFactory cacheFactory, List<InjectAnnotationHandler> annotationHandlers) {
-        return new DefaultInstantiatorFactory(cacheFactory, annotationHandlers);
+    InstantiatorFactory createInstantiatorFactory(CrossBuildInMemoryCacheFactory cacheFactory, List<InjectAnnotationHandler> injectHandlers, List<AbstractOutputPropertyAnnotationHandler> outputHandlers) {
+        return new DefaultInstantiatorFactory(cacheFactory, injectHandlers, new OutputPropertyRoleAnnotationHandler(outputHandlers));
     }
 
     GradleUserHomeScopeServiceRegistry createGradleUserHomeScopeServiceRegistry(ServiceRegistry globalServices) {
@@ -262,17 +249,16 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
         return new DefaultMemoryManager(osMemoryInfo, jvmMemoryInfo, listenerManager, executorFactory);
     }
 
-    FilePropertyFactory createFilePropertyFactory(FileResolver fileResolver) {
-        return new DefaultFilePropertyFactory(fileResolver);
-    }
-
-    ObjectFactory createObjectFactory(InstantiatorFactory instantiatorFactory, ServiceRegistry services, FileResolver fileResolver, DirectoryFileTreeFactory directoryFileTreeFactory, FileCollectionFactory fileCollectionFactory, DomainObjectCollectionFactory domainObjectCollectionFactory, NamedObjectInstantiator instantiator) {
+    ObjectFactory createObjectFactory(InstantiatorFactory instantiatorFactory, ServiceRegistry services, DirectoryFileTreeFactory directoryFileTreeFactory, Factory<PatternSet> patternSetFactory,
+                                      PropertyFactory propertyFactory, FilePropertyFactory filePropertyFactory, FileCollectionFactory fileCollectionFactory,
+                                      DomainObjectCollectionFactory domainObjectCollectionFactory, NamedObjectInstantiator instantiator) {
         return new DefaultObjectFactory(
-            instantiatorFactory.injectAndDecorate(services),
+            instantiatorFactory.decorate(services),
             instantiator,
-            fileResolver,
             directoryFileTreeFactory,
-            new DefaultFilePropertyFactory(fileResolver),
+            patternSetFactory,
+            propertyFactory,
+            filePropertyFactory,
             fileCollectionFactory,
             domainObjectCollectionFactory);
     }
@@ -281,20 +267,12 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
         return new DefaultDomainObjectCollectionFactory(instantiatorFactory, services, CollectionCallbackActionDecorator.NOOP, MutationGuards.identity());
     }
 
-    ProviderFactory createProviderFactory() {
-        return new DefaultProviderFactory();
-    }
-
     BuildLayoutFactory createBuildLayoutFactory() {
         return new BuildLayoutFactory();
     }
 
-    TaskInputsListener createTaskInputsListener() {
-        return new DefaultTaskInputsListener();
-    }
-
-    ParallelismConfigurationManager createMaxWorkersManager(ListenerManager listenerManager) {
-        return new DefaultParallelismConfigurationManager(listenerManager);
+    TaskInputsListeners createTaskInputsListener(ListenerManager listenerManager) {
+        return new DefaultTaskInputsListeners(listenerManager);
     }
 
     @Override
@@ -304,10 +282,6 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
 
     LoggingManagerInternal createLoggingManager(Factory<LoggingManagerInternal> loggingManagerFactory) {
         return loggingManagerFactory.create();
-    }
-
-    StreamHasher createStreamHasher() {
-        return new DefaultStreamHasher();
     }
 
     ExecutionStateChangeDetector createExecutionStateChangeDetector() {
@@ -346,7 +320,9 @@ public class GlobalScopeServices extends WorkerSharedGlobalScopeServices {
         return new DefaultOverlappingOutputDetector();
     }
 
-    Deleter createDeleter(Clock clock, FileSystem fileSystem, OperatingSystem os) {
-        return new DefaultDeleter(clock::getCurrentTime, fileSystem::isSymlink, os.isWindows());
+    ValidateStep.ValidationWarningReporter createValidationWarningReporter() {
+        return behaviour -> DeprecationLogger.deprecateBehaviour(behaviour)
+            .willBeRemovedInGradle7()
+            .withUserManual("more_about_tasks", "sec:up_to_date_checks").nagUser();
     }
 }

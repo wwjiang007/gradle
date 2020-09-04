@@ -26,7 +26,6 @@ class BasePluginIntegrationTest extends AbstractIntegrationSpec {
     @Requires(TestPrecondition.MANDATORY_FILE_LOCKING)
     def "clean failure message indicates file"() {
         given:
-        executer.requireGradleDistribution()
         buildFile << """
             apply plugin: 'base'
         """
@@ -76,7 +75,7 @@ class BasePluginIntegrationTest extends AbstractIntegrationSpec {
             apply plugin: 'base'
 """
         expect:
-        succeeds "tasks"
+        succeeds "help"
     }
 
     def "can override archiveBaseName in custom Jar task"() {

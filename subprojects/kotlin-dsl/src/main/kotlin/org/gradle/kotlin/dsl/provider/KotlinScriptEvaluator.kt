@@ -29,6 +29,8 @@ import org.gradle.groovy.scripts.ScriptSource
 import org.gradle.groovy.scripts.internal.ScriptSourceHasher
 
 import org.gradle.internal.classloader.ClasspathHasher
+import org.gradle.internal.classpath.CachedClasspathTransformer
+import org.gradle.internal.classpath.CachedClasspathTransformer.StandardTransform.BuildLogic
 import org.gradle.internal.classpath.ClassPath
 import org.gradle.internal.classpath.DefaultClassPath
 
@@ -43,25 +45,23 @@ import org.gradle.internal.operations.CallableBuildOperation
 
 import org.gradle.internal.scripts.CompileScriptBuildOperationType.Details
 import org.gradle.internal.scripts.CompileScriptBuildOperationType.Result
-
-import org.gradle.kotlin.dsl.accessors.pluginSpecBuildersClassPath
+import org.gradle.internal.scripts.ScriptExecutionListener
+import org.gradle.kotlin.dsl.accessors.PluginAccessorClassPathGenerator
 
 import org.gradle.kotlin.dsl.cache.ScriptCache
+import org.gradle.kotlin.dsl.execution.CompiledScript
 
 import org.gradle.kotlin.dsl.execution.EvalOption
 import org.gradle.kotlin.dsl.execution.EvalOptions
 import org.gradle.kotlin.dsl.execution.Interpreter
 import org.gradle.kotlin.dsl.execution.ProgramId
 
-import org.gradle.kotlin.dsl.get
-
 import org.gradle.kotlin.dsl.support.EmbeddedKotlinProvider
 import org.gradle.kotlin.dsl.support.ImplicitImports
 import org.gradle.kotlin.dsl.support.KotlinScriptHost
 import org.gradle.kotlin.dsl.support.ScriptCompilationException
-import org.gradle.kotlin.dsl.support.transitiveClosureOf
+import org.gradle.kotlin.dsl.support.serviceOf
 
-import org.gradle.plugin.management.internal.DefaultPluginRequests
 import org.gradle.plugin.management.internal.PluginRequests
 
 import org.gradle.plugin.use.internal.PluginRequestApplicator
@@ -84,6 +84,10 @@ interface KotlinScriptEvaluator {
 
 
 internal
+const val scriptCacheKeyPrefix = "gradle-kotlin-dsl"
+
+
+internal
 class StandardKotlinScriptEvaluator(
     private val classPathProvider: KotlinScriptClassPathProvider,
     private val classloadingCache: KotlinScriptClassloadingCache,
@@ -97,7 +101,9 @@ class StandardKotlinScriptEvaluator(
     private val scriptCache: ScriptCache,
     private val implicitImports: ImplicitImports,
     private val progressLoggerFactory: ProgressLoggerFactory,
-    private val buildOperationExecutor: BuildOperationExecutor
+    private val buildOperationExecutor: BuildOperationExecutor,
+    private val cachedClasspathTransformer: CachedClasspathTransformer,
+    private val scriptExecutionListener: ScriptExecutionListener
 ) : KotlinScriptEvaluator {
 
     override fun evaluate(
@@ -134,12 +140,10 @@ class StandardKotlinScriptEvaluator(
 
     private
     fun setupEmbeddedKotlinForBuildscript(scriptHandler: ScriptHandler) {
-        embeddedKotlinProvider.run {
-            addRepositoryTo(scriptHandler.repositories)
-            pinDependenciesOn(
-                scriptHandler.configurations["classpath"],
-                embeddedKotlinModules)
-        }
+        embeddedKotlinProvider.pinEmbeddedKotlinDependenciesOn(
+            scriptHandler.dependencies,
+            "classpath"
+        )
     }
 
     private
@@ -151,7 +155,8 @@ class StandardKotlinScriptEvaluator(
 
         override fun pluginAccessorsFor(scriptHost: KotlinScriptHost<*>): ClassPath =
             (scriptHost.target as? Project)?.let {
-                pluginSpecBuildersClassPath(it).bin
+                val pluginAccessorClassPathGenerator = it.serviceOf<PluginAccessorClassPathGenerator>()
+                pluginAccessorClassPathGenerator.pluginSpecBuildersClassPath(it).bin
             } ?: ClassPath.EMPTY
 
         override fun runCompileBuildOperation(scriptPath: String, stage: String, action: () -> String): String =
@@ -171,6 +176,10 @@ class StandardKotlinScriptEvaluator(
                     })
                 }
             })
+
+        override fun onScriptClassLoaded(scriptSource: ScriptSource, specializedProgram: Class<*>) {
+            scriptExecutionListener.onScriptClassLoaded(scriptSource, specializedProgram)
+        }
 
         override fun setupEmbeddedKotlinFor(scriptHost: KotlinScriptHost<*>) {
             setupEmbeddedKotlinForBuildscript(scriptHost.scriptHandler)
@@ -202,7 +211,7 @@ class StandardKotlinScriptEvaluator(
         override fun closeTargetScopeOf(scriptHost: KotlinScriptHost<*>) {
 
             pluginRequestApplicator.applyPlugins(
-                DefaultPluginRequests.EMPTY,
+                PluginRequests.EMPTY,
                 scriptHost.scriptHandler as ScriptHandlerInternal?,
                 null,
                 scriptHost.targetScope
@@ -211,10 +220,10 @@ class StandardKotlinScriptEvaluator(
 
         override fun cachedClassFor(
             programId: ProgramId
-        ): Class<*>? = classloadingCache.get(programId)
+        ): CompiledScript? = classloadingCache.get(programId)
 
         override fun cache(
-            specializedProgram: Class<*>,
+            specializedProgram: CompiledScript,
             programId: ProgramId
         ) {
             classloadingCache.put(
@@ -233,7 +242,7 @@ class StandardKotlinScriptEvaluator(
         ): File = try {
 
             val baseCacheKey =
-                cacheKeyPrefix + templateId + sourceHash + parentClassLoader
+                cacheKeySpecPrefix + templateId + sourceHash + parentClassLoader
 
             val effectiveCacheKey =
                 accessorsClassPath?.let { baseCacheKey + it }
@@ -258,8 +267,8 @@ class StandardKotlinScriptEvaluator(
             )
 
         private
-        val cacheKeyPrefix =
-            CacheKeyBuilder.CacheKeySpec.withPrefix("gradle-kotlin-dsl")
+        val cacheKeySpecPrefix =
+            CacheKeyBuilder.CacheKeySpec.withPrefix(scriptCacheKeyPrefix)
 
         override fun compilationClassPathOf(classLoaderScope: ClassLoaderScope): ClassPath =
             classPathProvider.compilationClassPathOf(classLoaderScope)
@@ -270,22 +279,46 @@ class StandardKotlinScriptEvaluator(
             location: File,
             className: String,
             accessorsClassPath: ClassPath?
-        ): Class<*> =
-            classLoaderScope
-                .createChild(childScopeId)
-                .local(DefaultClassPath.of(location))
-                .apply { accessorsClassPath?.let(::local) }
-                .lock()
-                .localClassLoader
-                .loadClass(className)
+        ): CompiledScript {
+            val instrumentedClasses = cachedClasspathTransformer.transform(DefaultClassPath.of(location), BuildLogic)
+            val classpath = instrumentedClasses.plus(accessorsClassPath ?: ClassPath.EMPTY)
+            return ScopeBackedCompiledScript(classLoaderScope, childScopeId, classpath, className)
+        }
 
         override val implicitImports: List<String>
             get() = this@StandardKotlinScriptEvaluator.implicitImports.list
     }
-}
 
+    private
+    class ScopeBackedCompiledScript(
+        private val classLoaderScope: ClassLoaderScope,
+        private val childScopeId: String,
+        private val classPath: ClassPath,
+        private val className: String
+    ) : CompiledScript {
+        private
+        var loadedClass: Class<*>? = null
+        var scope: ClassLoaderScope? = null
 
-private
-val embeddedKotlinModules by lazy {
-    transitiveClosureOf("stdlib-jdk8", "reflect")
+        override val programFor: Class<*>
+            get() {
+                if (loadedClass == null) {
+                    scope = prepareClassLoaderScope().also {
+                        loadedClass = it.localClassLoader.loadClass(className)
+                    }
+                }
+                return loadedClass!!
+            }
+
+        override fun onReuse() {
+            scope?.let {
+                // Recreate the script scope and ClassLoader, so that things that use scopes are notified that the scope exists
+                it.onReuse()
+                require(loadedClass!!.classLoader == it.localClassLoader)
+            }
+        }
+
+        private
+        fun prepareClassLoaderScope() = classLoaderScope.createLockedChild(childScopeId, classPath, null, null)
+    }
 }

@@ -18,6 +18,7 @@ package org.gradle.api.plugins.quality.checkstyle
 
 import org.gradle.integtests.fixtures.MultiVersionIntegrationSpec
 import org.gradle.integtests.fixtures.TargetCoverage
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.quality.integtest.fixtures.CheckstyleCoverage
 import org.gradle.util.Matchers
@@ -44,6 +45,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         writeConfigFile()
     }
 
+    @ToBeFixedForConfigurationCache
     def "analyze good code"() {
         goodCode()
 
@@ -60,8 +62,34 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         file("build/reports/checkstyle/test.html").assertContents(containsClass("org.gradle.TestClass2"))
     }
 
+    @ToBeFixedForConfigurationCache
+    def "supports fallback when configDirectory does not exist"() {
+        goodCode()
+        buildFile << """
+            checkstyle {
+                config = project.resources.text.fromString('''<!DOCTYPE module PUBLIC "-//Puppy Crawl//DTD Check Configuration 1.3//EN"
+                        "https://www.puppycrawl.com/dtds/configuration_1_3.dtd">
+                <module name="Checker">
+
+                    <module name="FileTabCharacter"/>
+
+                    <module name="SuppressionFilter">
+                        <property name="file" value="\${config_loc}/suppressions.xml" default=""/>
+                        <property name="optional" value="true"/>
+                    </module>
+                </module>''')
+
+                configDirectory = file("config/does-not-exist")
+            }
+        """
+
+        expect:
+        succeeds('check')
+    }
+
     @ToBeImplemented
     @Issue("GRADLE-3432")
+    @ToBeFixedForConfigurationCache
     def "analyze bad resources"() {
         defaultLanguage('en')
         writeConfigFileForResources()
@@ -76,6 +104,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         // file("build/reports/checkstyle/main.html").assertContents(containsLine(containsString("bad.properties")))
     }
 
+    @ToBeFixedForConfigurationCache
     def "analyze bad code"() {
         defaultLanguage('en')
         badCode()
@@ -92,6 +121,20 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         file("build/reports/checkstyle/main.html").assertContents(containsClass("org.gradle.class2"))
     }
 
+    @Issue("https://github.com/gradle/gradle/issues/12270")
+    @ToBeFixedForConfigurationCache
+    def "can analyse a single source file"() {
+        buildFile << """
+            checkstyleMain.source = ['src/main/java/org/gradle/Class1.java']
+        """
+        goodCode()
+
+        expect:
+        succeeds('check')
+        file("build/reports/checkstyle/main.xml").assertContents(containsClass("org.gradle.Class1"))
+    }
+
+    @ToBeFixedForConfigurationCache
     def "can suppress console output"() {
         def message = "Name 'class1' must match pattern"
 
@@ -116,6 +159,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         file("build/reports/checkstyle/main.html").assertContents(containsClass("org.gradle.class2"))
     }
 
+    @ToBeFixedForConfigurationCache
     def "can ignore failures"() {
         badCode()
         buildFile << """
@@ -138,6 +182,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         file("build/reports/checkstyle/main.html").assertContents(containsClass("org.gradle.class2"))
     }
 
+    @ToBeFixedForConfigurationCache
     def "can ignore maximum number of errors"() {
         badCode()
         buildFile << """
@@ -161,6 +206,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         file("build/reports/checkstyle/main.html").assertContents(containsClass("org.gradle.class2"))
     }
 
+    @ToBeFixedForConfigurationCache
     def "can fail on maximum number of warnings"() {
         given:
         writeConfigFileWithWarnings()
@@ -186,7 +232,8 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         file("build/reports/checkstyle/main.html").assertContents(containsClass("org.gradle.class2"))
     }
 
-    @IgnoreIf({GradleContextualExecuter.parallel})
+    @IgnoreIf({ GradleContextualExecuter.parallel })
+    @ToBeFixedForConfigurationCache
     def "is incremental"() {
         given:
         goodCode()
@@ -208,6 +255,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         executedAndNotSkipped(":checkstyleMain")
     }
 
+    @ToBeFixedForConfigurationCache
     def "can configure reporting"() {
         given:
         goodCode()
@@ -226,6 +274,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         file("bar.html").exists()
     }
 
+    @ToBeFixedForConfigurationCache
     def "can configure the html report with a custom stylesheet"() {
         given:
         goodCode()
@@ -245,6 +294,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
     }
 
     @Issue("GRADLE-3490")
+    @ToBeFixedForConfigurationCache
     def "do not output XML report when only HTML report is enabled"() {
         given:
         goodCode()
@@ -266,7 +316,8 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         !file("build/tmp/checkstyleMain/main.xml").exists()
     }
 
-    def "changes to files in configDir make the task out-of-date"() {
+    @ToBeFixedForConfigurationCache
+    def "changes to files in configDirectory make the task out-of-date"() {
         given:
         goodCode()
         succeeds "checkstyleMain"
@@ -283,6 +334,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         executedAndNotSkipped(":checkstyleMain")
     }
 
+    @ToBeFixedForConfigurationCache
     def "can change built-in config_loc"() {
         given:
         goodCode()
@@ -292,7 +344,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         buildFile << """
             checkstyle {
                 configFile = file("config/checkstyle/checkstyle.xml")
-                configDir = file("custom")
+                configDirectory = file("custom")
             }
         """
         when:
@@ -309,6 +361,7 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
         skipped(":checkstyleMain")
     }
 
+    @ToBeFixedForConfigurationCache
     def "behaves if config_loc is already defined"() {
         given:
         goodCode()
@@ -317,21 +370,23 @@ class CheckstylePluginVersionIntegrationTest extends MultiVersionIntegrationSpec
 
         buildFile << """
             checkstyle {
-                configProperties['config_loc'] = file("custom") 
+                configProperties['config_loc'] = file("custom")
             }
         """
         when:
-        // config_loc points to the correct location
-        // while the default configDir does not.
-        // The build should be successful anyways
-        executer.expectDeprecationWarning()
-        succeeds "checkstyleMain"
+        // config_loc points to the location of suppressions.xml
+        // while the default configDirectory does not.
+        // The build should fail because we ignore the user provided value
+        executer.expectDocumentedDeprecationWarning("Adding 'config_loc' to checkstyle.configProperties has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "This property is now ignored and the value of configDirectory is always used for 'config_loc'. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_5.html#user_provided_config_loc_properties_are_ignored_by_checkstyle")
+        fails "checkstyleMain"
         then:
-        outputContains("Adding 'config_loc' to checkstyle.configProperties has been deprecated.")
         executedAndNotSkipped(":checkstyleMain")
     }
 
     @Issue("https://github.com/gradle/gradle/issues/2326")
+    @ToBeFixedForConfigurationCache
     def "check task should not be up-to-date after clean if it only outputs to console"() {
         given:
         defaultLanguage('en')

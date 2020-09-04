@@ -16,7 +16,7 @@
 
 package org.gradle.internal.operations.notify
 
-import org.gradle.api.internal.GradleInternal
+
 import org.gradle.internal.event.DefaultListenerManager
 import org.gradle.internal.operations.BuildOperationDescriptor
 import org.gradle.internal.operations.BuildOperationListenerManager
@@ -25,15 +25,15 @@ import org.gradle.internal.operations.OperationFinishEvent
 import org.gradle.internal.operations.OperationIdentifier
 import org.gradle.internal.operations.OperationProgressEvent
 import org.gradle.internal.operations.OperationStartEvent
+import org.gradle.internal.service.scopes.Scopes
 import spock.lang.Specification
 
 class BuildOperationNotificationBridgeTest extends Specification {
 
-    def listenerManager = new DefaultListenerManager()
+    def listenerManager = new DefaultListenerManager(Scopes.BuildSession)
     def buildOperationListenerManager = new DefaultBuildOperationListenerManager()
     def broadcast = buildOperationListenerManager.broadcaster
     def listener = Mock(BuildOperationNotificationListener)
-    def gradle = Mock(GradleInternal)
 
     BuildOperationNotificationBridge bridgeInstance
 
@@ -64,8 +64,8 @@ class BuildOperationNotificationBridgeTest extends Specification {
         when:
         def bridge = bridge()
         bridge.valve.start()
-        bridge.registrar.register(listener)
-        bridge.registrar.register(listener)
+        bridge.register(listener)
+        bridge.register(listener)
 
         then:
         thrown IllegalStateException
@@ -75,10 +75,10 @@ class BuildOperationNotificationBridgeTest extends Specification {
         when:
         def bridge = bridge()
         bridge.valve.start()
-        bridge.registrar.register(listener)
+        bridge.register(listener)
         bridge.valve.stop()
         bridge.valve.start()
-        bridge.registrar.register(listener)
+        bridge.register(listener)
 
         then:
         noExceptionThrown()
@@ -102,7 +102,7 @@ class BuildOperationNotificationBridgeTest extends Specification {
         broadcast.finished(d1, new OperationFinishEvent(0, 1, null, ""))
 
         and:
-        bridge.registrar.register(listener)
+        bridge.register(listener)
 
         then:
         1 * listener.started(_)
@@ -358,7 +358,7 @@ class BuildOperationNotificationBridgeTest extends Specification {
     }
 
     void register(BuildOperationNotificationListener listener) {
-        bridge().registrar.register(listener)
+        bridge().register(listener)
     }
 
     BuildOperationNotificationBridge bridge() {

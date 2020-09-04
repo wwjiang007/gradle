@@ -33,7 +33,9 @@ import java.util.Set;
  * typically only selected properties will be configured.
  *
  * <pre class='autoTested'>
- *     apply plugin: "java-gradle-plugin"
+ *     plugins {
+ *         id 'java-gradle-plugin'
+ *     }
  *
  *     sourceSets {
  *         customMain
@@ -67,7 +69,7 @@ public class GradlePluginDevelopmentExtension {
     }
 
     public GradlePluginDevelopmentExtension(Project project, SourceSet pluginSourceSet, SourceSet[] testSourceSets) {
-        this.plugins = project.getObjects().domainObjectContainer(PluginDeclaration.class);
+        this.plugins = project.container(PluginDeclaration.class);
         this.pluginSourceSet = pluginSourceSet;
         testSourceSets(testSourceSets);
     }

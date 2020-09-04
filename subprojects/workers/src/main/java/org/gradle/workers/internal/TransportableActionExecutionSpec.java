@@ -16,40 +16,33 @@
 
 package org.gradle.workers.internal;
 
-import org.gradle.workers.WorkAction;
-import org.gradle.workers.WorkParameters;
+import java.io.File;
 
-public class TransportableActionExecutionSpec<T extends WorkParameters> implements ActionExecutionSpec<T> {
-    private final String displayName;
-    private final String implementationClassName;
+public class TransportableActionExecutionSpec {
+    protected final String implementationClassName;
     private final byte[] serializedParameters;
     private final ClassLoaderStructure classLoaderStructure;
+    private final File baseDir;
+    private final boolean usesInternalServices;
 
-    public TransportableActionExecutionSpec(String displayName, String implementationClassName, byte[] serializedParameters, ClassLoaderStructure classLoaderStructure) {
-        this.displayName = displayName;
+    public TransportableActionExecutionSpec(String implementationClassName, byte[] serializedParameters, ClassLoaderStructure classLoaderStructure, File baseDir, boolean usesInternalServices) {
         this.implementationClassName = implementationClassName;
         this.serializedParameters = serializedParameters;
         this.classLoaderStructure = classLoaderStructure;
+        this.baseDir = baseDir;
+        this.usesInternalServices = usesInternalServices;
     }
 
-    @Override
+    public File getBaseDir() {
+        return baseDir;
+    }
+
+    public boolean isInternalServicesRequired() {
+        return usesInternalServices;
+    }
+
     public ClassLoaderStructure getClassLoaderStructure() {
         return classLoaderStructure;
-    }
-
-    @Override
-    public Class<? extends WorkAction<T>> getImplementationClass() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    @Override
-    public T getParameters() {
-        throw new UnsupportedOperationException();
     }
 
     public String getImplementationClassName() {

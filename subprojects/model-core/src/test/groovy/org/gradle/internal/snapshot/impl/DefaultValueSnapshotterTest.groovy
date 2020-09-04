@@ -19,11 +19,9 @@ package org.gradle.internal.snapshot.impl
 import org.gradle.api.Named
 import org.gradle.api.internal.file.TestFiles
 import org.gradle.api.internal.model.NamedObjectInstantiator
-import org.gradle.api.internal.provider.DefaultListProperty
 import org.gradle.api.internal.provider.DefaultMapProperty
-import org.gradle.api.internal.provider.DefaultProperty
-import org.gradle.api.internal.provider.DefaultSetProperty
 import org.gradle.api.internal.provider.ManagedFactories
+import org.gradle.api.internal.provider.PropertyHost
 import org.gradle.api.internal.provider.Providers
 import org.gradle.cache.internal.TestCrossBuildInMemoryCacheFactory
 import org.gradle.internal.classloader.ClasspathUtil
@@ -36,6 +34,8 @@ import org.gradle.internal.state.ManagedFactoryRegistry
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.TestUtil
 import spock.lang.Specification
+
+import static org.gradle.api.internal.file.collections.ManagedFactories.ConfigurableFileCollectionManagedFactory
 
 class DefaultValueSnapshotterTest extends Specification {
     def classLoaderHasher = Stub(ClassLoaderHierarchyHasher) {
@@ -424,6 +424,56 @@ class DefaultValueSnapshotterTest extends Specification {
         snapshotter.snapshot([a: "1", b: "2"]) != snapshotter.snapshot(isolated2)
     }
 
+    Properties properties(Map<String, String> entries) {
+        def properties = new Properties()
+        entries.each { key, value -> properties.setProperty(key, value) }
+        return properties
+    }
+
+    def "creates snapshot for properties"() {
+        expect:
+        def snapshot1 = snapshotter.snapshot(properties([:]))
+        snapshot1 instanceof MapValueSnapshot
+        snapshot1 == snapshotter.snapshot(properties([:]))
+        snapshot1 != snapshotter.snapshot("abc")
+        snapshot1 != snapshotter.snapshot(properties(["a": "123"]))
+
+        def snapshot2 = snapshotter.snapshot(properties(["a": "123"]))
+        snapshot2 instanceof MapValueSnapshot
+        snapshot2 == snapshotter.snapshot(properties([a: "123"]))
+        snapshot2 != snapshotter.snapshot(["123"])
+        snapshot2 != snapshotter.snapshot(properties([:]))
+        snapshot2 != snapshotter.snapshot(properties([a: "123", b: "abc"]))
+        snapshot2 != snapshot1
+    }
+
+    def "creates isolated properties"() {
+        expect:
+        def original1 = properties([:])
+        def isolated1 = snapshotter.isolate(original1)
+        isolated1 instanceof IsolatedProperties
+        def copy1 = isolated1.isolate()
+        copy1 == properties([:])
+        !copy1.is(original1)
+
+        def original2 = properties([a: "123"])
+        def isolated2 = snapshotter.isolate(original2)
+        isolated2 instanceof IsolatedProperties
+        def copy2 = isolated2.isolate()
+        copy2 == properties([a: "123"])
+        !copy2.is(isolated2)
+    }
+
+    def "creates snapshot for isolated properties"() {
+        expect:
+        def isolated1 = snapshotter.isolate(properties([:]))
+        snapshotter.snapshot(properties([:])) == snapshotter.snapshot(isolated1)
+
+        def isolated2 = snapshotter.isolate(properties([a: "123"]))
+        snapshotter.snapshot(properties([a: "123"])) == snapshotter.snapshot(isolated2)
+        snapshotter.snapshot(properties([a: "1", b: "2"])) != snapshotter.snapshot(isolated2)
+    }
+
     enum Type2 {
         TWO, THREE
     }
@@ -536,11 +586,12 @@ class DefaultValueSnapshotterTest extends Specification {
 
     def "creates isolated property"() {
         def originalValue = "123"
-        def original = new DefaultProperty(String)
+        def original = TestUtil.propertyFactory().property(String)
         original.set(originalValue)
 
         given:
-        1 * managedFactoryRegistry.lookup(_) >> new ManagedFactories.PropertyManagedFactory()
+        1 * managedFactoryRegistry.lookup(ManagedFactories.PropertyManagedFactory.FACTORY_ID) >> new ManagedFactories.PropertyManagedFactory(TestUtil.propertyFactory())
+        1 * managedFactoryRegistry.lookup(ManagedFactories.ProviderManagedFactory.FACTORY_ID) >> new ManagedFactories.ProviderManagedFactory()
 
         expect:
         def isolated = snapshotter.isolate(original)
@@ -552,11 +603,11 @@ class DefaultValueSnapshotterTest extends Specification {
 
     def "creates isolated list property"() {
         def originalValue = ["123"]
-        def original = new DefaultListProperty(String)
+        def original = TestUtil.propertyFactory().listProperty(String)
         original.set(originalValue)
 
         given:
-        1 * managedFactoryRegistry.lookup(_) >> new ManagedFactories.ListPropertyManagedFactory()
+        1 * managedFactoryRegistry.lookup(_) >> new ManagedFactories.ListPropertyManagedFactory(TestUtil.propertyFactory())
 
         expect:
         def isolated = snapshotter.isolate(original)
@@ -569,11 +620,11 @@ class DefaultValueSnapshotterTest extends Specification {
 
     def "creates isolated set property"() {
         def originalValue = ["123"]
-        def original = new DefaultSetProperty(String)
+        def original = TestUtil.propertyFactory().setProperty(String)
         original.set(originalValue)
 
         given:
-        1 * managedFactoryRegistry.lookup(_) >> new ManagedFactories.SetPropertyManagedFactory()
+        1 * managedFactoryRegistry.lookup(_) >> new ManagedFactories.SetPropertyManagedFactory(TestUtil.propertyFactory())
 
         expect:
         def isolated = snapshotter.isolate(original)
@@ -586,11 +637,11 @@ class DefaultValueSnapshotterTest extends Specification {
 
     def "creates isolated map property"() {
         def originalMap = [a: 1, b: 2]
-        def original = new DefaultMapProperty(String, Number)
+        def original = new DefaultMapProperty(PropertyHost.NO_OP, String, Number)
         original.set(originalMap)
 
         given:
-        1 * managedFactoryRegistry.lookup(_) >> new ManagedFactories.MapPropertyManagedFactory()
+        1 * managedFactoryRegistry.lookup(_) >> new ManagedFactories.MapPropertyManagedFactory(TestUtil.propertyFactory())
 
         expect:
         def isolated = snapshotter.isolate(original)
@@ -752,7 +803,7 @@ class DefaultValueSnapshotterTest extends Specification {
         files1.from(new File("a").absoluteFile)
 
         given:
-        _ * managedFactoryRegistry.lookup(_) >> new org.gradle.api.internal.file.collections.ManagedFactories.ConfigurableFileCollectionManagedFactory(TestFiles.resolver())
+        _ * managedFactoryRegistry.lookup(ConfigurableFileCollectionManagedFactory.FACTORY_ID) >> new ConfigurableFileCollectionManagedFactory(TestFiles.fileCollectionFactory())
 
         expect:
         def isolatedEmpty = snapshotter.isolate(empty)
@@ -1034,6 +1085,27 @@ class DefaultValueSnapshotterTest extends Specification {
         snapshotter.snapshot(map2, snapshot4) == snapshotter.snapshot(map2)
         snapshotter.snapshot(map3, snapshot4) != snapshot4
         snapshotter.snapshot(map3, snapshot4) == snapshotter.snapshot(map3)
+    }
+
+    def "creates snapshot for properties from candidate"() {
+        expect:
+        def snapshot1 = snapshotter.snapshot(properties([:]))
+        snapshotter.snapshot(properties([:]), snapshot1).is(snapshot1)
+
+        snapshotter.snapshot(properties(["12": "123"]), snapshot1) != snapshot1
+
+        snapshotter.snapshot("other", snapshot1) != snapshot1
+        snapshotter.snapshot("other", snapshot1) == snapshotter.snapshot("other")
+        snapshotter.snapshot(new Bean(), snapshot1) != snapshot1
+        snapshotter.snapshot(new Bean(), snapshot1) == snapshotter.snapshot(new Bean())
+
+        def snapshot2 = snapshotter.snapshot(properties(["12": "123"]))
+        snapshotter.snapshot(properties(["12": "123"]), snapshot2).is(snapshot2)
+
+        snapshotter.snapshot(properties(["12": "456"]), snapshot2) != snapshot2
+        snapshotter.snapshot(properties([:]), snapshot2) != snapshot2
+        snapshotter.snapshot(properties(["123": "123"]), snapshot2) != snapshot2
+        snapshotter.snapshot(properties(["12": "123", "10": "123"]), snapshot2) != snapshot2
     }
 
     def "creates snapshot for provider type from candidate"() {

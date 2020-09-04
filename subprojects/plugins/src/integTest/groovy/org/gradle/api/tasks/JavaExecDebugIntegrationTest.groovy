@@ -17,19 +17,23 @@
 package org.gradle.api.tasks
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.integtests.fixtures.jvm.JDWPUtil
 import org.gradle.test.fixtures.ConcurrentTestUtil
 import org.junit.Rule
 import spock.lang.Ignore
+import spock.lang.Unroll
 
 class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
 
     @Rule
     JDWPUtil debugClient = new JDWPUtil()
 
-    def "debug is disabled by default"(String taskName) {
+    @Unroll
+    @UnsupportedWithConfigurationCache(iterationMatchers = ".* :runProjectJavaExec")
+    def "debug is disabled by default with task :#taskName"() {
         setup:
-        sampleProject"""
+        sampleProject """
             debugOptions {
             }
         """
@@ -38,12 +42,14 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
         succeeds(taskName)
 
         where:
-        taskName << ['runJavaExec', 'runProjectJavaExec', 'test']
+        taskName << ['runJavaExec', 'runProjectJavaExec', 'runExecOperationsJavaExec', 'test']
     }
 
-    def "debug session fails without debugger"(String taskName) {
+    @Unroll
+    @UnsupportedWithConfigurationCache(iterationMatchers = ".* :runProjectJavaExec")
+    def "debug session fails without debugger with task :#taskName"() {
         setup:
-        sampleProject"""
+        sampleProject """
             debugOptions {
                 enabled = true
                 server = false
@@ -52,15 +58,17 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
 
         expect:
         def failure = executer.withTasks(taskName).withStackTraceChecksDisabled().runWithFailure()
-        failure.assertHasErrorOutput('ERROR: transport error 202: connect failed: Connection refused')
+        failure.assertHasErrorOutput('ERROR: transport error 202: connect failed:')
 
         where:
-        taskName << ['runJavaExec', 'runProjectJavaExec', 'test']
+        taskName << ['runJavaExec', 'runProjectJavaExec', 'runExecOperationsJavaExec', 'test']
     }
 
-    def "can debug Java exec with socket listen type debugger (server = false)"(String taskName) {
+    @Unroll
+    @UnsupportedWithConfigurationCache(iterationMatchers = ".* :runProjectJavaExec")
+    def "can debug Java exec with socket listen type debugger (server = false) with task :#taskName"() {
         setup:
-        sampleProject"""    
+        sampleProject """
             debugOptions {
                 enabled = true
                 server = false
@@ -74,13 +82,15 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
         succeeds(taskName)
 
         where:
-        taskName << ['runJavaExec', 'runProjectJavaExec', 'test']
+        taskName << ['runJavaExec', 'runProjectJavaExec', 'runExecOperationsJavaExec', 'test']
     }
 
     @Ignore
-    def "can debug Java exec with socket attach type debugger (server = true)"(String taskName) {
+    @Unroll
+    @UnsupportedWithConfigurationCache(iterationMatchers = ".* :runProjectJavaExec")
+    def "can debug Java exec with socket attach type debugger (server = true) with task :#taskName"() {
         setup:
-        sampleProject"""    
+        sampleProject """
             debugOptions {
                 enabled = true
                 server = true
@@ -102,14 +112,16 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
         handle.waitForFinish()
 
         where:
-        taskName << ['runJavaExec', 'runProjectJavaExec', 'test']
+        taskName << ['runJavaExec', 'runProjectJavaExec', 'runExecOperationsJavaExec', 'test']
     }
 
-    def "debug options overrides debug property"(String taskName) {
+    @Unroll
+    @UnsupportedWithConfigurationCache(iterationMatchers = ".* :runProjectJavaExec")
+    def "debug options overrides debug property with task :#taskName"() {
         setup:
-        sampleProject"""    
+        sampleProject """
             debug = true
-        
+
             debugOptions {
                 enabled = false
                 server = false
@@ -120,18 +132,20 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
         succeeds(taskName)
 
         where:
-        taskName << ['runJavaExec', 'runProjectJavaExec', 'test']
+        taskName << ['runJavaExec', 'runProjectJavaExec', 'runExecOperationsJavaExec', 'test']
     }
 
-    def "if custom debug argument is passed to the build then debug options is ignored"(String taskName) {
+    @Unroll
+    @UnsupportedWithConfigurationCache(iterationMatchers = ".* :runProjectJavaExec")
+    def "if custom debug argument is passed to the build then debug options is ignored with task :#taskName"() {
         setup:
-        sampleProject"""    
+        sampleProject """
             debugOptions {
                 enabled = true
                 server = false
                 suspend = false
             }
-            
+
             jvmArgs "-agentlib:jdwp=transport=dt_socket,server=n,suspend=n,address=$debugClient.port"
         """
 
@@ -142,7 +156,7 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
         output.contains "Debug configuration ignored in favor of the supplied JVM arguments: [-agentlib:jdwp=transport=dt_socket,server=n,suspend=n,address=$debugClient.port]"
 
         where:
-        taskName << ['runJavaExec', 'runProjectJavaExec', 'test']
+        taskName << ['runJavaExec', 'runProjectJavaExec', 'runExecOperationsJavaExec', 'test']
     }
 
     private def sampleProject(String javaExecConfig) {
@@ -154,7 +168,7 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
                     System.exit(0);
                 }
             }
-            
+
         """
 
         file('src/test/java/driver/DriverTest.java').text = """
@@ -177,13 +191,13 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
             }
 
             dependencies {
-                 testImplementation 'junit:junit:4.12'
+                 testImplementation 'junit:junit:4.13'
             }
 
             task runJavaExec(type: JavaExec) {
                 classpath = sourceSets.main.runtimeClasspath
                 main "driver.Driver"
-                
+
                 $javaExecConfig
             }
 
@@ -192,11 +206,25 @@ class JavaExecDebugIntegrationTest extends AbstractIntegrationSpec {
                     project.javaexec {
                         classpath = sourceSets.main.runtimeClasspath
                         main "driver.Driver"
-                        
+
                         $javaExecConfig
                     }
                 }
                 dependsOn sourceSets.main.runtimeClasspath
+            }
+
+            task runExecOperationsJavaExec {
+                def runClasspath = sourceSets.main.runtimeClasspath
+                dependsOn runClasspath
+                def execOps = services.get(ExecOperations)
+                doLast {
+                    execOps.javaexec {
+                        classpath = runClasspath
+                        main "driver.Driver"
+
+                        $javaExecConfig
+                    }
+                }
             }
 
             tasks.withType(Test) {

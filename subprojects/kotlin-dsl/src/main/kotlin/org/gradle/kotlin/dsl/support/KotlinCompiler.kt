@@ -16,9 +16,11 @@
 
 package org.gradle.kotlin.dsl.support
 
+import org.gradle.internal.SystemProperties
 import org.gradle.internal.io.NullOutputStream
 
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
+import org.jetbrains.kotlin.cli.common.KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY
 
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoots
@@ -45,7 +47,6 @@ import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.ApiVersion
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
-import org.jetbrains.kotlin.config.JVMConfigurationKeys
 import org.jetbrains.kotlin.config.JVMConfigurationKeys.JVM_TARGET
 import org.jetbrains.kotlin.config.JVMConfigurationKeys.OUTPUT_DIRECTORY
 import org.jetbrains.kotlin.config.JVMConfigurationKeys.RETAIN_OUTPUT_IN_MEMORY
@@ -60,9 +61,9 @@ import org.jetbrains.kotlin.name.NameUtils
 
 import org.jetbrains.kotlin.samWithReceiver.CliSamWithReceiverComponentContributor
 
-import org.jetbrains.kotlin.scripting.definitions.KotlinScriptDefinition
 import org.jetbrains.kotlin.scripting.compiler.plugin.ScriptingCompilerConfigurationComponentRegistrar
 import org.jetbrains.kotlin.scripting.configuration.ScriptingConfigurationKeys.SCRIPT_DEFINITIONS
+import org.jetbrains.kotlin.scripting.definitions.ScriptDefinition
 
 import org.jetbrains.kotlin.utils.PathUtil
 import org.jetbrains.kotlin.utils.addToStdlib.firstNotNullResult
@@ -74,12 +75,21 @@ import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream
 
+import kotlin.reflect.KClass
+
+import kotlin.script.experimental.api.ScriptCompilationConfiguration
+import kotlin.script.experimental.api.baseClass
+import kotlin.script.experimental.api.defaultImports
+import kotlin.script.experimental.api.hostConfiguration
+import kotlin.script.experimental.api.implicitReceivers
+import kotlin.script.experimental.jvm.defaultJvmScriptingHostConfiguration
+
 
 fun compileKotlinScriptModuleTo(
     outputDirectory: File,
     moduleName: String,
     scriptFiles: Collection<String>,
-    scriptDef: KotlinScriptDefinition,
+    scriptDef: ScriptDefinition,
     classPath: Iterable<File>,
     logger: Logger,
     pathTranslation: (String) -> String
@@ -93,11 +103,32 @@ fun compileKotlinScriptModuleTo(
 )
 
 
+fun scriptDefinitionFromTemplate(
+    template: KClass<out Any>,
+    implicitImports: List<String>,
+    implicitReceiver: KClass<*>? = null
+): ScriptDefinition {
+    val hostConfiguration = defaultJvmScriptingHostConfiguration
+    return ScriptDefinition.FromConfigurations(
+        hostConfiguration = hostConfiguration,
+        compilationConfiguration = ScriptCompilationConfiguration {
+            baseClass(template)
+            defaultImports(implicitImports)
+            hostConfiguration(hostConfiguration)
+            implicitReceiver?.let {
+                implicitReceivers(it)
+            }
+        },
+        evaluationConfiguration = null
+    )
+}
+
+
 internal
 fun compileKotlinScriptToDirectory(
     outputDirectory: File,
     scriptFile: File,
-    scriptDef: KotlinScriptDefinition,
+    scriptDef: ScriptDefinition,
     classPath: List<File>,
     messageCollector: LoggingMessageCollector
 ): String {
@@ -120,7 +151,7 @@ fun compileKotlinScriptModuleTo(
     outputDirectory: File,
     moduleName: String,
     scriptFiles: Collection<String>,
-    scriptDef: KotlinScriptDefinition,
+    scriptDef: ScriptDefinition,
     classPath: Iterable<File>,
     messageCollector: LoggingMessageCollector
 ) {
@@ -129,7 +160,6 @@ fun compileKotlinScriptModuleTo(
         withCompilationExceptionHandler(messageCollector) {
 
             val configuration = compilerConfigurationFor(messageCollector).apply {
-                put(JVM_TARGET, JVM_1_8)
                 put(RETAIN_OUTPUT_IN_MEMORY, false)
                 put(OUTPUT_DIRECTORY, outputDirectory)
                 setModuleName(moduleName)
@@ -138,6 +168,7 @@ fun compileKotlinScriptModuleTo(
                 scriptFiles.forEach { addKotlinSourceRoot(it) }
                 classPath.forEach { addJvmClasspathRoot(it) }
             }
+
             val environment = kotlinCoreEnvironmentFor(configuration).apply {
                 HasImplicitReceiverCompilerPlugin.apply(project)
             }
@@ -299,7 +330,7 @@ private
 fun compilerConfigurationFor(messageCollector: MessageCollector): CompilerConfiguration =
     CompilerConfiguration().apply {
         put(CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY, messageCollector)
-        put(JVMConfigurationKeys.USE_FAST_CLASS_FILES_READING, true)
+        put(JVM_TARGET, JVM_1_8)
         put(CommonConfigurationKeys.LANGUAGE_VERSION_SETTINGS, gradleKotlinDslLanguageVersionSettings)
     }
 
@@ -311,7 +342,8 @@ val gradleKotlinDslLanguageVersionSettings = LanguageVersionSettingsImpl(
     specificFeatures = mapOf(
         LanguageFeature.NewInference to LanguageFeature.State.ENABLED,
         LanguageFeature.SamConversionForKotlinFunctions to LanguageFeature.State.ENABLED,
-        LanguageFeature.SamConversionPerArgument to LanguageFeature.State.ENABLED
+        LanguageFeature.SamConversionPerArgument to LanguageFeature.State.ENABLED,
+        LanguageFeature.ReferencesToSyntheticJavaProperties to LanguageFeature.State.ENABLED
     ),
     analysisFlags = mapOf(
         AnalysisFlags.skipMetadataVersionCheck to true
@@ -335,7 +367,7 @@ fun CompilerConfiguration.addScriptingCompilerComponents() {
 
 
 private
-fun CompilerConfiguration.addScriptDefinition(scriptDef: KotlinScriptDefinition) {
+fun CompilerConfiguration.addScriptDefinition(scriptDef: ScriptDefinition) {
     add(SCRIPT_DEFINITIONS, scriptDef)
 }
 
@@ -343,7 +375,18 @@ fun CompilerConfiguration.addScriptDefinition(scriptDef: KotlinScriptDefinition)
 private
 fun Disposable.kotlinCoreEnvironmentFor(configuration: CompilerConfiguration): KotlinCoreEnvironment {
     org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback()
-    return KotlinCoreEnvironment.createForProduction(this, configuration, EnvironmentConfigFiles.JVM_CONFIG_FILES)
+    // Don't keep the Kotlin compiler environment alive as it might hold onto stale data.
+    // See https://youtrack.jetbrains.com/issue/KT-35394
+    return SystemProperties.getInstance().withSystemProperty(
+        KOTLIN_COMPILER_ENVIRONMENT_KEEPALIVE_PROPERTY,
+        "false"
+    ) {
+        KotlinCoreEnvironment.createForProduction(
+            this,
+            configuration,
+            EnvironmentConfigFiles.JVM_CONFIG_FILES
+        )
+    }
 }
 
 

@@ -27,12 +27,12 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import org.gradle.api.file.DirectoryTree;
 import org.gradle.api.file.FileCollection;
-import org.gradle.internal.metaobject.DynamicObjectUtil;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.util.PatternSet;
 import org.gradle.internal.Cast;
 import org.gradle.internal.Pair;
+import org.gradle.internal.metaobject.DynamicObjectUtil;
 import org.gradle.plugins.ide.eclipse.internal.EclipsePluginConstants;
 import org.gradle.plugins.ide.eclipse.model.EclipseClasspath;
 import org.gradle.plugins.ide.eclipse.model.SourceFolder;
@@ -126,7 +126,7 @@ public class SourceFoldersCreator {
                     folder.setExcludes(getExcludesForTree(sourceSet, tree));
                     folder.setOutput(sourceSetOutputPaths.get(sourceSet));
                     addScopeAttributes(folder, sourceSet, sourceSetUsages);
-                    addSourceSetAttribute(folder);
+                    addSourceSetAttribute(sourceSet, folder);
                     entries.add(folder);
                 }
             }
@@ -217,10 +217,13 @@ public class SourceFoldersCreator {
         return true;
     }
 
-    private void addSourceSetAttribute(SourceFolder folder) {
+    private void addSourceSetAttribute(SourceSet sourceSet, SourceFolder folder) {
         // Using the test sources feature introduced in Eclipse Photon
-        if (folder.getPath().toLowerCase().contains("test")) {
-            folder.getEntryAttributes().put(EclipsePluginConstants.TEST_SOURCES_ATTRIBUTE_KEY, EclipsePluginConstants.TEST_SOURCES_ATTRIBUTE_VALUE);
+        String name = sourceSet.getName();
+        if (!SourceSet.MAIN_SOURCE_SET_NAME.equals(name)) {
+            if (SourceSet.TEST_SOURCE_SET_NAME.equals(name) || folder.getPath().toLowerCase().contains("test")) {
+                folder.getEntryAttributes().put(EclipsePluginConstants.TEST_SOURCES_ATTRIBUTE_KEY, EclipsePluginConstants.TEST_SOURCES_ATTRIBUTE_VALUE);
+            }
         }
     }
 
@@ -304,7 +307,7 @@ public class SourceFoldersCreator {
         });
     }
 
-    private static Comparable toComparable(SourceSet sourceSet) {
+    private static Integer toComparable(SourceSet sourceSet) {
         String name = sourceSet.getName();
         if (SourceSet.MAIN_SOURCE_SET_NAME.equals(name)) {
             return 0;
@@ -315,7 +318,7 @@ public class SourceFoldersCreator {
         }
     }
 
-    private static Comparable toComparable(DirectoryTree tree) {
+    private static Integer toComparable(DirectoryTree tree) {
         String path = tree.getDir().getPath();
         if (path.endsWith("java")) {
             return 0;

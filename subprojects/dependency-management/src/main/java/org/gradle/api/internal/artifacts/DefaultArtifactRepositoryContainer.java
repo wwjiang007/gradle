@@ -35,22 +35,14 @@ import org.gradle.util.GUtil;
 public class DefaultArtifactRepositoryContainer extends DefaultNamedDomainObjectList<ArtifactRepository>
         implements ArtifactRepositoryContainer {
 
-    private final Action<ArtifactRepository> addLastAction = new Action<ArtifactRepository>() {
-        @Override
-        public void execute(ArtifactRepository repository) {
-            DefaultArtifactRepositoryContainer.super.add(repository);
-        }
-    };
+    private final Action<ArtifactRepository> addLastAction = DefaultArtifactRepositoryContainer.super::add;
 
     public DefaultArtifactRepositoryContainer(Instantiator instantiator, CollectionCallbackActionDecorator callbackActionDecorator) {
         super(ArtifactRepository.class, instantiator, new RepositoryNamer(), callbackActionDecorator);
-        whenObjectAdded(new InternalAction<ArtifactRepository>() {
-            @Override
-            public void execute(ArtifactRepository artifactRepository) {
-                if (artifactRepository instanceof ArtifactRepositoryInternal) {
-                    ArtifactRepositoryInternal repository = (ArtifactRepositoryInternal) artifactRepository;
-                    repository.onAddToContainer(DefaultArtifactRepositoryContainer.this);
-                }
+        whenObjectAdded((InternalAction<ArtifactRepository>) artifactRepository -> {
+            if (artifactRepository instanceof ArtifactRepositoryInternal) {
+                ArtifactRepositoryInternal repository = (ArtifactRepositoryInternal) artifactRepository;
+                repository.onAddToContainer(DefaultArtifactRepositoryContainer.this);
             }
         });
     }
@@ -68,6 +60,7 @@ public class DefaultArtifactRepositoryContainer extends DefaultNamedDomainObject
     }
 
     @Override
+    @SuppressWarnings("rawtypes")
     public DefaultArtifactRepositoryContainer configure(Closure closure) {
         return ConfigureUtil.configureSelf(closure, this);
     }

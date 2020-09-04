@@ -19,12 +19,13 @@ package org.gradle.execution;
 import org.gradle.StartParameter;
 import org.gradle.api.execution.TaskActionListener;
 import org.gradle.api.execution.TaskExecutionListener;
-import org.gradle.api.execution.internal.TaskInputsListener;
+import org.gradle.api.execution.internal.TaskInputsListeners;
 import org.gradle.api.internal.cache.StringInterner;
 import org.gradle.api.internal.changedetection.TaskExecutionModeResolver;
 import org.gradle.api.internal.changedetection.changes.DefaultTaskExecutionModeResolver;
 import org.gradle.api.internal.changedetection.state.ResourceSnapshotterCacheService;
 import org.gradle.api.internal.file.FileCollectionFactory;
+import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.tasks.TaskExecuter;
 import org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter;
@@ -46,6 +47,7 @@ import org.gradle.caching.internal.controller.BuildCacheController;
 import org.gradle.execution.taskgraph.TaskExecutionGraphInternal;
 import org.gradle.execution.taskgraph.TaskListenerInternal;
 import org.gradle.internal.cleanup.BuildOutputCleanupRegistry;
+import org.gradle.internal.enterprise.core.GradleEnterprisePluginManager;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.execution.CachingResult;
 import org.gradle.internal.execution.ExecutionRequestContext;
@@ -54,6 +56,7 @@ import org.gradle.internal.execution.WorkExecutor;
 import org.gradle.internal.execution.history.ExecutionHistoryStore;
 import org.gradle.internal.execution.history.OutputFilesRepository;
 import org.gradle.internal.file.DefaultReservedFileSystemLocationRegistry;
+import org.gradle.internal.file.Deleter;
 import org.gradle.internal.file.RelativeFilePathResolver;
 import org.gradle.internal.file.ReservedFileSystemLocation;
 import org.gradle.internal.file.ReservedFileSystemLocationRegistry;
@@ -65,7 +68,6 @@ import org.gradle.internal.fingerprint.classpath.impl.DefaultClasspathFingerprin
 import org.gradle.internal.fingerprint.impl.DefaultFileCollectionFingerprinterRegistry;
 import org.gradle.internal.hash.ClassLoaderHierarchyHasher;
 import org.gradle.internal.operations.BuildOperationExecutor;
-import org.gradle.internal.scan.config.BuildScanPluginApplied;
 import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.work.AsyncWorkTracker;
 import org.gradle.normalization.internal.InputNormalizationHandlerInternal;
@@ -73,6 +75,7 @@ import org.gradle.normalization.internal.InputNormalizationHandlerInternal;
 import java.util.List;
 
 public class ProjectExecutionServices extends DefaultServiceRegistry {
+
     public ProjectExecutionServices(ProjectInternal project) {
         super("Configured project services for '" + project.getPath() + "'", project.getServices());
     }
@@ -90,45 +93,54 @@ public class ProjectExecutionServices extends DefaultServiceRegistry {
     }
 
     EmptySourceTaskSkipper createEmptySourceTaskSkipper(
-        TaskInputsListener taskInputsListener,
+        BuildOutputCleanupRegistry buildOutputCleanupRegistry,
+        Deleter deleter,
         OutputChangeListener outputChangeListener,
-        BuildOutputCleanupRegistry buildOutputCleanupRegistry
+        TaskInputsListeners taskInputsListeners
     ) {
-        return new DefaultEmptySourceTaskSkipper(taskInputsListener, outputChangeListener, buildOutputCleanupRegistry);
+        return new DefaultEmptySourceTaskSkipper(
+            buildOutputCleanupRegistry,
+            deleter,
+            outputChangeListener,
+            taskInputsListeners
+        );
     }
 
-    TaskExecuter createTaskExecuter(TaskExecutionModeResolver repository,
-                                    BuildCacheController buildCacheController,
-                                    TaskInputsListener inputsListener,
-                                    TaskActionListener actionListener,
-                                    OutputChangeListener outputChangeListener,
-                                    ClassLoaderHierarchyHasher classLoaderHierarchyHasher,
-                                    TaskSnapshotter taskSnapshotter,
-                                    FileCollectionFingerprinterRegistry fingerprinterRegistry,
-                                    BuildOperationExecutor buildOperationExecutor,
-                                    AsyncWorkTracker asyncWorkTracker,
-                                    BuildOutputCleanupRegistry cleanupRegistry,
-                                    ExecutionHistoryStore executionHistoryStore,
-                                    OutputFilesRepository outputFilesRepository,
-                                    BuildScanPluginApplied buildScanPlugin,
-                                    FileCollectionFactory fileCollectionFactory,
-                                    PropertyWalker propertyWalker,
-                                    TaskExecutionGraphInternal taskExecutionGraph,
-                                    TaskExecutionListener taskExecutionListener,
-                                    TaskListenerInternal taskListenerInternal,
-                                    TaskCacheabilityResolver taskCacheabilityResolver,
-                                    WorkExecutor<ExecutionRequestContext, CachingResult> workExecutor,
-                                    ListenerManager listenerManager,
-                                    ReservedFileSystemLocationRegistry reservedFileSystemLocationRegistry,
-                                    EmptySourceTaskSkipper emptySourceTaskSkipper
+    TaskExecuter createTaskExecuter(
+        AsyncWorkTracker asyncWorkTracker,
+        BuildCacheController buildCacheController,
+        BuildOperationExecutor buildOperationExecutor,
+        BuildOutputCleanupRegistry cleanupRegistry,
+        GradleEnterprisePluginManager gradleEnterprisePluginManager,
+        ClassLoaderHierarchyHasher classLoaderHierarchyHasher,
+        Deleter deleter,
+        EmptySourceTaskSkipper emptySourceTaskSkipper,
+        ExecutionHistoryStore executionHistoryStore,
+        FileCollectionFactory fileCollectionFactory,
+        FileCollectionFingerprinterRegistry fingerprinterRegistry,
+        FileOperations fileOperations,
+        ListenerManager listenerManager,
+        OutputChangeListener outputChangeListener,
+        OutputFilesRepository outputFilesRepository,
+        PropertyWalker propertyWalker,
+        ReservedFileSystemLocationRegistry reservedFileSystemLocationRegistry,
+        StartParameter startParameter,
+        TaskActionListener actionListener,
+        TaskCacheabilityResolver taskCacheabilityResolver,
+        TaskExecutionGraphInternal taskExecutionGraph,
+        TaskExecutionListener taskExecutionListener,
+        TaskExecutionModeResolver repository,
+        TaskListenerInternal taskListenerInternal,
+        TaskSnapshotter taskSnapshotter,
+        WorkExecutor<ExecutionRequestContext, CachingResult> workExecutor
     ) {
-
-        boolean buildCacheEnabled = buildCacheController.isEnabled();
-        boolean scanPluginApplied = buildScanPlugin.isBuildScanPluginApplied();
-
         TaskExecuter executer = new ExecuteActionsTaskExecuter(
-            buildCacheEnabled,
-            scanPluginApplied,
+            buildCacheController.isEnabled()
+                ? ExecuteActionsTaskExecuter.BuildCacheState.ENABLED
+                : ExecuteActionsTaskExecuter.BuildCacheState.DISABLED,
+            gradleEnterprisePluginManager.isPresent()
+                ? ExecuteActionsTaskExecuter.ScanPluginState.APPLIED
+                : ExecuteActionsTaskExecuter.ScanPluginState.NOT_APPLIED,
             taskSnapshotter,
             executionHistoryStore,
             buildOperationExecutor,
@@ -141,9 +153,17 @@ public class ProjectExecutionServices extends DefaultServiceRegistry {
             listenerManager,
             reservedFileSystemLocationRegistry,
             emptySourceTaskSkipper,
-            fileCollectionFactory
+            fileCollectionFactory,
+            fileOperations
         );
-        executer = new CleanupStaleOutputsExecuter(cleanupRegistry, outputFilesRepository, buildOperationExecutor, outputChangeListener, executer);
+        executer = new CleanupStaleOutputsExecuter(
+            buildOperationExecutor,
+            cleanupRegistry,
+            deleter,
+            outputChangeListener,
+            outputFilesRepository,
+            executer
+        );
         executer = new FinalizePropertiesTaskExecuter(executer);
         executer = new ResolveTaskExecutionModeExecuter(repository, fileCollectionFactory, propertyWalker, executer);
         executer = new SkipTaskWithNoActionsExecuter(taskExecutionGraph, executer);
@@ -158,7 +178,9 @@ public class ProjectExecutionServices extends DefaultServiceRegistry {
         return new DefaultClasspathFingerprinter(
             resourceSnapshotterCacheService,
             fileCollectionSnapshotter,
-            inputNormalizationHandler.getRuntimeClasspath().getResourceFilter(),
+            inputNormalizationHandler.getRuntimeClasspath().getClasspathResourceFilter(),
+            inputNormalizationHandler.getRuntimeClasspath().getManifestAttributeResourceEntryFilter(),
+            inputNormalizationHandler.getRuntimeClasspath().getManifestPropertyResourceEntryFilter(),
             stringInterner
         );
     }

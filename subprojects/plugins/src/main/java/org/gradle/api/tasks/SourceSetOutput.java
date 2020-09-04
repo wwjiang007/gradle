@@ -29,7 +29,9 @@ import java.util.Map;
  * Provides output information of the source set. Allows configuring the default output dirs and specify additional output dirs.
  *
  * <pre class='autoTested'>
- * apply plugin: 'java'
+ * plugins {
+ *     id 'java'
+ * }
  *
  * sourceSets {
  *   main {
@@ -52,7 +54,9 @@ import java.util.Map;
  * An example how to work with generated resources:
  *
  * <pre class='autoTested'>
- * apply plugin: 'java'
+ * plugins {
+ *     id 'java'
+ * }
  *
  * def generatedResources = "$buildDir/generated-resources/main"
  *
@@ -91,15 +95,6 @@ public interface SourceSetOutput extends FileCollection {
      * @since 4.0
      */
     FileCollection getClassesDirs();
-
-    /**
-     * Source set uses the legacy layout (single classes directory for the entire source set).
-     * @return true if the source set has a single classes directory
-     * @since 4.0
-     * @deprecated This method always returns false starting from Gradle 5.0.
-     */
-    @Deprecated
-    boolean isLegacyLayout();
 
     /**
      * Returns the output directory for resources

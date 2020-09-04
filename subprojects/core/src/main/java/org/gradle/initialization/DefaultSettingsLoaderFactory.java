@@ -17,28 +17,39 @@
 package org.gradle.initialization;
 
 import org.gradle.api.internal.project.ProjectStateRegistry;
-import org.gradle.initialization.buildsrc.BuildSourceBuilder;
+import org.gradle.initialization.layout.BuildLayoutFactory;
 import org.gradle.internal.build.BuildStateRegistry;
 import org.gradle.internal.build.PublicBuildPath;
 import org.gradle.internal.composite.ChildBuildRegisteringSettingsLoader;
 import org.gradle.internal.composite.CommandLineIncludedBuildSettingsLoader;
 import org.gradle.internal.composite.CompositeBuildSettingsLoader;
+import org.gradle.internal.reflect.Instantiator;
 
 public class DefaultSettingsLoaderFactory implements SettingsLoaderFactory {
-    private final ISettingsFinder settingsFinder;
     private final SettingsProcessor settingsProcessor;
-    private final BuildSourceBuilder buildSourceBuilder;
     private final BuildStateRegistry buildRegistry;
     private final ProjectStateRegistry projectRegistry;
     private final PublicBuildPath publicBuildPath;
+    private final Instantiator instantiator;
+    private final BuildLayoutFactory buildLayoutFactory;
+    private final GradlePropertiesController gradlePropertiesController;
 
-    public DefaultSettingsLoaderFactory(ISettingsFinder settingsFinder, SettingsProcessor settingsProcessor, BuildSourceBuilder buildSourceBuilder, BuildStateRegistry buildRegistry, ProjectStateRegistry projectRegistry, PublicBuildPath publicBuildPath) {
-        this.settingsFinder = settingsFinder;
+    public DefaultSettingsLoaderFactory(
+        SettingsProcessor settingsProcessor,
+        BuildStateRegistry buildRegistry,
+        ProjectStateRegistry projectRegistry,
+        PublicBuildPath publicBuildPath,
+        Instantiator instantiator,
+        BuildLayoutFactory buildLayoutFactory,
+        GradlePropertiesController gradlePropertiesController
+    ) {
         this.settingsProcessor = settingsProcessor;
-        this.buildSourceBuilder = buildSourceBuilder;
         this.buildRegistry = buildRegistry;
         this.projectRegistry = projectRegistry;
         this.publicBuildPath = publicBuildPath;
+        this.instantiator = instantiator;
+        this.buildLayoutFactory = buildLayoutFactory;
+        this.gradlePropertiesController = gradlePropertiesController;
     }
 
     @Override
@@ -49,7 +60,9 @@ public class DefaultSettingsLoaderFactory implements SettingsLoaderFactory {
                     defaultSettingsLoader()
                 ),
                 buildRegistry,
-                publicBuildPath),
+                publicBuildPath,
+                instantiator
+            ),
             buildRegistry);
     }
 
@@ -58,17 +71,19 @@ public class DefaultSettingsLoaderFactory implements SettingsLoaderFactory {
         return new ChildBuildRegisteringSettingsLoader(
             defaultSettingsLoader(),
             buildRegistry,
-            publicBuildPath
+            publicBuildPath,
+            instantiator
         );
     }
 
     private SettingsLoader defaultSettingsLoader() {
         return new SettingsAttachingSettingsLoader(
             new DefaultSettingsLoader(
-                settingsFinder,
                 settingsProcessor,
-                buildSourceBuilder
+                buildLayoutFactory,
+                gradlePropertiesController
             ),
-            projectRegistry);
+            projectRegistry
+        );
     }
 }

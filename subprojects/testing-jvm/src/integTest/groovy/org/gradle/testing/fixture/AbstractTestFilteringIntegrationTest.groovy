@@ -344,6 +344,34 @@ abstract class AbstractTestFilteringIntegrationTest extends MultiVersionIntegrat
         !output.contains('CTest!')
     }
 
+    def "can exclude tests"() {
+        given:
+        buildFile << """
+        test {
+            filter.excludeTestsMatching("*BTest.test*")
+        }
+        """
+
+        createTestABC()
+
+        when:
+        succeeds('test', '--info')
+
+        then:
+        executedAndNotSkipped(":test")
+
+        and:
+        def executionResult = new DefaultTestExecutionResult(testDirectory)
+        executionResult.testClass("ATest").assertTestsExecuted("test")
+        !executionResult.testClassExists("BTest")
+        executionResult.testClass("CTest").assertTestsExecuted("test")
+
+        and:
+        output.contains('ATest!')
+        !output.contains('BTest!')
+        output.contains('CTest!')
+    }
+
     private createTestABC(){
         file('src/test/java/ATest.java') << """import $imports;
             public class ATest {

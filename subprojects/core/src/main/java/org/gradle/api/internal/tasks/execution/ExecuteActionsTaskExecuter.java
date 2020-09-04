@@ -21,16 +21,16 @@ import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.execution.TaskActionListener;
 import org.gradle.api.execution.TaskExecutionListener;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.internal.GeneratedSubclasses;
 import org.gradle.api.internal.TaskInternal;
 import org.gradle.api.internal.TaskOutputsInternal;
 import org.gradle.api.internal.file.FileCollectionFactory;
-import org.gradle.api.internal.file.FileResolver;
+import org.gradle.api.internal.file.FileCollectionInternal;
+import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.internal.file.collections.LazilyInitializedFileCollection;
-import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.internal.project.taskfactory.IncrementalInputsTaskAction;
 import org.gradle.api.internal.project.taskfactory.IncrementalTaskInputsTaskAction;
 import org.gradle.api.internal.tasks.DefaultTaskValidationContext;
@@ -42,15 +42,14 @@ import org.gradle.api.internal.tasks.TaskExecuterResult;
 import org.gradle.api.internal.tasks.TaskExecutionContext;
 import org.gradle.api.internal.tasks.TaskExecutionOutcome;
 import org.gradle.api.internal.tasks.TaskStateInternal;
-import org.gradle.api.internal.tasks.TaskValidationContext;
 import org.gradle.api.internal.tasks.properties.CacheableOutputFilePropertySpec;
 import org.gradle.api.internal.tasks.properties.InputFilePropertySpec;
 import org.gradle.api.internal.tasks.properties.OutputFilePropertySpec;
 import org.gradle.api.internal.tasks.properties.TaskProperties;
+import org.gradle.api.tasks.CacheableTask;
 import org.gradle.api.tasks.StopActionException;
 import org.gradle.api.tasks.StopExecutionException;
 import org.gradle.api.tasks.TaskExecutionException;
-import org.gradle.api.tasks.TaskValidationException;
 import org.gradle.caching.internal.origin.OriginMetadata;
 import org.gradle.internal.UncheckedException;
 import org.gradle.internal.event.ListenerManager;
@@ -63,6 +62,7 @@ import org.gradle.internal.execution.ExecutionRequestContext;
 import org.gradle.internal.execution.InputChangesContext;
 import org.gradle.internal.execution.UnitOfWork;
 import org.gradle.internal.execution.WorkExecutor;
+import org.gradle.internal.execution.WorkValidationException;
 import org.gradle.internal.execution.caching.CachingDisabledReason;
 import org.gradle.internal.execution.caching.CachingState;
 import org.gradle.internal.execution.history.AfterPreviousExecutionState;
@@ -82,7 +82,6 @@ import org.gradle.internal.operations.BuildOperationContext;
 import org.gradle.internal.operations.BuildOperationDescriptor;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.operations.BuildOperationRef;
-import org.gradle.internal.operations.ExecutingBuildOperation;
 import org.gradle.internal.operations.RunnableBuildOperation;
 import org.gradle.internal.snapshot.FileSystemSnapshot;
 import org.gradle.internal.work.AsyncWorkTracker;
@@ -99,7 +98,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.gradle.internal.work.AsyncWorkTracker.ProjectLockRetention.RELEASE_AND_REACQUIRE_PROJECT_LOCKS;
 import static org.gradle.internal.work.AsyncWorkTracker.ProjectLockRetention.RELEASE_PROJECT_LOCKS;
@@ -110,8 +108,17 @@ import static org.gradle.internal.work.AsyncWorkTracker.ProjectLockRetention.REL
 public class ExecuteActionsTaskExecuter implements TaskExecuter {
     private static final Logger LOGGER = LoggerFactory.getLogger(ExecuteActionsTaskExecuter.class);
 
-    private final boolean buildCacheEnabled;
-    private final boolean scanPluginApplied;
+    public enum BuildCacheState {
+        ENABLED, DISABLED
+    }
+
+    public enum ScanPluginState {
+        APPLIED, NOT_APPLIED
+    }
+
+    private final BuildCacheState buildCacheState;
+    private final ScanPluginState scanPluginState;
+
     private final TaskSnapshotter taskSnapshotter;
     private final ExecutionHistoryStore executionHistoryStore;
     private final BuildOperationExecutor buildOperationExecutor;
@@ -125,10 +132,12 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
     private final ReservedFileSystemLocationRegistry reservedFileSystemLocationRegistry;
     private final EmptySourceTaskSkipper emptySourceTaskSkipper;
     private final FileCollectionFactory fileCollectionFactory;
+    private final FileOperations fileOperations;
 
     public ExecuteActionsTaskExecuter(
-        boolean buildCacheEnabled,
-        boolean scanPluginApplied,
+        BuildCacheState buildCacheState,
+        ScanPluginState scanPluginState,
+
         TaskSnapshotter taskSnapshotter,
         ExecutionHistoryStore executionHistoryStore,
         BuildOperationExecutor buildOperationExecutor,
@@ -141,10 +150,12 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
         ListenerManager listenerManager,
         ReservedFileSystemLocationRegistry reservedFileSystemLocationRegistry,
         EmptySourceTaskSkipper emptySourceTaskSkipper,
-        FileCollectionFactory fileCollectionFactory
+        FileCollectionFactory fileCollectionFactory,
+        FileOperations fileOperations
     ) {
-        this.buildCacheEnabled = buildCacheEnabled;
-        this.scanPluginApplied = scanPluginApplied;
+        this.buildCacheState = buildCacheState;
+        this.scanPluginState = scanPluginState;
+
         this.taskSnapshotter = taskSnapshotter;
         this.executionHistoryStore = executionHistoryStore;
         this.buildOperationExecutor = buildOperationExecutor;
@@ -158,6 +169,7 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
         this.reservedFileSystemLocationRegistry = reservedFileSystemLocationRegistry;
         this.emptySourceTaskSkipper = emptySourceTaskSkipper;
         this.fileCollectionFactory = fileCollectionFactory;
+        this.fileOperations = fileOperations;
     }
 
     @Override
@@ -165,7 +177,7 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
         TaskExecution work = new TaskExecution(task, context, executionHistoryStore, fingerprinterRegistry, classLoaderHierarchyHasher);
         try {
             return executeIfValid(task, state, context, work);
-        } catch (TaskValidationException ex) {
+        } catch (WorkValidationException ex) {
             state.setOutcome(ex);
             return TaskExecuterResult.WITHOUT_OUTPUTS;
         }
@@ -312,7 +324,10 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
         @Override
         public void visitOutputProperties(OutputPropertyVisitor visitor) {
             for (OutputFilePropertySpec property : context.getTaskProperties().getOutputFileProperties()) {
-                visitor.visitOutputProperty(property.getPropertyName(), property.getOutputType(), property.getPropertyFiles());
+                File outputFile = property.getOutputFile();
+                if (outputFile != null) {
+                    visitor.visitOutputProperty(property.getPropertyName(), property.getOutputType(), outputFile);
+                }
             }
         }
 
@@ -322,7 +337,7 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
                 if (!(property instanceof CacheableOutputFilePropertySpec)) {
                     throw new IllegalStateException("Non-cacheable property: " + property);
                 }
-                File cacheRoot = ((CacheableOutputFilePropertySpec) property).getOutputFile();
+                File cacheRoot = property.getOutputFile();
                 if (cacheRoot == null) {
                     continue;
                 }
@@ -349,8 +364,12 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
         }
 
         @Override
-        public Optional<? extends Iterable<String>> getChangingOutputs() {
-            return Optional.empty();
+        public Iterable<String> getChangingOutputs() {
+            ImmutableList.Builder<String> builder = ImmutableList.builder();
+            visitOutputProperties((propertyName, type, root) -> builder.add(root.getAbsolutePath()));
+            context.getTaskProperties().getDestroyableFiles().forEach(file -> builder.add(file.getAbsolutePath()));
+            context.getTaskProperties().getLocalStateFiles().forEach(file -> builder.add(file.getAbsolutePath()));
+            return builder.build();
         }
 
         @Override
@@ -443,46 +462,38 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
         public void markLegacySnapshottingInputsStarted() {
             // Note: this operation should be added only if the scan plugin is applied, but SnapshotTaskInputsOperationIntegrationTest
             //   expects it to be added also when the build cache is enabled (but not the scan plugin)
-            if (buildCacheEnabled || scanPluginApplied) {
-                ExecutingBuildOperation operation = buildOperationExecutor.start(BuildOperationDescriptor
+            if (buildCacheState == BuildCacheState.ENABLED || scanPluginState == ScanPluginState.APPLIED) {
+                BuildOperationContext operationContext = buildOperationExecutor.start(BuildOperationDescriptor
                     .displayName("Snapshot task inputs for " + task.getIdentityPath())
                     .name("Snapshot task inputs")
                     .details(SnapshotTaskInputsBuildOperationType.Details.INSTANCE));
-                context.setSnapshotTaskInputsBuildOperation(operation);
+                context.setSnapshotTaskInputsBuildOperationContext(operationContext);
             }
         }
 
         @Override
         public void markLegacySnapshottingInputsFinished(CachingState cachingState) {
-            context.removeSnapshotTaskInputsBuildOperation()
+            context.removeSnapshotTaskInputsBuildOperationContext()
                 .ifPresent(operation -> operation.setResult(new SnapshotTaskInputsBuildOperationResult(cachingState)));
         }
 
         @Override
         public void ensureLegacySnapshottingInputsClosed() {
             // If the operation hasn't finished normally (because of a shortcut or an error), we close it without a cache key
-            context.removeSnapshotTaskInputsBuildOperation()
+            context.removeSnapshotTaskInputsBuildOperationContext()
                 .ifPresent(operation -> operation.setResult(new SnapshotTaskInputsBuildOperationResult(CachingState.NOT_DETERMINED)));
         }
 
         @Override
-        public void validate() {
-            List<String> messages = new ArrayList<>();
-            FileResolver resolver = ((ProjectInternal) task.getProject()).getFileResolver();
-            TaskValidationContext validationContext = new DefaultTaskValidationContext(resolver, reservedFileSystemLocationRegistry, messages);
-
-            context.getTaskProperties().validate(validationContext);
-            if (!messages.isEmpty()) {
-                String errorMessage = messages.size() == 1
-                    ? String.format("A problem was found with the configuration of %s.", task)
-                    : String.format("Some problems were found with the configuration of %s.", task);
-                List<InvalidUserDataException> causes = messages.stream()
-                    .limit(5)
-                    .sorted()
-                    .map(InvalidUserDataException::new)
-                    .collect(Collectors.toList());
-                throw new TaskValidationException(errorMessage, causes);
-            }
+        public void validate(WorkValidationContext validationContext) {
+            Class<?> taskType = GeneratedSubclasses.unpackType(task);
+            // TODO This should probably use the task class info store
+            boolean cacheable = taskType.isAnnotationPresent(CacheableTask.class);
+            context.getTaskProperties().validate(new DefaultTaskValidationContext(
+                fileOperations,
+                reservedFileSystemLocationRegistry,
+                validationContext.createContextFor(taskType, cacheable)
+            ));
         }
 
         @Override
@@ -530,9 +541,9 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
             @Override
             public BuildOperationDescriptor.Builder description() {
                 return BuildOperationDescriptor
-                        .displayName(actionDisplayName + " for " + task.getIdentityPath().getPath())
-                        .name(actionDisplayName)
-                        .details(ExecuteTaskActionBuildOperationType.DETAILS_INSTANCE);
+                    .displayName(actionDisplayName + " for " + task.getIdentityPath().getPath())
+                    .name(actionDisplayName)
+                    .details(ExecuteTaskActionBuildOperationType.DETAILS_INSTANCE);
             }
 
             @Override
@@ -598,7 +609,7 @@ public class ExecuteActionsTaskExecuter implements TaskExecuter {
         }
 
         @Override
-        public FileCollection createDelegate() {
+        public FileCollectionInternal createDelegate() {
             ImmutableCollection<FileCollectionFingerprint> outputFingerprints = previousExecution.getOutputFileProperties().values();
             Set<File> outputs = new HashSet<>();
             for (FileCollectionFingerprint fileCollectionFingerprint : outputFingerprints) {

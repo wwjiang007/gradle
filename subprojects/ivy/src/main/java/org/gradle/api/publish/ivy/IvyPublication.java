@@ -17,7 +17,6 @@
 package org.gradle.api.publish.ivy;
 
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.component.SoftwareComponent;
 import org.gradle.api.publish.Publication;
 import org.gradle.api.publish.VersionMappingStrategy;
@@ -65,8 +64,10 @@ import org.gradle.internal.HasInternalProtocol;
  * <h4>Example of publishing a java component with an added source jar and custom module description</h4>
  *
  * <pre class='autoTested'>
- * apply plugin: "java"
- * apply plugin: "ivy-publish"
+ * plugins {
+ *     id 'java'
+ *     id 'ivy-publish'
+ * }
  *
  * task sourceJar(type: Jar) {
  *   from sourceSets.main.allJava
@@ -132,8 +133,10 @@ public interface IvyPublication extends Publication {
      *
      * The following example demonstrates how to publish the 'java' component to a ivy repository.
      * <pre class='autoTested'>
-     * apply plugin: "java"
-     * apply plugin: "ivy-publish"
+     * plugins {
+     *     id 'java'
+     *     id 'ivy-publish'
+     * }
      *
      * publishing {
      *   publications {
@@ -153,8 +156,10 @@ public interface IvyPublication extends Publication {
      *
      * The following example demonstrates how to add a "testCompile" configuration, and a "testRuntime" configuration that extends it.
      * <pre class='autoTested'>
-     * apply plugin: "java"
-     * apply plugin: "ivy-publish"
+     * plugins {
+     *     id 'java'
+     *     id 'ivy-publish'
+     * }
      *
      * publishing {
      *   publications {
@@ -195,10 +200,12 @@ public interface IvyPublication extends Publication {
      *
      * The following example demonstrates the addition of various custom artifacts.
      * <pre class='autoTested'>
-     * apply plugin: "ivy-publish"
+     * plugins {
+     *     id 'ivy-publish'
+     * }
      *
      * task sourceJar(type: Jar) {
-     *   classifier "source"
+     *   archiveClassifier = "source"
      * }
      *
      * task genDocs {
@@ -230,10 +237,12 @@ public interface IvyPublication extends Publication {
      * This method also accepts the configure action as a closure argument, by type coercion.
      *
      * <pre class='autoTested'>
-     * apply plugin: "ivy-publish"
+     * plugins {
+     *     id 'ivy-publish'
+     * }
      *
      * task sourceJar(type: Jar) {
-     *   classifier "source"
+     *   archiveClassifier = "source"
      * }
 
      * task genDocs {
@@ -275,11 +284,13 @@ public interface IvyPublication extends Publication {
      *
      * For example, to exclude the dependencies declared by a component and instead use a custom set of artifacts:
      * <pre class='autoTested'>
-     * apply plugin: "java"
-     * apply plugin: "ivy-publish"
+     * plugins {
+     *     id 'java'
+     *     id 'ivy-publish'
+     * }
      *
      * task sourceJar(type: Jar) {
-     *   classifier "source"
+     *   archiveClassifier = "source"
      * }
      *
      * publishing {
@@ -338,8 +349,10 @@ public interface IvyPublication extends Publication {
      *
      * For example, to use resolved versions for runtime dependencies:
      * <pre class='autoTested'>
-     * apply plugin: "java"
-     * apply plugin: "ivy-publish"
+     * plugins {
+     *     id 'java'
+     *     id 'ivy-publish'
+     * }
      *
      * publishing {
      *   publications {
@@ -359,7 +372,25 @@ public interface IvyPublication extends Publication {
      *
      * @since 5.4
      */
-    @Incubating
     void versionMapping(Action<? super VersionMappingStrategy> configureAction);
 
+    /**
+     * Silences the compatibility warnings for the Ivy publication for the specified variant.
+     *
+     * Warnings are emitted when Gradle features are used that cannot be mapped completely to Ivy xml.
+     *
+     * @param variantName the variant to silence warning for
+     *
+     * @since 6.0
+     */
+    void suppressIvyMetadataWarningsFor(String variantName);
+
+    /**
+     * Silences all the compatibility warnings for the Ivy publication.
+     *
+     * Warnings are emitted when Gradle features are used that cannot be mapped completely to Ivy xml.
+     *
+     * @since 6.0
+     */
+    void suppressAllIvyMetadataWarnings();
 }

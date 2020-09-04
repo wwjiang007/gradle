@@ -46,15 +46,11 @@ import org.gradle.internal.logging.text.TreeFormatter;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.resolve.result.BuildableModuleComponentMetaDataResolveResult;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 class DefaultMetadataProvider implements MetadataProvider {
-    private final static Transformer<ComponentMetadata, BuildableComponentMetadataSupplierDetails> TO_COMPONENT_METADATA = new Transformer<ComponentMetadata, BuildableComponentMetadataSupplierDetails>() {
-        @Override
-        public ComponentMetadata transform(BuildableComponentMetadataSupplierDetails details) {
-            return details.getExecutionResult();
-        }
-    };
+    private final static Transformer<ComponentMetadata, BuildableComponentMetadataSupplierDetails> TO_COMPONENT_METADATA = BuildableComponentMetadataSupplierDetails::getExecutionResult;
     private final ModuleComponentResolveState resolveState;
     private BuildableModuleComponentMetaDataResolveResult cachedResult;
     private ComponentMetadata cachedComponentMetadata;
@@ -75,6 +71,7 @@ class DefaultMetadataProvider implements MetadataProvider {
         return cachedComponentMetadata;
     }
 
+    @Nullable
     private ComponentMetadata computeMetadata() {
         ComponentMetadata metadata = null;
         InstantiatingAction<ComponentMetadataSupplierDetails> componentMetadataSupplier = resolveState.getComponentMetadataSupplier();
@@ -98,12 +95,9 @@ class DefaultMetadataProvider implements MetadataProvider {
     private ComponentMetadata getComponentMetadataFromSupplier(InstantiatingAction<ComponentMetadataSupplierDetails> componentMetadataSupplier) {
         ComponentMetadata metadata;
         ModuleVersionIdentifier id = DefaultModuleVersionIdentifier.newId(resolveState.getId());
-        metadata = resolveState.getComponentMetadataSupplierExecutor().execute(id, componentMetadataSupplier, TO_COMPONENT_METADATA, new Transformer<BuildableComponentMetadataSupplierDetails, ModuleVersionIdentifier>() {
-            @Override
-            public BuildableComponentMetadataSupplierDetails transform(ModuleVersionIdentifier id) {
-                final SimpleComponentMetadataBuilder builder = new SimpleComponentMetadataBuilder(id, resolveState.getAttributesFactory());
-                return new BuildableComponentMetadataSupplierDetails(builder);
-            }
+        metadata = resolveState.getComponentMetadataSupplierExecutor().execute(id, componentMetadataSupplier, TO_COMPONENT_METADATA, id1 -> {
+            final SimpleComponentMetadataBuilder builder = new SimpleComponentMetadataBuilder(id1, resolveState.getAttributesFactory());
+            return new BuildableComponentMetadataSupplierDetails(builder);
         }, resolveState.getCachePolicy());
         return metadata;
     }
@@ -192,7 +186,7 @@ class DefaultMetadataProvider implements MetadataProvider {
             return attributes.asImmutable();
         }
 
-        private void maybeThrowValidationError(List<Attribute<?>> invalidAttributes) {
+        private void maybeThrowValidationError(@Nullable List<Attribute<?>> invalidAttributes) {
             if (invalidAttributes != null) {
                 TreeFormatter fm = new TreeFormatter();
                 fm.node("Invalid attributes types have been provider by component metadata supplier. Attributes must either be strings or booleans");
@@ -233,6 +227,7 @@ class DefaultMetadataProvider implements MetadataProvider {
             return builder;
         }
 
+        @Nullable
         public ComponentMetadata getExecutionResult() {
             if (builder.mutated) {
                 return builder.build();

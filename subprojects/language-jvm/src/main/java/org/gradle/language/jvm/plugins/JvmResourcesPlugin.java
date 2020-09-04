@@ -20,6 +20,7 @@ import org.gradle.api.DefaultTask;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.jvm.internal.JvmAssembly;
 import org.gradle.jvm.internal.WithJvmAssembly;
@@ -28,7 +29,6 @@ import org.gradle.language.base.internal.SourceTransformTaskConfig;
 import org.gradle.language.base.internal.registry.LanguageTransform;
 import org.gradle.language.base.internal.registry.LanguageTransformContainer;
 import org.gradle.language.base.plugins.ComponentModelBasePlugin;
-import org.gradle.language.jvm.JvmResourceSet;
 import org.gradle.language.jvm.internal.DefaultJvmResourceLanguageSourceSet;
 import org.gradle.language.jvm.tasks.ProcessResources;
 import org.gradle.model.Mutate;
@@ -46,17 +46,23 @@ import static org.gradle.util.CollectionUtils.first;
  * Plugin for packaging JVM resources. Applies the {@link org.gradle.language.base.plugins.ComponentModelBasePlugin}. Registers "resources" language support with the {@link
  * org.gradle.language.jvm.JvmResourceSet}.
  */
+@Deprecated
 public class JvmResourcesPlugin implements Plugin<Project> {
 
     @Override
     public void apply(final Project project) {
+        DeprecationLogger.deprecatePlugin("jvm-resources")
+            .willBeRemovedInGradle7()
+            .withUpgradeGuideSection(6, "upgrading_jvm_plugins")
+            .nagUser();
         project.getPluginManager().apply(ComponentModelBasePlugin.class);
     }
 
     @SuppressWarnings("UnusedDeclaration")
     static class Rules extends RuleSource {
         @ComponentType
-        void registerLanguage(TypeBuilder<JvmResourceSet> builder) {
+        @SuppressWarnings("deprecation")
+        void registerLanguage(TypeBuilder<org.gradle.language.jvm.JvmResourceSet> builder) {
             builder.defaultImplementation(DefaultJvmResourceLanguageSourceSet.class);
         }
 
@@ -66,15 +72,16 @@ public class JvmResourcesPlugin implements Plugin<Project> {
         }
     }
 
-    private static class JvmResources implements LanguageTransform<JvmResourceSet, org.gradle.jvm.JvmResources> {
+    @SuppressWarnings("deprecation")
+    private static class JvmResources implements LanguageTransform<org.gradle.language.jvm.JvmResourceSet, org.gradle.jvm.JvmResources> {
         @Override
         public String getLanguageName() {
             return "resources";
         }
 
         @Override
-        public Class<JvmResourceSet> getSourceSetType() {
-            return JvmResourceSet.class;
+        public Class<org.gradle.language.jvm.JvmResourceSet> getSourceSetType() {
+            return org.gradle.language.jvm.JvmResourceSet.class;
         }
 
         @Override
@@ -103,7 +110,7 @@ public class JvmResourcesPlugin implements Plugin<Project> {
                 @Override
                 public void configureTask(Task task, BinarySpec binary, LanguageSourceSet sourceSet, ServiceRegistry serviceRegistry) {
                     ProcessResources resourcesTask = (ProcessResources) task;
-                    JvmResourceSet resourceSet = (JvmResourceSet) sourceSet;
+                    org.gradle.language.jvm.JvmResourceSet resourceSet = (org.gradle.language.jvm.JvmResourceSet) sourceSet;
                     resourcesTask.from(resourceSet.getSource());
 
                     // The first directory is the one created by JvmComponentPlugin.configureJvmBinaries()
@@ -115,6 +122,7 @@ public class JvmResourcesPlugin implements Plugin<Project> {
                 }
             };
         }
+
         @Override
         public boolean applyToBinary(BinarySpec binary) {
             return binary instanceof WithJvmAssembly;

@@ -16,6 +16,7 @@
 
 package org.gradle.workers.internal;
 
+import org.gradle.api.file.ProjectLayout;
 import org.gradle.api.internal.ClassPathRegistry;
 import org.gradle.concurrent.ParallelismConfiguration;
 import org.gradle.initialization.ClassLoaderRegistry;
@@ -58,17 +59,10 @@ public class WorkersServices extends AbstractPluginServiceRegistry {
     @Override
     public void registerProjectServices(ServiceRegistration registration) {
         registration.addProvider(new ProjectScopeServices());
+        registration.add(IsolatedClassloaderWorkerFactory.class);
     }
 
     private static class BuildSessionScopeServices {
-        WorkerDaemonFactory createWorkerDaemonFactory(WorkerDaemonClientsManager workerDaemonClientsManager, BuildOperationExecutor buildOperationExecutor) {
-            return new WorkerDaemonFactory(workerDaemonClientsManager, buildOperationExecutor);
-        }
-
-        IsolatedClassloaderWorkerFactory createIsolatedClassloaderWorkerFactory(BuildOperationExecutor buildOperationExecutor, ServiceRegistry serviceRegistry, ClassLoaderRegistry classLoaderRegistry) {
-            return new IsolatedClassloaderWorkerFactory(buildOperationExecutor, serviceRegistry, classLoaderRegistry);
-        }
-
         WorkerDirectoryProvider createWorkerDirectoryProvider(GradleUserHomeDirProvider gradleUserHomeDirProvider) {
             return new DefaultWorkerDirectoryProvider(gradleUserHomeDirProvider);
         }
@@ -101,8 +95,8 @@ public class WorkersServices extends AbstractPluginServiceRegistry {
             return new IsolatableSerializerRegistry(classLoaderHierarchyHasher, managedFactoryRegistry);
         }
 
-        ActionExecutionSpecFactory createActionExecutionSpecFactory(IsolatableFactory isolatableFactory, IsolatableSerializerRegistry serializerRegistry, InstantiatorFactory instantiatorFactory) {
-            return new DefaultActionExecutionSpecFactory(isolatableFactory, serializerRegistry, instantiatorFactory);
+        ActionExecutionSpecFactory createActionExecutionSpecFactory(IsolatableFactory isolatableFactory, IsolatableSerializerRegistry serializerRegistry) {
+            return new DefaultActionExecutionSpecFactory(isolatableFactory, serializerRegistry);
         }
     }
 
@@ -117,12 +111,32 @@ public class WorkersServices extends AbstractPluginServiceRegistry {
                                             WorkerDirectoryProvider workerDirectoryProvider,
                                             ClassLoaderStructureProvider classLoaderStructureProvider,
                                             WorkerExecutionQueueFactory workerExecutionQueueFactory,
-                                            ServiceRegistry serviceRegistry,
-                                            ActionExecutionSpecFactory actionExecutionSpecFactory) {
-            NoIsolationWorkerFactory noIsolationWorkerFactory = new NoIsolationWorkerFactory(buildOperationExecutor, serviceRegistry);
-            DefaultWorkerExecutor workerExecutor = instantiatorFactory.decorateLenient().newInstance(DefaultWorkerExecutor.class, daemonWorkerFactory, isolatedClassloaderWorkerFactory, noIsolationWorkerFactory, forkOptionsFactory, workerLeaseRegistry, buildOperationExecutor, asyncWorkTracker, workerDirectoryProvider, workerExecutionQueueFactory, classLoaderStructureProvider, actionExecutionSpecFactory, instantiatorFactory.injectAndDecorateLenient(serviceRegistry));
+                                            ServiceRegistry projectServices,
+                                            ActionExecutionSpecFactory actionExecutionSpecFactory,
+                                            ProjectLayout projectLayout) {
+            NoIsolationWorkerFactory noIsolationWorkerFactory = new NoIsolationWorkerFactory(buildOperationExecutor, instantiatorFactory, actionExecutionSpecFactory, projectServices);
+
+            DefaultWorkerExecutor workerExecutor = instantiatorFactory.decorateLenient().newInstance(
+                DefaultWorkerExecutor.class,
+                daemonWorkerFactory,
+                isolatedClassloaderWorkerFactory,
+                noIsolationWorkerFactory,
+                forkOptionsFactory,
+                workerLeaseRegistry,
+                buildOperationExecutor,
+                asyncWorkTracker,
+                workerDirectoryProvider,
+                workerExecutionQueueFactory,
+                classLoaderStructureProvider,
+                actionExecutionSpecFactory,
+                instantiatorFactory.decorateLenient(projectServices),
+                projectLayout.getProjectDirectory().getAsFile());
             noIsolationWorkerFactory.setWorkerExecutor(workerExecutor);
             return workerExecutor;
+        }
+
+        WorkerDaemonFactory createWorkerDaemonFactory(WorkerDaemonClientsManager workerDaemonClientsManager, BuildOperationExecutor buildOperationExecutor) {
+            return new WorkerDaemonFactory(workerDaemonClientsManager, buildOperationExecutor);
         }
     }
 }

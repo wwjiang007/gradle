@@ -20,9 +20,7 @@ import com.google.common.collect.Maps;
 import org.gradle.api.Action;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.process.JavaForkOptions;
-import org.gradle.process.internal.JavaForkOptionsFactory;
 import org.gradle.workers.ClassLoaderWorkerSpec;
-import org.gradle.workers.IsolationMode;
 import org.gradle.workers.ProcessWorkerSpec;
 
 import javax.inject.Inject;
@@ -31,10 +29,10 @@ public class DefaultProcessWorkerSpec extends DefaultClassLoaderWorkerSpec imple
     protected final JavaForkOptions forkOptions;
 
     @Inject
-    public DefaultProcessWorkerSpec(JavaForkOptionsFactory javaForkOptionsFactory, ObjectFactory objectFactory) {
-        super(IsolationMode.PROCESS, objectFactory);
-        this.forkOptions = javaForkOptionsFactory.newJavaForkOptions();
-        getForkOptions().setEnvironment(Maps.<String, Object>newHashMap());
+    public DefaultProcessWorkerSpec(JavaForkOptions forkOptions, ObjectFactory objectFactory) {
+        super(objectFactory);
+        this.forkOptions = forkOptions;
+        this.forkOptions.setEnvironment(Maps.newHashMap());
     }
 
     @Override

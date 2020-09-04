@@ -31,9 +31,11 @@ import org.gradle.tooling.internal.consumer.Distribution;
 import org.gradle.tooling.internal.consumer.connection.AbstractConsumerConnection;
 import org.gradle.tooling.internal.consumer.connection.ConsumerConnection;
 import org.gradle.tooling.internal.consumer.connection.NoToolingApiConnection;
+import org.gradle.tooling.internal.consumer.connection.NotifyDaemonsAboutChangedPathsConsumerConnection;
 import org.gradle.tooling.internal.consumer.connection.ParameterAcceptingConsumerConnection;
 import org.gradle.tooling.internal.consumer.connection.ParameterValidatingConsumerConnection;
 import org.gradle.tooling.internal.consumer.connection.PhasedActionAwareConsumerConnection;
+import org.gradle.tooling.internal.consumer.connection.StopWhenIdleConsumerConnection;
 import org.gradle.tooling.internal.consumer.connection.TestExecutionConsumerConnection;
 import org.gradle.tooling.internal.consumer.connection.UnsupportedOlderVersionConnection;
 import org.gradle.tooling.internal.consumer.converters.ConsumerTargetTypeProvider;
@@ -41,8 +43,10 @@ import org.gradle.tooling.internal.consumer.versioning.ModelMapping;
 import org.gradle.tooling.internal.consumer.versioning.VersionDetails;
 import org.gradle.tooling.internal.protocol.ConnectionVersion4;
 import org.gradle.tooling.internal.protocol.InternalBuildProgressListener;
+import org.gradle.tooling.internal.protocol.InternalInvalidatableVirtualFileSystemConnection;
 import org.gradle.tooling.internal.protocol.InternalParameterAcceptingConnection;
 import org.gradle.tooling.internal.protocol.InternalPhasedActionConnection;
+import org.gradle.tooling.internal.protocol.InternalStopWhenIdleConnection;
 import org.gradle.tooling.internal.protocol.test.InternalTestExecutionConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +57,6 @@ import java.io.File;
  * Loads the tooling API implementation of the Gradle version that will run the build (the "provider").
  * Adapts the rather clunky cross-version interface to the more readable interface of the TAPI client.
  */
-@SuppressWarnings("deprecation")
 public class DefaultToolingImplementationLoader implements ToolingImplementationLoader {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultToolingImplementationLoader.class);
     private final ClassLoader classLoader;
@@ -80,8 +83,11 @@ public class DefaultToolingImplementationLoader implements ToolingImplementation
 
             ProtocolToModelAdapter adapter = new ProtocolToModelAdapter(new ConsumerTargetTypeProvider());
             ModelMapping modelMapping = new ModelMapping();
-
-            if (connection instanceof InternalPhasedActionConnection) {
+            if (connection instanceof InternalStopWhenIdleConnection) {
+                return createConnection(new StopWhenIdleConsumerConnection(connection, modelMapping, adapter), connectionParameters);
+            } else if (connection instanceof InternalInvalidatableVirtualFileSystemConnection) {
+                return createConnection(new NotifyDaemonsAboutChangedPathsConsumerConnection(connection, modelMapping, adapter), connectionParameters);
+            } else if (connection instanceof InternalPhasedActionConnection) {
                 return createConnection(new PhasedActionAwareConsumerConnection(connection, modelMapping, adapter), connectionParameters);
             } else if (connection instanceof InternalParameterAcceptingConnection) {
                 return createConnection(new ParameterAcceptingConsumerConnection(connection, modelMapping, adapter), connectionParameters);

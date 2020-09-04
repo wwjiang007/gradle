@@ -55,6 +55,7 @@ tasks.withType(JavaCompile) {
 }
 tasks.withType(Javadoc) {
     executable = "$javadoc"
+    options.noTimestamp = false
 }
 tasks.withType(Test) {
     executable = "$java"
@@ -74,7 +75,7 @@ public class Thing { }
     def "can compile source and run JUnit tests using target Java version"() {
         given:
         buildFile << """
-dependencies { testImplementation 'junit:junit:4.12' }
+dependencies { testImplementation 'junit:junit:4.13' }
 """
 
         file("src/test/java/ThingTest.java") << """
@@ -120,7 +121,10 @@ public class ThingTest {
         given:
         buildFile << """
 apply plugin: 'application'
-mainClassName = 'Main'
+
+application {
+    mainClass = 'Main'
+}
 """
 
         file("src/main/java/Main.java") << """

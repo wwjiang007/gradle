@@ -16,33 +16,26 @@
 
 package org.gradle.kotlin.dsl.execution
 
+import com.google.common.annotations.VisibleForTesting
 import org.gradle.api.Project
 import org.gradle.api.initialization.Settings
 import org.gradle.api.initialization.dsl.ScriptHandler
 import org.gradle.api.internal.initialization.ClassLoaderScope
 import org.gradle.api.invocation.Gradle
-
 import org.gradle.groovy.scripts.ScriptSource
-
 import org.gradle.internal.classpath.ClassPath
 import org.gradle.internal.exceptions.LocationAwareException
 import org.gradle.internal.hash.HashCode
 import org.gradle.internal.service.ServiceRegistry
-
-import org.gradle.kotlin.dsl.accessors.projectAccessorsClassPath
-
+import org.gradle.kotlin.dsl.accessors.ProjectAccessorsClassPathGenerator
 import org.gradle.kotlin.dsl.support.KotlinScriptHost
 import org.gradle.kotlin.dsl.support.ScriptCompilationException
 import org.gradle.kotlin.dsl.support.loggerFor
+import org.gradle.kotlin.dsl.support.serviceOf
 import org.gradle.kotlin.dsl.support.serviceRegistryOf
 import org.gradle.kotlin.dsl.support.unsafeLazy
-
 import org.gradle.plugin.management.internal.PluginRequests
-
-import com.google.common.annotations.VisibleForTesting
-
 import java.io.File
-
 import java.lang.reflect.InvocationTargetException
 
 
@@ -77,10 +70,10 @@ class Interpreter(val host: Host) {
 
         fun cachedClassFor(
             programId: ProgramId
-        ): Class<*>?
+        ): CompiledScript?
 
         fun cache(
-            specializedProgram: Class<*>,
+            specializedProgram: CompiledScript,
             programId: ProgramId
         )
 
@@ -118,7 +111,7 @@ class Interpreter(val host: Host) {
             location: File,
             className: String,
             accessorsClassPath: ClassPath?
-        ): Class<*>
+        ): CompiledScript
 
         fun applyPluginsTo(
             scriptHost: KotlinScriptHost<*>,
@@ -134,6 +127,8 @@ class Interpreter(val host: Host) {
         fun hashOf(classPath: ClassPath): HashCode
 
         fun runCompileBuildOperation(scriptPath: String, stage: String, action: () -> String): String
+
+        fun onScriptClassLoaded(scriptSource: ScriptSource, specializedProgram: Class<*>)
 
         val implicitImports: List<String>
 
@@ -181,7 +176,7 @@ class Interpreter(val host: Host) {
             programHostFor(options)
 
         if (cachedProgram != null) {
-            programHost.eval(cachedProgram, scriptHost)
+            programHost.eval(cachedProgram.programFor, scriptHost)
             return
         }
 
@@ -203,7 +198,7 @@ class Interpreter(val host: Host) {
             programId
         )
 
-        programHost.eval(specializedProgram, scriptHost)
+        programHost.eval(specializedProgram.programFor, scriptHost)
     }
 
     private
@@ -247,7 +242,7 @@ class Interpreter(val host: Host) {
         baseScope: ClassLoaderScope,
         programKind: ProgramKind,
         programTarget: ProgramTarget
-    ): Class<*> {
+    ): CompiledScript {
 
         val pluginAccessorsClassPath by unsafeLazy {
             // TODO: consider computing plugin accessors only when there's a plugins block
@@ -281,9 +276,9 @@ class Interpreter(val host: Host) {
                     val program =
                         ProgramParser.parse(programSource, programKind, programTarget)
 
-                    val residualProgram = program.map { program ->
-                        PartialEvaluator(programKind, programTarget).reduce(program)
-                    }
+                    val residualProgram = program.map(
+                        PartialEvaluator(programKind, programTarget)::reduce
+                    )
 
                     scriptSource.withLocationAwareExceptionHandling {
                         ResidualProgramCompiler(
@@ -327,7 +322,7 @@ class Interpreter(val host: Host) {
         scriptTemplateId: String,
         accessorsClassPath: ClassPath?,
         scriptSource: ScriptSource
-    ): Class<*> {
+    ): CompiledScript {
 
         logClassLoadingOf(scriptTemplateId, scriptSource)
 
@@ -405,7 +400,7 @@ class Interpreter(val host: Host) {
                 host.cachedClassFor(programId)
 
             if (cachedProgram != null) {
-                eval(cachedProgram, scriptHost)
+                eval(cachedProgram.programFor, scriptHost)
                 return
             }
 
@@ -421,14 +416,17 @@ class Interpreter(val host: Host) {
                 specializedProgram,
                 programId)
 
-            eval(specializedProgram, scriptHost)
+            eval(specializedProgram.programFor, scriptHost)
         }
 
-        override fun accessorsClassPathFor(scriptHost: KotlinScriptHost<*>) =
-            projectAccessorsClassPath(
-                scriptHost.target as Project,
+        override fun accessorsClassPathFor(scriptHost: KotlinScriptHost<*>): ClassPath {
+            val project = scriptHost.target as Project
+            val projectAccessorsClassPathGenerator = project.serviceOf<ProjectAccessorsClassPathGenerator>()
+            return projectAccessorsClassPathGenerator.projectAccessorsClassPath(
+                project,
                 host.compilationClassPathOf(scriptHost.targetScope)
             ).bin
+        }
 
         override fun compileSecondStageOf(
             program: ExecutableProgram.StagedProgram,
@@ -438,7 +436,7 @@ class Interpreter(val host: Host) {
             programKind: ProgramKind,
             programTarget: ProgramTarget,
             accessorsClassPath: ClassPath?
-        ): Class<*> {
+        ): CompiledScript {
 
             val originalScriptPath =
                 scriptHost.fileName
@@ -504,8 +502,8 @@ class Interpreter(val host: Host) {
 
         open fun eval(specializedProgram: Class<*>, scriptHost: KotlinScriptHost<*>) {
             withContextClassLoader(specializedProgram.classLoader) {
-                instantiate(specializedProgram)
-                    .execute(this, scriptHost)
+                host.onScriptClassLoaded(scriptHost.scriptSource, specializedProgram)
+                instantiate(specializedProgram).execute(this, scriptHost)
             }
         }
 

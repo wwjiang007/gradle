@@ -153,9 +153,9 @@ class MavenPublishIdentifierValidationIntegTest extends AbstractMavenPublishInte
 
             publishing {
                 repositories {
-                    maven { 
+                    maven {
                         name '${repoName}'
-                        url "${mavenRepo.uri}" 
+                        url "${mavenRepo.uri}"
                     }
                 }
                 publications {

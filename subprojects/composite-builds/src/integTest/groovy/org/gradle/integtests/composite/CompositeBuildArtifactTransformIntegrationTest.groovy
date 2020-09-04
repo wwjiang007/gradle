@@ -16,10 +16,12 @@
 
 package org.gradle.integtests.composite
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.test.fixtures.file.TestFile
 
 class CompositeBuildArtifactTransformIntegrationTest extends AbstractCompositeBuildIntegrationTest {
 
+    @ToBeFixedForConfigurationCache
     def "can apply a transform to the outputs of included builds"() {
         def buildB = singleProjectBuild("buildB") {
             buildFile << """
@@ -35,28 +37,33 @@ class CompositeBuildArtifactTransformIntegrationTest extends AbstractCompositeBu
         includedBuilds << buildC
 
         buildA.buildFile << """
-            class XForm extends ArtifactTransform {
-                List<File> transform(File file) {
-                    println("Transforming \$file in output directory \$outputDirectory")
-                    File outputFile = new File(outputDirectory, file.name + ".xform")
-                    java.nio.file.Files.copy(file.toPath(), outputFile.toPath())
-                    return [outputFile]
+            import org.gradle.api.artifacts.transform.TransformParameters
+
+            abstract class XForm implements TransformAction<TransformParameters.None> {
+                @InputArtifact
+                abstract Provider<FileSystemLocation> getInputArtifact()
+
+                void transform(TransformOutputs outputs) {
+                    def input = inputArtifact.get().asFile
+                    File outputFile = outputs.file(input.name + ".xform")
+                    def outputDirectory = outputFile.parentFile
+                    println("Transforming \$input in output directory \$outputDirectory")
+                    java.nio.file.Files.copy(input.toPath(), outputFile.toPath())
                 }
             }
-            
+
             dependencies {
                 implementation 'org.test:buildB:1.2'
                 implementation 'org.test:buildC:1.2'
-                
-                registerTransform {
+
+                registerTransform(XForm) {
                     from.attribute(Attribute.of("artifactType", String), "jar")
                     to.attribute(Attribute.of("artifactType", String), "xform")
-                    artifactTransform(XForm)
                 }
             }
-            
+
             task resolve {
-                def artifacts = configurations.compileClasspath.incoming.artifactView { 
+                def artifacts = configurations.compileClasspath.incoming.artifactView {
                     attributes.attribute(Attribute.of("artifactType", String), "xform")
                 }.artifacts
                 inputs.files artifacts.artifactFiles

@@ -16,6 +16,7 @@
 
 package org.gradle.language.swift
 
+
 import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationSpec
 import org.gradle.nativeplatform.fixtures.NativeBinaryFixture
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
@@ -95,7 +96,7 @@ class SwiftLibraryIntegrationTest extends AbstractInstalledToolChainIntegrationS
         and:
         buildFile << """
             apply plugin: 'swift-library'
-            
+
             task assembleLinkDebug {
                 dependsOn library.binaries.getByName('mainDebug').map { it.linkFile }
             }
@@ -116,7 +117,7 @@ class SwiftLibraryIntegrationTest extends AbstractInstalledToolChainIntegrationS
         and:
         buildFile << """
             apply plugin: 'swift-library'
-            
+
             task assembleRuntimeDebug {
                 dependsOn library.binaries.getByName('mainDebug').map { it.runtimeFile }
             }
@@ -137,7 +138,7 @@ class SwiftLibraryIntegrationTest extends AbstractInstalledToolChainIntegrationS
         and:
         buildFile << """
             apply plugin: 'swift-library'
-            
+
             task compileDebug {
                 dependsOn library.binaries.getByName('mainDebug').map { it.objects }
             }

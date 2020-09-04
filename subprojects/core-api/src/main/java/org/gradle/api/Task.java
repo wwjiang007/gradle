@@ -24,6 +24,7 @@ import org.gradle.api.plugins.Convention;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
+import org.gradle.api.services.BuildService;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Optional;
@@ -94,9 +95,6 @@ import java.util.Set;
  *
  * <li>A {@link Task}.</li>
  *
- * <li>A closure. The closure may take a {@code Task} as parameter. It may return any of the types listed here. Its
- * return value is recursively converted to tasks. A {@code null} return value is treated as an empty collection.</li>
- *
  * <li>A {@link TaskDependency} object.</li>
  *
  * <li>A {@link org.gradle.api.tasks.TaskReference} object.</li>
@@ -113,7 +111,8 @@ import java.util.Set;
  * <li>A {@code Callable}. The {@code call()} method may return any of the types listed here. Its return value is
  * recursively converted to tasks. A {@code null} return value is treated as an empty collection.</li>
  *
- * <li>A Groovy {@code Closure} or Kotlin function. The closure or function may return any of the types listed here. Its return value is
+ * <li>A Groovy {@code Closure} or Kotlin function. The closure may take a {@code Task} as parameter. 
+ * The closure or function may return any of the types listed here. Its return value is
  * recursively converted to tasks. A {@code null} return value is treated as an empty collection.</li>
  *
  * <li>Anything else is treated as an error.</li>
@@ -177,7 +176,6 @@ public interface Task extends Comparable<Task>, ExtensionAware {
      *
      * @since 4.7
      */
-    @Incubating
     String TASK_CONSTRUCTOR_ARGS = "constructorArgs";
 
     /**
@@ -369,7 +367,6 @@ public interface Task extends Comparable<Task>, ExtensionAware {
      *
      * @since 4.2
      */
-    @Incubating
     Task doFirst(String actionName, Action<? super Task> action);
 
     /**
@@ -389,7 +386,6 @@ public interface Task extends Comparable<Task>, ExtensionAware {
      *
      * @since 4.2
      */
-    @Incubating
     Task doLast(String actionName, Action<? super Task> action);
 
     /**
@@ -755,30 +751,11 @@ public interface Task extends Comparable<Task>, ExtensionAware {
     Property<Duration> getTimeout();
 
     /**
-     * <p>Adds the given shared resource as a requirement of this task.</p>
+     * Registers a {@link BuildService} that is used by this task.
      *
-     * <p>Requests a single lease for the given shared resource. If the given resource has already been added as a requirement to this task calling this method has no effect.</p>
-     *
-     * @param name The name of the shared resource.
-     * @see org.gradle.api.execution.SharedResource
-     *
-     * @since 5.7
+     * @param service The service provider.
+     * @since 6.1
      */
     @Incubating
-    void requiresResource(String name);
-
-    /**
-     * <p>Adds the given shared resource as a requirement of this task.</p>
-     *
-     * <p>Requests the given number of leases for the shared resource. If the given resource has already been added as a requirement, calling this method will override the requested
-     * number of leases.</p>
-     *
-     * @param name The name of the shared resource.
-     * @param leases The number of required leases.
-     * @see org.gradle.api.execution.SharedResource
-     *
-     * @since 5.7
-     */
-    @Incubating
-    void requiresResource(String name, int leases);
+    void usesService(Provider<? extends BuildService<?>> service);
 }

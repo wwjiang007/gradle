@@ -16,9 +16,14 @@
 
 package org.gradle.smoketests
 
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.integtests.fixtures.android.AndroidHome
 import org.gradle.testkit.runner.TaskOutcome
+import org.gradle.util.Requires
+import org.gradle.util.TestPrecondition
+import org.gradle.util.VersionNumber
 import spock.lang.Unroll
+
 
 /**
  * For these tests to run you need to set ANDROID_HOME to your Android SDK directory
@@ -28,68 +33,106 @@ import spock.lang.Unroll
  * https://androidstudio.googleblog.com/
  *
  */
+@Requires(TestPrecondition.JDK11_OR_EARLIER)
 class AndroidPluginsSmokeTest extends AbstractSmokeTest {
+
+    public static final String JAVA_COMPILE_DEPRECATION_MESSAGE = "Extending the JavaCompile task has been deprecated. This is scheduled to be removed in Gradle 7.0. Configure the task instead."
 
     def setup() {
         AndroidHome.assertIsSet()
     }
 
-    @Unroll
-    def "android application plugin #pluginVersion"(String pluginVersion) {
-        given:
-
-        def basedir='.'
-
-        def packageName = 'org.gradle.android.example'
-        def activity = 'MyActivity'
-        writeActivity(basedir, packageName, activity)
-
-        file("${basedir}/src/main/res/values/strings.xml") << '''<?xml version="1.0" encoding="utf-8"?>
-            <resources>
-                <string name="app_name">Android Gradle</string>
-            </resources>'''.stripIndent()
-
-
-        file('src/main/AndroidManifest.xml') << """<?xml version="1.0" encoding="utf-8"?>
-            <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-                package="${packageName}">
-
-                <application android:label="@string/app_name" >
-                    <activity
-                        android:name=".${activity}"
-                        android:label="@string/app_name" >
-                        <intent-filter>
-                            <action android:name="android.intent.action.MAIN" />
-                            <category android:name="android.intent.category.LAUNCHER" />
-                        </intent-filter>
-                    </activity>
-                </application>
-
-            </manifest>""".stripIndent()
-
-        buildFile << buildscript(pluginVersion) << """
-            apply plugin: 'com.android.application'
-
-           ${jcenterRepository()}
-           ${googleRepository()}
-
-            android.defaultConfig.applicationId "org.gradle.android.myapplication"
-        """.stripIndent() << androidPluginConfiguration() << activityDependency()
-
-        when:
-        def result = runner('androidDependencies', 'build', 'connectedAndroidTest', '-x', 'lint').build()
-
-        then:
-        result.task(':assemble').outcome == TaskOutcome.SUCCESS
-        result.task(':compileReleaseJavaWithJavac').outcome == TaskOutcome.SUCCESS
-
-        where:
-        pluginVersion << TestedVersions.androidGradle
+    // TODO:configuration-cache remove once fixed upstream
+    @Override
+    protected int maxConfigurationCacheProblems() {
+        return 100
     }
 
     @Unroll
-    def "android library plugin #pluginVersion"(String pluginVersion) {
+    @UnsupportedWithConfigurationCache(iterationMatchers = [AGP_3_ITERATION_MATCHER, AGP_4_0_ITERATION_MATCHER])
+    def "android library and application APK assembly (agp=#agpVersion, ide=#ide)"(
+        String agpVersion, boolean ide
+    ) {
+
         given:
+        def abiChange = androidLibraryAndApplicationBuild(agpVersion)
+
+        and:
+        def runner = useAgpVersion(agpVersion, runner(
+            'assembleDebug',
+            "-Pandroid.injected.invoked.from.ide=$ide"
+        ))
+
+        when: 'first build'
+        def result = runner.build()
+
+        then:
+        result.task(':app:compileDebugJavaWithJavac').outcome == TaskOutcome.SUCCESS
+        result.task(':library:assembleDebug').outcome == TaskOutcome.SUCCESS
+        result.task(':app:assembleDebug').outcome == TaskOutcome.SUCCESS
+
+        and:
+        def agpBaseVersion = VersionNumber.parse(agpVersion).baseVersion
+        def threeDotSixBaseVersion = VersionNumber.parse("3.6.0").baseVersion
+        if (agpBaseVersion < threeDotSixBaseVersion) {
+            assert result.output.contains(JAVA_COMPILE_DEPRECATION_MESSAGE)
+        } else {
+            assert !result.output.contains(JAVA_COMPILE_DEPRECATION_MESSAGE)
+        }
+        if (agpBaseVersion >= threeDotSixBaseVersion) {
+            expectNoDeprecationWarnings(result)
+        }
+
+        and:
+        assertConfigurationCacheStateStored()
+
+        when: 'up-to-date build'
+        result = runner.build()
+
+        then:
+        result.task(':app:compileDebugJavaWithJavac').outcome == TaskOutcome.UP_TO_DATE
+        result.task(':library:assembleDebug').outcome == TaskOutcome.UP_TO_DATE
+        result.task(':app:assembleDebug').outcome == TaskOutcome.UP_TO_DATE
+
+        and:
+        assertConfigurationCacheStateLoaded()
+
+        when: 'abi change on library'
+        abiChange.run()
+        result = runner.build()
+
+        then: 'dependent sources are recompiled'
+        result.task(':library:compileDebugJavaWithJavac').outcome == TaskOutcome.SUCCESS
+        result.task(':app:compileDebugJavaWithJavac').outcome == TaskOutcome.SUCCESS
+        result.task(':library:assembleDebug').outcome == TaskOutcome.SUCCESS
+        result.task(':app:assembleDebug').outcome == TaskOutcome.SUCCESS
+
+        and:
+        assertConfigurationCacheStateLoaded()
+
+        when: 'clean re-build'
+        useAgpVersion(agpVersion, this.runner('clean')).build()
+        result = runner.build()
+
+        then:
+        result.task(':app:compileDebugJavaWithJavac').outcome == TaskOutcome.SUCCESS
+        result.task(':library:assembleDebug').outcome == TaskOutcome.SUCCESS
+        result.task(':app:assembleDebug').outcome == TaskOutcome.SUCCESS
+
+        and:
+        assertConfigurationCacheStateLoaded()
+
+        where:
+        [agpVersion, ide] << [
+            TestedVersions.androidGradle.toList(),
+            [false, true]
+        ].combinations()
+    }
+
+    /**
+     * @return ABI change runnable
+     */
+    private Runnable androidLibraryAndApplicationBuild(String agpVersion) {
 
         def app = 'app'
         def appPackage = 'org.gradle.android.example.app'
@@ -106,6 +149,12 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
             </manifest>""".stripIndent()
 
         writeActivity(app, appPackage, appActivity)
+        file("${app}/src/main/java/UsesLibraryActivity.java") << """
+            public class UsesLibraryActivity {
+                public void consume(${libPackage}.${libraryActivity} activity) {
+                }
+            }
+        """
         file("${app}/src/main/AndroidManifest.xml") << """<?xml version="1.0" encoding="utf-8"?>
             <manifest xmlns:android="http://schemas.android.com/apk/res/android"
                 package="${appPackage}">
@@ -135,7 +184,7 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
             include ':${library}'
         """
 
-        file('build.gradle') << buildscript(pluginVersion) << """
+        file('build.gradle') << buildscript(agpVersion) << """
             subprojects {
                 ${jcenterRepository()}
                 ${googleRepository()}
@@ -163,19 +212,12 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
         libraryBuildFile << androidPluginConfiguration()
         libraryBuildFile << activityDependency()
 
-        when:
-        def result = runner('build', '-x', 'lint').build()
-
-        then:
-        result.task(':app:assemble').outcome == TaskOutcome.SUCCESS
-        result.task(':library:assemble').outcome == TaskOutcome.SUCCESS
-        result.task(':app:compileReleaseJavaWithJavac').outcome == TaskOutcome.SUCCESS
-
-        where:
-        pluginVersion << TestedVersions.androidGradle
+        return {
+            writeActivity(library, libPackage, libraryActivity, true)
+        }
     }
 
-    private String activityDependency() {
+    private static String activityDependency() {
         """
             dependencies {
                 compile 'joda-time:joda-time:2.7'
@@ -183,7 +225,7 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
         """
     }
 
-    private String buildscript(String pluginVersion) {
+    private static String buildscript(String pluginVersion) {
         """
             buildscript {
                 ${jcenterRepository()}
@@ -193,15 +235,13 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
                     classpath 'com.android.tools.build:gradle:${pluginVersion}'
                 }
             }
-
-            System.properties['com.android.build.gradle.overrideVersionCheck'] = 'true'
         """.stripIndent()
     }
 
-    private writeActivity(String basedir, String packageName, String className) {
+    private writeActivity(String basedir, String packageName, String className, changed = false) {
         String resourceName = className.toLowerCase()
 
-        file("${basedir}/src/main/java/${packageName.replaceAll('\\.', '/')}/HelloActivity.java") << """
+        file("${basedir}/src/main/java/${packageName.replaceAll('\\.', '/')}/${className}.java").text = """
             package ${packageName};
 
             import org.joda.time.LocalTime;
@@ -210,7 +250,7 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
             import android.os.Bundle;
             import android.widget.TextView;
 
-            public class HelloActivity extends Activity {
+            public class ${className} extends Activity {
 
                 @Override
                 public void onCreate(Bundle savedInstanceState) {
@@ -226,9 +266,10 @@ class AndroidPluginsSmokeTest extends AbstractSmokeTest {
                     textView.setText("The current local time is: " + currentTime);
                 }
 
+                ${changed ? "public void doStuff() {}" : ""}
             }""".stripIndent()
 
-        file("${basedir}/src/main/res/layout/${resourceName}_layout.xml") << '''<?xml version="1.0" encoding="utf-8"?>
+        file("${basedir}/src/main/res/layout/${resourceName}_layout.xml").text = '''<?xml version="1.0" encoding="utf-8"?>
             <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
                 android:orientation="vertical"
                 android:layout_width="fill_parent"

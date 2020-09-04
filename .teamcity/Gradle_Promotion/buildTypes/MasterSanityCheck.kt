@@ -3,9 +3,9 @@ package Gradle_Promotion.buildTypes
 import common.Os
 import common.gradleWrapper
 import common.requiresOs
-import jetbrains.buildServer.configs.kotlin.v2018_2.BuildType
-import jetbrains.buildServer.configs.kotlin.v2018_2.CheckoutMode
-import jetbrains.buildServer.configs.kotlin.v2018_2.triggers.vcs
+import jetbrains.buildServer.configs.kotlin.v2019_2.BuildType
+import jetbrains.buildServer.configs.kotlin.v2019_2.CheckoutMode
+import jetbrains.buildServer.configs.kotlin.v2019_2.triggers.vcs
 
 object MasterSanityCheck : BuildType({
     uuid = "bf9b573a-6e5e-4db1-88b2-399e709026b5"
@@ -24,7 +24,7 @@ object MasterSanityCheck : BuildType({
     steps {
         gradleWrapper {
             tasks = "tasks"
-            gradleParams = "-Igradle/buildScanInit.gradle"
+            gradleParams = ""
             param("org.jfrog.artifactory.selectedDeployableServer.defaultModuleVersionConfiguration", "GLOBAL")
         }
     }
@@ -36,6 +36,6 @@ object MasterSanityCheck : BuildType({
     }
 
     requirements {
-        requiresOs(Os.linux)
+        requiresOs(Os.LINUX)
     }
 })

@@ -49,7 +49,7 @@ import java.util.NoSuchElementException;
 import java.util.Set;
 
 import static org.gradle.internal.Cast.cast;
-import static org.gradle.internal.Cast.uncheckedCast;
+import static org.gradle.internal.Cast.castNullable;
 import static org.gradle.internal.Cast.uncheckedNonnullCast;
 
 public abstract class CollectionUtils {
@@ -79,9 +79,9 @@ public abstract class CollectionUtils {
 
     public static <T> Collection<? extends T> checkedCast(Class<T> type, Collection<?> input) {
         for (Object o : input) {
-            cast(type, o);
+            castNullable(type, o);
         }
-        return uncheckedCast(input);
+        return uncheckedNonnullCast(input);
     }
 
     @Nullable
@@ -143,7 +143,7 @@ public abstract class CollectionUtils {
     /**
      * Returns a sorted copy of the provided collection of things. Uses the natural ordering of the things.
      */
-    public static <T extends Comparable> List<T> sort(Iterable<T> things) {
+    public static <T extends Comparable<T>> List<T> sort(Iterable<T> things) {
         List<T> copy = toMutableList(things);
         Collections.sort(copy);
         return copy;

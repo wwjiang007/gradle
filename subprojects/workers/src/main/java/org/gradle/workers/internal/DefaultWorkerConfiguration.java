@@ -35,13 +35,14 @@ import java.util.List;
 
 public class DefaultWorkerConfiguration extends DefaultActionConfiguration implements WorkerConfiguration {
     private final ActionConfiguration actionConfiguration = new DefaultActionConfiguration();
-    private final JavaForkOptions forkOptions;
+    private final JavaForkOptionsFactory forkOptionsFactory;
     private IsolationMode isolationMode = IsolationMode.AUTO;
+    private JavaForkOptions forkOptions;
     private String displayName;
     private List<File> classpath = Lists.newArrayList();
 
     public DefaultWorkerConfiguration(JavaForkOptionsFactory forkOptionsFactory) {
-        this.forkOptions = forkOptionsFactory.newJavaForkOptions();
+        this.forkOptionsFactory = forkOptionsFactory;
     }
 
     @Override
@@ -56,11 +57,14 @@ public class DefaultWorkerConfiguration extends DefaultActionConfiguration imple
 
     @Override
     public void forkOptions(Action<? super JavaForkOptions> forkOptionsAction) {
-        forkOptionsAction.execute(forkOptions);
+        forkOptionsAction.execute(getForkOptions());
     }
 
     @Override
     public JavaForkOptions getForkOptions() {
+        if (forkOptions == null) {
+            forkOptions = forkOptionsFactory.newDecoratedJavaForkOptions();
+        }
         return forkOptions;
     }
 
@@ -105,6 +109,7 @@ public class DefaultWorkerConfiguration extends DefaultActionConfiguration imple
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public ForkMode getForkMode() {
         switch (getIsolationMode()) {
             case AUTO:
@@ -120,6 +125,7 @@ public class DefaultWorkerConfiguration extends DefaultActionConfiguration imple
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void setForkMode(ForkMode forkMode) {
         switch (forkMode) {
             case AUTO:

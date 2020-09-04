@@ -63,8 +63,8 @@ public class ModuleComponentSelectorSerializer implements Serializer<ModuleCompo
         for (int i = 0; i < cpt; i++) {
             rejects.add(decoder.readString());
         }
-        boolean forSubgraph = decoder.readBoolean();
-        return new DefaultImmutableVersionConstraint(preferred, required, strictly, rejects, forSubgraph);
+        String branch = decoder.readNullableString();
+        return new DefaultImmutableVersionConstraint(preferred, required, strictly, rejects, branch);
     }
 
     @Override
@@ -93,7 +93,7 @@ public class ModuleComponentSelectorSerializer implements Serializer<ModuleCompo
         for (String rejectedVersion : rejectedVersions) {
             encoder.writeString(rejectedVersion);
         }
-        encoder.writeBoolean(cst.isForSubgraph());
+        encoder.writeNullableString(cst.getBranch());
     }
 
     private ImmutableAttributes readAttributes(Decoder decoder) throws IOException {

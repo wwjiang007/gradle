@@ -44,8 +44,11 @@ public class ElementUtils {
         }
         Set<String> typeNames = Sets.newLinkedHashSet();
         for (Element element : originatingElements) {
-            String topLevelTypeName = getTopLevelTypeName(element);
-            typeNames.add(topLevelTypeName);
+            // TODO: Support for modules
+            if (!element.getKind().name().equals("MODULE")) {
+                String topLevelTypeName = getTopLevelTypeName(element);
+                typeNames.add(topLevelTypeName);
+            }
         }
         return typeNames;
     }
@@ -66,7 +69,8 @@ public class ElementUtils {
             }
         }
         if (current instanceof TypeElement) {
-            return ((TypeElement) current).getQualifiedName().toString();
+            TypeElement typeElement = (TypeElement) current;
+            return typeElement.getQualifiedName().toString();
         }
         throw new IllegalArgumentException("Unexpected element " + originatingElement);
     }

@@ -20,11 +20,15 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.initialization.StartParameterBuildOptions.BuildCacheDebugLoggingOption
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.DirectoryBuildCacheFixture
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.test.fixtures.file.TestFile
+import org.gradle.util.ToBeImplemented
 import spock.lang.Issue
 import spock.lang.Unroll
 
-class NestedInputIntegrationTest extends AbstractIntegrationSpec {
+class NestedInputIntegrationTest extends AbstractIntegrationSpec implements DirectoryBuildCacheFixture {
 
     @Unroll
     def "nested #type.simpleName input adds a task dependency"() {
@@ -33,26 +37,27 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                 @Nested
                 Object bean
             }
-            
+
             class NestedBeanWithInput {
                 @Input${kind}
+                @PathSensitive(PathSensitivity.NONE)
                 ${type.name} input
             }
-            
+
             class GeneratorTask extends DefaultTask {
                 @Output${kind}
-                ${type.name} output = project.objects.${factory}()
-                
+                final ${type.name} output = project.objects.${factory}()
+
                 @TaskAction
                 void doStuff() {
                     output${generatorAction}
                 }
             }
-            
+
             task generator(type: GeneratorTask) {
                 output.set(project.layout.buildDirectory.${lookup}('output'))
             }
-            
+
             task consumer(type: TaskWithNestedProperty) {
                 bean = new NestedBeanWithInput(input: project.objects.${factory}())
                 bean.input.set(generator.output)
@@ -76,26 +81,26 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                 @Nested
                 Object bean
             }
-            
+
             class NestedBeanWithInput {
                 @InputFiles
                 FileCollection input
             }
-            
+
             class GeneratorTask extends DefaultTask {
                 @OutputFile
-                RegularFileProperty outputFile = project.objects.fileProperty()
-                
+                final RegularFileProperty outputFile = project.objects.fileProperty()
+
                 @TaskAction
                 void doStuff() {
                     outputFile.getAsFile().get().text = "Hello"
                 }
             }
-            
+
             task generator(type: GeneratorTask) {
                 outputFile = project.layout.buildDirectory.file('output')
             }
-            
+
             task consumer(type: TaskWithNestedProperty) {
                 bean = new NestedBeanWithInput(input: files(generator.outputFile))
             }
@@ -114,26 +119,26 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                 @Nested
                 Object bean
             }
-            
+
             class NestedBeanWithInput {
                 @InputFile
                 RegularFileProperty file
             }
-            
+
             class GeneratorTask extends DefaultTask {
                 @OutputFile
-                RegularFileProperty outputFile = project.objects.fileProperty()
-                
+                final RegularFileProperty outputFile = project.objects.fileProperty()
+
                 @TaskAction
                 void doStuff() {
                     outputFile.getAsFile().get().text = "Hello"
                 }
             }
-            
+
             task generator(type: GeneratorTask) {
                 outputFile = project.layout.buildDirectory.file('output')
             }
-            
+
             task consumer(type: TaskWithNestedProperty) {
                 bean = new NestedBeanWithInput(file: generator.outputFile)
             }
@@ -147,6 +152,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @Unroll
+    @UnsupportedWithConfigurationCache(because = "task references another task")
     def "re-configuring #change in nested bean during execution time is detected"() {
         def fixture = new NestedBeanTestFixture()
 
@@ -157,7 +163,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                     taskWithNestedProperty.bean = secondBean
                 }
             }
-            
+
             taskWithNestedProperty.dependsOn(configureTask)
         """
 
@@ -185,11 +191,12 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @Unroll
+    @UnsupportedWithConfigurationCache(because = "task references another task")
     def "re-configuring a nested bean from #from to #to during execution time is detected"() {
         def fixture = new NestedBeanTestFixture()
 
         buildFile << fixture.taskWithNestedProperty()
-        buildFile << """      
+        buildFile << """
             taskWithNestedProperty.bean = ${from}
 
             task configureTask {
@@ -197,7 +204,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                     taskWithNestedProperty.bean = ${to}
                 }
             }
-            
+
             taskWithNestedProperty.dependsOn(configureTask)
         """
 
@@ -261,9 +268,9 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         def fixture = new NestedBeanTestFixture()
         fixture.prepareInputFiles()
         buildFile << fixture.taskWithNestedProperty()
-        buildFile << """   
+        buildFile << """
             taskWithNestedProperty.bean = ${from}
-            
+
             taskWithNestedProperty.doLast {
                 bean = ${to}
             }
@@ -343,64 +350,64 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         String taskWithNestedProperty() {
             """
             class TaskWithNestedProperty extends DefaultTask {
-                @Nested     
+                @Nested
                 @Optional
                 Object bean
-    
+
                 @OutputFile
-                RegularFileProperty outputFile = project.objects.fileProperty()
-    
+                final RegularFileProperty outputFile = project.objects.fileProperty()
+
                 @TaskAction
                 void writeInputToFile() {
                     outputFile.getAsFile().get().text = bean == null ? 'null' : bean.toString()
                     if (bean != null) {
-                        bean.doStuff()     
+                        bean.doStuff()
                     }
                 }
             }
-    
+
             class NestedBean {
                 @Input
                 String firstInput
-    
+
                 @InputFile
                 File firstInputFile
-    
+
                 @OutputFile
                 File firstOutputFile
-    
+
                 String toString() {
                     firstInput
                 }
-    
+
                 void doStuff() {
                     firstOutputFile.text = firstInputFile.text
                 }
             }
-    
+
             class OtherNestedBean {
                 @Input
                 String secondInput
-    
+
                 @InputFile
                 File secondInputFile
-    
+
                 @OutputFile
                 File secondOutputFile
-    
+
                 String toString() {
                     secondInput
                 }
-    
+
                 void doStuff() {
                     secondOutputFile.text = secondInputFile.text
                 }
             }
-            
-            def firstString = project.findProperty('firstInput')
+
+            def firstString = providers.gradleProperty('firstInput').forUseAtConfigurationTime().orNull
             def firstBean = new NestedBean(firstInput: firstString, firstOutputFile: file("${firstOutputFile}"), firstInputFile: file("${firstInputFile}"))
 
-            def secondString = project.findProperty('secondInput')
+            def secondString = providers.gradleProperty('secondInput').forUseAtConfigurationTime().orNull
             def secondBean = new OtherNestedBean(secondInput: secondString, secondOutputFile: file("${secondOutputFile}"), secondInputFile: file("${secondInputFile}"))
 
             task taskWithNestedProperty(type: TaskWithNestedProperty) {
@@ -418,19 +425,19 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                 Object getNested() {
                     throw new RuntimeException("BOOM")
                 }
-                
+
                 @Input
                 String input = "Hello"
-                
+
                 @OutputFile
                 File outputFile
-                
+
                 @TaskAction
                 void doStuff() {
                     outputFile.text = input
                 }
-            }            
-            
+            }
+
             task myTask(type: TaskWithFailingNestedInput) {
                 outputFile = file('build/output.txt')
             }
@@ -447,27 +454,27 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
             class TaskWithAbsentNestedInput extends DefaultTask {
                 @Nested
                 Object nested
-                
+
                 @Input
                 String input = "Hello"
-                
+
                 @OutputFile
                 File outputFile
-                
+
                 @TaskAction
                 void doStuff() {
                     outputFile.text = input
                 }
-            }            
-            
+            }
+
             task myTask(type: TaskWithAbsentNestedInput) {
                 outputFile = file('build/output.txt')
-            }            
+            }
         """
 
         expect:
         fails "myTask"
-        failure.assertHasDescription("A problem was found with the configuration of task ':myTask'.")
+        failure.assertHasDescription("A problem was found with the configuration of task ':myTask' (type 'TaskWithAbsentNestedInput').")
         failure.assertHasCause("No value has been specified for property 'nested'.")
     }
 
@@ -477,22 +484,22 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                 @Nested
                 @Optional
                 Object nested
-                
+
                 @Input
                 String input = "Hello"
-                
+
                 @OutputFile
                 File outputFile
-                
+
                 @TaskAction
                 void doStuff() {
                     outputFile.text = input
                 }
-            }            
-            
+            }
+
             task myTask(type: TaskWithAbsentNestedInput) {
                 outputFile = file('build/output.txt')
-            }            
+            }
         """
 
         expect:
@@ -504,28 +511,28 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
             class TaskWithNestedInput extends DefaultTask {
                 @Nested
                 Object nested
-                
+
                 @OutputFile
                 File outputFile
-                
+
                 @TaskAction
                 void doStuff() {
                     outputFile.text = nested.input
                 }
             }
-            
+
             class NestedBean {
                 @Input
                 input
             }
-            
+
             class OtherNestedBean {
                 @Input
                 input
             }
-            
-            boolean useOther = project.findProperty('useOther')
-            
+
+            boolean useOther = providers.gradleProperty('useOther').forUseAtConfigurationTime().present
+
             task myTask(type: TaskWithNestedInput) {
                 outputFile = file('build/output.txt')
                 nested = useOther ? new OtherNestedBean(input: 'string') : new NestedBean(input: 'string')
@@ -557,12 +564,12 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                 @Optional
                 Iterable<Object> beans
             }
-            
+
             class NestedBean {
                 @Input
                 String input
             }
-            
+
             task myTask(type: TaskWithNestedIterable) {
                 beans = [new NestedBean(input: 'input'), null]
             }
@@ -579,18 +586,18 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
             class TaskWithNestedIterable extends DefaultTask {
                 @Nested
                 Iterable<Object> beans
-                
+
                 @OutputFile
                 File outputFile
-                
+
                 @TaskAction
                 void doStuff() {
                     outputFile.text = beans.flatten()*.input.join('\\n')
                 }
             }
-            
-            def inputString = project.findProperty('input') ?: 'input'
-            
+
+            def inputString = providers.gradleProperty('input').forUseAtConfigurationTime().getOrElse('input')
+
             task myTask(type: TaskWithNestedIterable) {
                 outputFile = file('build/output.txt')
                 beans = [[new NestedBean(inputString)], [new NestedBean('secondInput')]]
@@ -619,29 +626,29 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
             class TaskWithNestedInput extends DefaultTask {
                 @Nested
                 Object nested
-                
+
                 @Input
                 String input = "Hello"
-                
+
                 @OutputFile
                 File outputFile
-                
+
                 @TaskAction
                 void doStuff() {
                     outputFile.text = input
                 }
-            }            
-            
+            }
+
             class NestedBean {
                 @Nested
                 NestedBean nested
             }
-            
+
             task myTask(type: TaskWithNestedInput) {
                 outputFile = file('build/output.txt')
                 nested = new NestedBean()
                 nested.nested = nested
-            }            
+            }
         """
 
         expect:
@@ -654,7 +661,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         buildFile << taskWithNestedInput()
         buildFile << namedBeanClass()
         buildFile << """
-            myTask.nested = [new NamedBean('name', 'value1'), new NamedBean('name', 'value2')]           
+            myTask.nested = [new NamedBean('name', 'value1'), new NamedBean('name', 'value2')]
         """
 
         expect:
@@ -665,7 +672,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         buildFile << taskWithNestedInput()
         buildFile << nestedBeanWithStringInput()
         buildFile << """
-            myTask.nested = provider { new NestedBean(project.property('input')) }
+            myTask.nested = provider { new NestedBean(providers.gradleProperty('input').forUseAtConfigurationTime().get()) }
         """
 
         def myTask = ':myTask'
@@ -689,8 +696,8 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
     def "input changes for task with named nested beans"() {
         buildFile << taskWithNestedInput()
         buildFile << namedBeanClass()
-        buildFile << """                                   
-            myTask.nested = [new NamedBean(project.property('namedName'), 'value1'), new NamedBean('name', 'value2')]           
+        buildFile << """
+            myTask.nested = [new NamedBean(providers.gradleProperty('namedName').forUseAtConfigurationTime().get(), 'value1'), new NamedBean('name', 'value2')]
         """
         def taskPath = ':myTask'
 
@@ -715,8 +722,8 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
     def "input changes for task with nested map"() {
         buildFile << taskWithNestedInput()
         buildFile << nestedBeanWithStringInput()
-        buildFile << """                                   
-            myTask.nested = [(project.property('key')): new NestedBean('value1'), key2: new NestedBean('value2')]           
+        buildFile << """
+            myTask.nested = [(providers.gradleProperty('key').forUseAtConfigurationTime().get()): new NestedBean('value1'), key2: new NestedBean('value2')]
         """
         def taskPath = ':myTask'
 
@@ -764,6 +771,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
             "  Non-cacheable inputs: property 'bean' was loaded with an unknown classloader (class 'NestedBean')."
     }
 
+    @ToBeFixedForConfigurationCache(because = "uses custom GroovyClassLoader")
     def "task with nested bean loaded with custom classloader is never up-to-date"() {
         file("input.txt").text = "data"
         buildFile << taskWithNestedBeanFromCustomClassLoader()
@@ -778,6 +786,45 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         then:
         executedAndNotSkipped ":customTask"
         output.contains "Implementation of input property 'bean' has changed for task ':customTask'"
+    }
+
+    def "changes to nested domain object container are tracked"() {
+        buildFile << taskWithNestedInput()
+        buildFile << """
+            abstract class Bean {
+                @Internal
+                final String name
+                @Input
+                abstract Property<String> getProp()
+
+                Bean(String name) {
+                    this.name = name
+                }
+            }
+        """
+        buildFile << """
+            def domainObjectCollection = objects.domainObjectContainer(Bean)
+            myTask.nested = domainObjectCollection
+
+            domainObjectCollection.create('first') { prop = providers.gradleProperty('value').forUseAtConfigurationTime().get() }
+            domainObjectCollection.create('second') { prop = '2' }
+        """
+
+        when:
+        run "myTask", "-Pvalue=1"
+        then:
+        executedAndNotSkipped(":myTask")
+
+        when:
+        run "myTask", "-Pvalue=1"
+        then:
+        skipped(":myTask")
+
+        when:
+        run "myTask", "-Pvalue=2", "--info"
+        then:
+        executedAndNotSkipped(":myTask")
+        outputContains("Value of input property 'nested.\$0.prop' has changed for task ':myTask'")
     }
 
     private static String taskWithNestedBeanFromCustomClassLoader() {
@@ -795,7 +842,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
                 import org.gradle.api.tasks.*
 
                 class NestedBean {
-                    @InputFile File input
+                    @InputFile @PathSensitive(PathSensitivity.NONE) File input
                     @OutputFile File output
                 }
             '''
@@ -813,13 +860,13 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
             class TaskWithNestedInput extends DefaultTask {
                 @Nested
                 Object nested
-                
+
                 @Input
                 String input = "Hello"
-                
+
                 @OutputFile
                 File outputFile
-                
+
                 @TaskAction
                 void doStuff() {
                     outputFile.text = input
@@ -836,7 +883,7 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         """
             class NestedBean {
                 @Input final String input
-                
+
                 NestedBean(String input) {
                     this.input = input
                 }
@@ -848,11 +895,11 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         taskWithNestedBeanWithAction()
         buildFile << """
             extensions.create("bean", NestedBeanWithAction.class)
-            
+
             bean {
                 withAction { it.text = "hello" }
             }
-            
+
             task myTask(type: TaskWithNestedBeanWithAction) {
                 bean = project.bean
             }
@@ -877,19 +924,71 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         output.contains "Implementation of input property 'bean.action' has changed for task ':myTask'"
     }
 
-    private TestFile nestedBeanWithAction() {
-        return file("buildSrc/src/main/java/NestedBeanWithAction.java") << """
+    @ToBeImplemented("https://github.com/gradle/gradle/issues/11703")
+    def "nested bean from closure can be used with the build cache"() {
+        def project1 = file("project1").createDir()
+        def project2 = file("project2").createDir()
+        [project1, project2].each { projectDir ->
+            taskWithNestedBeanWithAction(projectDir)
+            def buildFile = projectDir.file("build.gradle")
+            buildFile << """
+                apply plugin: 'base'
+
+                extensions.create("bean", NestedBeanWithAction.class)
+
+                bean {
+                    withAction { it.text = "hello" }
+                }
+
+                task myTask(type: TaskWithNestedBeanWithAction) {
+                    bean = project.bean
+                    outputs.cacheIf { true }
+                }
+            """
+            buildFile.makeOlder()
+            projectDir.file("settings.gradle") << localCacheConfiguration()
+        }
+
+        when:
+        executer.inDirectory(project1)
+        withBuildCache().run 'myTask'
+
+        then:
+        executedAndNotSkipped(':myTask')
+        project1.file('build/tmp/myTask/output.txt').text == "hello"
+
+        when:
+        executer.inDirectory(project2)
+        withBuildCache().run 'myTask'
+
+        then:
+        // TODO: Should be skipped(":myTask")
+        executedAndNotSkipped(':myTask')
+        project2.file('build/tmp/myTask/output.txt').text == "hello"
+
+        // TODO: This can be removed when the above already worked
+        when:
+        executer.inDirectory(project2)
+        run 'clean'
+        executer.inDirectory(project2)
+        withBuildCache().run 'myTask'
+        then:
+        skipped(":myTask")
+    }
+
+    private TestFile nestedBeanWithAction(TestFile projectDir = temporaryFolder.testDirectory) {
+        return projectDir.file("buildSrc/src/main/java/NestedBeanWithAction.java") << """
             import org.gradle.api.tasks.Nested;
             import org.gradle.api.Action;
             import java.io.File;
-            
+
             public class NestedBeanWithAction {
-                Action<File> action;
-                
+                private Action<File> action;
+
                 public void withAction(Action<File> action) {
                     this.action = action;
                 }
-                
+
                 @Nested
                 public Action<File> getAction() {
                     return action;
@@ -898,41 +997,41 @@ class NestedInputIntegrationTest extends AbstractIntegrationSpec {
         """
     }
 
-    private TestFile taskWithNestedBeanWithAction() {
-        nestedBeanWithAction()
-        return file("buildSrc/src/main/java/TaskWithNestedBeanWithAction.java") << """
+    private TestFile taskWithNestedBeanWithAction(TestFile projectDir = temporaryFolder.testDirectory) {
+        nestedBeanWithAction(projectDir)
+        return projectDir.file("buildSrc/src/main/java/TaskWithNestedBeanWithAction.java") << """
             import org.gradle.api.Action;
             import org.gradle.api.DefaultTask;
             import org.gradle.api.NonNullApi;
             import org.gradle.api.tasks.Nested;
             import org.gradle.api.tasks.OutputFile;
             import org.gradle.api.tasks.TaskAction;
-            
+
             import java.io.File;
-            
+
             @NonNullApi
             public class TaskWithNestedBeanWithAction extends DefaultTask {
                 private File outputFile = new File(getTemporaryDir(), "output.txt");
                 private NestedBeanWithAction bean;
-                
+
                 @OutputFile
                 public File getOutputFile() {
                     return outputFile;
                 }
-            
+
                 public void setOutputFile(File outputFile) {
                     this.outputFile = outputFile;
                 }
-            
+
                 @Nested
                 public NestedBeanWithAction getBean() {
                     return bean;
                 }
-                
+
                 public void setBean(NestedBeanWithAction bean) {
                     this.bean = bean;
                 }
-            
+
                 @TaskAction
                 public void doStuff() {
                     bean.getAction().execute(outputFile);

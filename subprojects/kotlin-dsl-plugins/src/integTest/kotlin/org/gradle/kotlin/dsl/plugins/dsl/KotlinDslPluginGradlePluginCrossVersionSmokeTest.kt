@@ -17,15 +17,14 @@
 package org.gradle.kotlin.dsl.plugins.dsl
 
 import org.gradle.integtests.fixtures.RepoScriptBlockUtil
-import org.gradle.kotlin.dsl.embeddedKotlinVersion
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
+import org.gradle.kotlin.dsl.*
 import org.gradle.kotlin.dsl.fixtures.AbstractPluginTest
 import org.gradle.test.fixtures.dsl.GradleDsl
-
 import org.gradle.test.fixtures.file.LeaksFileHandles
-
 import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.CoreMatchers.containsString
-import org.junit.Assert.assertThat
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
@@ -45,6 +44,7 @@ class KotlinDslPluginGradlePluginCrossVersionSmokeTest(
         @JvmStatic
         fun testedKotlinVersions() = listOf(
             embeddedKotlinVersion,
+            "1.3.60",
             "1.3.40",
             "1.3.30"
         )
@@ -52,10 +52,18 @@ class KotlinDslPluginGradlePluginCrossVersionSmokeTest(
 
     @Test
     @LeaksFileHandles("Kotlin Compiler Daemon working directory")
+    @ToBeFixedForConfigurationCache(
+        skip = ToBeFixedForConfigurationCache.Skip.FLAKY,
+        because = "OOME and stack overflows with 1.3.30, plus configuration cache does not work for <1.3.70"
+    )
     fun `kotlin-dsl plugin in buildSrc and production code using kotlin-gradle-plugin `() {
 
-        requireGradleDistributionOnEmbeddedExecuter()
+        assumeNonEmbeddedGradleExecuter() // newer Kotlin version always leaks on the classpath when running embedded
+
         executer.noDeprecationChecks()
+        // Ignore stacktraces when the Kotlin daemon fails
+        // See https://github.com/gradle/gradle-private/issues/2936
+        executer.withStackTraceChecksDisabled()
 
         withDefaultSettingsIn("buildSrc")
         withBuildScriptIn("buildSrc", """

@@ -28,7 +28,6 @@ import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.RepositoryChainMo
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.ComponentResolutionState;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.DependencyGraphComponent;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.conflicts.VersionConflictResolutionDetails;
-import org.gradle.api.internal.artifacts.ivyservice.resolveengine.graph.selectors.ResolvableSelectorState;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionDescriptorInternal;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasonInternal;
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasons;
@@ -37,11 +36,11 @@ import org.gradle.internal.component.external.model.ImmutableCapability;
 import org.gradle.internal.component.model.ComponentOverrideMetadata;
 import org.gradle.internal.component.model.ComponentResolveMetadata;
 import org.gradle.internal.component.model.DefaultComponentOverrideMetadata;
-import org.gradle.internal.component.model.ModuleSource;
 import org.gradle.internal.resolve.ModuleVersionResolveException;
 import org.gradle.internal.resolve.resolver.ComponentMetaDataResolver;
 import org.gradle.internal.resolve.result.DefaultBuildableComponentResolveResult;
 
+import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -66,7 +65,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
 
     private ComponentSelectionState state = ComponentSelectionState.Selectable;
     private ModuleVersionResolveException metadataResolveFailure;
-    private SelectorState firstSelectedBy;
+    private ModuleSelectors<SelectorState> selectors;
     private DependencyGraphBuilder.VisitState visitState = DependencyGraphBuilder.VisitState.NotSeen;
 
     private boolean rejected;
@@ -105,11 +104,9 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
 
     @Override
     public String getRepositoryName() {
-        ModuleSource moduleSource = metadata.getSource();
-        if (moduleSource instanceof RepositoryChainModuleSource) {
-            return ((RepositoryChainModuleSource) moduleSource).getRepositoryName();
-        }
-        return null;
+        return metadata.getSources().withSource(RepositoryChainModuleSource.class, source -> source
+            .map(RepositoryChainModuleSource::getRepositoryName)
+            .orElse(null));
     }
 
     @Override
@@ -117,6 +114,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
         return id;
     }
 
+    @Nullable
     public ModuleVersionResolveException getMetadataResolveFailure() {
         return metadataResolveFailure;
     }
@@ -138,7 +136,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
     }
 
     public void selectAndRestartModule() {
-        module.restart(this);
+        module.replaceWith(this);
     }
 
     @Override
@@ -165,11 +163,8 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
         }
     }
 
-    @Override
-    public void selectedBy(ResolvableSelectorState selectorState) {
-        if (firstSelectedBy == null) {
-            firstSelectedBy = (SelectorState) selectorState;
-        }
+    public void setSelectors(ModuleSelectors<SelectorState> selectors) {
+        this.selectors = selectors;
     }
 
     /**
@@ -186,9 +181,15 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
             return;
         }
 
-        // Any metadata overrides (e.g classifier/artifacts/client-module) will be taken from the first dependency that referenced this component
-        ComponentOverrideMetadata componentOverrideMetadata = DefaultComponentOverrideMetadata.forDependency(firstSelectedBy.getDependencyMetadata());
-
+        ComponentOverrideMetadata componentOverrideMetadata;
+        if (selectors != null && selectors.size() > 0) {
+            // Taking the first selector here to determine the 'changing' status and 'client module' is our best bet to get the selector that will most likely be chosen in the end.
+            // As selectors are sorted accordingly (see ModuleSelectors.SELECTOR_COMPARATOR).
+            SelectorState firstSelector = selectors.first();
+            componentOverrideMetadata = DefaultComponentOverrideMetadata.forDependency(firstSelector.isChanging(), selectors.getFirstDependencyArtifact(), firstSelector.getClientModule());
+        } else {
+            componentOverrideMetadata = DefaultComponentOverrideMetadata.EMPTY;
+        }
         DefaultBuildableComponentResolveResult result = new DefaultBuildableComponentResolveResult();
         if (tryResolveVirtualPlatform()) {
             return;
@@ -250,10 +251,10 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
         return reason;
     }
 
-    boolean isForced() {
+    boolean hasStrongOpinion() {
         return StreamSupport.stream(module.getSelectors().spliterator(), false)
             .filter(s -> s.getFailure() == null)
-            .anyMatch(SelectorState::isForce);
+            .anyMatch(SelectorState::hasStrongOpinion);
     }
 
     @Override
@@ -434,6 +435,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
         return implicitCapability;
     }
 
+    @Nullable
     Capability findCapability(String group, String name) {
         if (id.getGroup().equals(group) && id.getName().equals(name)) {
             return implicitCapability;
@@ -465,7 +467,7 @@ public class ComponentState implements ComponentResolutionState, DependencyGraph
 
         ComponentState that = (ComponentState) o;
 
-        return that.resultId == resultId;
+        return that.resultId.equals(resultId);
 
     }
 

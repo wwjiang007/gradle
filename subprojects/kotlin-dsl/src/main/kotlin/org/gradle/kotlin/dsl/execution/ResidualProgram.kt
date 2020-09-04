@@ -31,8 +31,8 @@ sealed class ResidualProgram {
      */
     data class Static(val instructions: List<Instruction>) : ResidualProgram() {
 
-        constructor(vararg instructions: Instruction)
-            : this(instructions.toList())
+        constructor(vararg instructions: Instruction) :
+            this(instructions.toList())
     }
 
     /**
@@ -43,7 +43,7 @@ sealed class ResidualProgram {
     sealed class Instruction {
 
         /**
-         * Causes the configuration of the embedded Kotlin repository and embedded Kotlin libraries
+         * Causes the configuration of the embedded Kotlin libraries
          * on the host's ScriptHandler.
          */
         object SetupEmbeddedKotlin : Instruction()

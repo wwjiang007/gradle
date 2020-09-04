@@ -40,13 +40,12 @@ public class CancelExecutionStep<C extends Context> implements Step<C, Result> {
         Runnable interrupt = thread::interrupt;
         try {
             cancellationToken.addCallback(interrupt);
-            Result result = delegate.execute(context);
-            return result;
+            return delegate.execute(context);
         } finally {
             cancellationToken.removeCallback(interrupt);
             if (cancellationToken.isCancellationRequested()) {
                 Thread.interrupted();
-                throw new BuildCancelledException("Build cancelled during executing " + context.getWork().getDisplayName());
+                throw new BuildCancelledException("Build cancelled while executing " + context.getWork().getDisplayName());
             }
         }
     }

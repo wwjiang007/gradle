@@ -36,9 +36,26 @@ import org.gradle.jvm.internal.resolve.JvmVariantSelector;
 import org.gradle.jvm.internal.resolve.VariantAxisCompatibilityFactory;
 import org.gradle.jvm.internal.resolve.VariantsMetaData;
 import org.gradle.jvm.platform.JavaPlatform;
+import org.gradle.jvm.toolchain.install.internal.AdoptOpenJdkDownloader;
+import org.gradle.jvm.toolchain.install.internal.AdoptOpenJdkRemoteBinary;
+import org.gradle.jvm.toolchain.install.internal.DefaultJavaToolchainProvisioningService;
+import org.gradle.jvm.toolchain.install.internal.JdkCacheDirectory;
+import org.gradle.jvm.toolchain.internal.AsdfInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.AutoInstalledInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.CurrentInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.DefaultJavaInstallationRegistry;
+import org.gradle.jvm.toolchain.internal.EnvironmentVariableListInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.JabbaInstallationSupplier;
 import org.gradle.jvm.toolchain.internal.JavaInstallationProbe;
+import org.gradle.jvm.toolchain.internal.JavaToolchainFactory;
+import org.gradle.jvm.toolchain.internal.JavaToolchainQueryService;
+import org.gradle.jvm.toolchain.internal.LinuxInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.LocationListInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.OsXInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.SdkmanInstallationSupplier;
+import org.gradle.jvm.toolchain.internal.SharedJavaInstallationRegistry;
+import org.gradle.jvm.toolchain.internal.WindowsInstallationSupplier;
 import org.gradle.model.internal.manage.schema.ModelSchemaStore;
-import org.gradle.process.internal.ExecActionFactory;
 
 import java.util.Collection;
 import java.util.List;
@@ -51,17 +68,44 @@ public class PlatformJvmServices extends AbstractPluginServiceRegistry {
     }
 
     @Override
-    public void registerBuildServices(ServiceRegistration registration) {
-        registration.addProvider(new BuildScopeServices());
+    public void registerBuildTreeServices(ServiceRegistration registration) {
+        registration.add(JavaInstallationProbe.class);
     }
 
-    private class BuildScopeServices {
+    @Override
+    public void registerBuildServices(ServiceRegistration registration) {
+        registration.add(DefaultJavaInstallationRegistry.class);
+        registration.addProvider(new BuildScopeServices());
+        registration.add(JdkCacheDirectory.class);
+        registration.add(SharedJavaInstallationRegistry.class);
+        registerJavaInstallationSuppliers(registration);
+    }
+
+    private void registerJavaInstallationSuppliers(ServiceRegistration registration) {
+        registration.add(AsdfInstallationSupplier.class);
+        registration.add(AutoInstalledInstallationSupplier.class);
+        registration.add(CurrentInstallationSupplier.class);
+        registration.add(EnvironmentVariableListInstallationSupplier.class);
+        registration.add(JabbaInstallationSupplier.class);
+        registration.add(LinuxInstallationSupplier.class);
+        registration.add(LocationListInstallationSupplier.class);
+        registration.add(OsXInstallationSupplier.class);
+        registration.add(SdkmanInstallationSupplier.class);
+        registration.add(WindowsInstallationSupplier.class);
+    }
+
+    @Override
+    public void registerProjectServices(ServiceRegistration registration) {
+        registration.add(JavaToolchainFactory.class);
+        registration.add(DefaultJavaToolchainProvisioningService.class);
+        registration.add(AdoptOpenJdkRemoteBinary.class);
+        registration.add(AdoptOpenJdkDownloader.class);
+        registration.add(JavaToolchainQueryService.class);
+    }
+
+    private static class BuildScopeServices {
         LocalLibraryDependencyResolverFactory createResolverProviderFactory(ProjectModelResolver projectModelResolver, ModelSchemaStore schemaStore, List<VariantAxisCompatibilityFactory> factories) {
             return new LocalLibraryDependencyResolverFactory(projectModelResolver, schemaStore, factories);
-        }
-
-        JavaInstallationProbe createJavaInstallationProbe(ExecActionFactory factory) {
-            return new JavaInstallationProbe(factory);
         }
     }
 

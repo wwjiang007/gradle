@@ -15,25 +15,15 @@
  */
 package org.gradle.api.internal.file;
 
-import org.gradle.api.tasks.util.PatternSet;
-import org.gradle.api.tasks.util.internal.PatternSets;
-import org.gradle.internal.Factory;
-
 import java.io.File;
 
 /**
  * FileResolver that uses the file provided to it or constructs one from the toString of the provided object. Used in cases where a FileResolver is needed by the infrastructure, but no base directory
  * can be known.
+ *
+ * NOTE: Do not create instances of this type. Instead, use the {@link FileLookup} service.
  */
 public class IdentityFileResolver extends AbstractFileResolver {
-    public IdentityFileResolver() {
-        this(PatternSets.getNonCachingPatternSetFactory());
-    }
-
-    public IdentityFileResolver(Factory<PatternSet> patternSetFactory) {
-        super(patternSetFactory);
-    }
-
     @Override
     protected File doResolve(Object path) {
         File file = convertObjectToFile(path);

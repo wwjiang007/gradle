@@ -30,6 +30,7 @@ import org.gradle.api.internal.artifacts.DefaultModuleVersionIdentifier
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.result.ComponentSelectionReasonInternal
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
+import org.gradle.configurationcache.problems.DisableConfigurationCacheFieldTypeCheck
 import org.gradle.internal.classloader.ClasspathUtil
 import org.gradle.test.fixtures.file.TestFile
 import org.junit.ComparisonFailure
@@ -39,11 +40,11 @@ import org.junit.ComparisonFailure
  * ensure that the old and new dependency graphs plus the artifacts and files are as expected and well-formed.
  */
 class ResolveTestFixture {
-    private final TestFile buildFile
-    private final String config
+    final TestFile buildFile
+    final String config
     private String defaultConfig = "default"
     private boolean buildArtifacts = true
-    private boolean strictReasonsCheck;
+    private boolean strictReasonsCheck
 
     ResolveTestFixture(TestFile buildFile, String config = "runtimeClasspath") {
         this.config = config
@@ -864,6 +865,7 @@ class GenerateGraphTask extends DefaultTask {
     @Internal
     File outputFile
     @Internal
+    @DisableConfigurationCacheFieldTypeCheck
     Configuration configuration
     @Internal
     boolean buildArtifacts

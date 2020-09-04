@@ -17,12 +17,14 @@
 package org.gradle.integtests.composite
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.resolve.ResolveTestFixture
 import spock.lang.Unroll
 
 class CompositeBuildDependencyCapabilitiesResolveIntegrationTest extends AbstractIntegrationSpec {
 
     @Unroll
+    @ToBeFixedForConfigurationCache(because = "composite builds")
     def "dependency capabilities travel to the included build"() {
         mavenRepo.module('com.acme.external', 'external', '1.0')
 
@@ -37,7 +39,7 @@ class CompositeBuildDependencyCapabilitiesResolveIntegrationTest extends Abstrac
         file("includedBuild/build.gradle") << """
             group = 'com.acme.external'
             version = '2.0-SNAPSHOT'
-            
+
             configurations {
                 first {
                    attributes {
@@ -52,7 +54,7 @@ class CompositeBuildDependencyCapabilitiesResolveIntegrationTest extends Abstrac
                    outgoing.capability('org:cap2:1.0')
                 }
             }
-            
+
             artifacts {
                 first file("first-\${version}.jar")
                 second file("second-\${version}.jar")
@@ -61,7 +63,7 @@ class CompositeBuildDependencyCapabilitiesResolveIntegrationTest extends Abstrac
 
         buildFile << """
             apply plugin: 'java-library'
-            
+
             dependencies {
                 api("com.acme.external:external:1.0") {
                     capabilities {
@@ -79,7 +81,7 @@ class CompositeBuildDependencyCapabilitiesResolveIntegrationTest extends Abstrac
         then:
         resolve.expectGraph {
             root(":", ":test:") {
-                edge("com.acme.external:external:1.0", "project :external", "com.acme.external:external:2.0-SNAPSHOT") {
+                edge("com.acme.external:external:1.0", "project :includedBuild", "com.acme.external:external:2.0-SNAPSHOT") {
                     compositeSubstitute()
                     variant(expectedVariant, ['org.gradle.usage': 'java-api'])
                     artifact(name: expectedVariant)

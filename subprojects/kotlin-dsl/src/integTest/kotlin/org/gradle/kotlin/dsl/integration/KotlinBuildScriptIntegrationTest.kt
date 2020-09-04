@@ -1,20 +1,69 @@
 package org.gradle.kotlin.dsl.integration
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.test.fixtures.file.LeaksFileHandles
 
 import org.gradle.kotlin.dsl.fixtures.AbstractKotlinIntegrationTest
 import org.gradle.kotlin.dsl.fixtures.containsMultiLineString
+import org.gradle.kotlin.dsl.fixtures.equalToMultiLineString
 
+import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.CoreMatchers.containsString
 import org.hamcrest.CoreMatchers.equalTo
 
-import org.junit.Assert.assertThat
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Test
 
 import java.io.StringWriter
 
 
 class KotlinBuildScriptIntegrationTest : AbstractKotlinIntegrationTest() {
+
+    @Test
+    @ToBeFixedForConfigurationCache
+    fun `can apply plugin using ObjectConfigurationAction syntax`() {
+
+        withSettings("""
+            rootProject.name = "foo"
+            include("bar")
+        """)
+
+        withBuildScript("""
+
+            open class ProjectPlugin : Plugin<Project> {
+                override fun apply(target: Project) {
+                    target.task("run") {
+                        doLast { println(target.name + ":42") }
+                    }
+                }
+            }
+
+            apply { plugin<ProjectPlugin>() }
+
+            subprojects {
+                apply { plugin<ProjectPlugin>() }
+            }
+        """)
+
+        assertThat(
+            build("run", "-q").output,
+            allOf(
+                containsString("foo:42"),
+                containsString("bar:42")
+            )
+        )
+    }
+
+    @Test
+    fun `Project receiver is undecorated`() {
+
+        withBuildScript("""
+            fun Project.implicitReceiver() = this
+            require(implicitReceiver() === rootProject)
+        """)
+
+        build("help")
+    }
 
     @Test
     fun `scripts larger than 64KB are supported`() {
@@ -47,6 +96,7 @@ class KotlinBuildScriptIntegrationTest : AbstractKotlinIntegrationTest() {
         })
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `can use Kotlin 1 dot 3 language features`() {
 
         withBuildScript("""
@@ -116,9 +166,8 @@ class KotlinBuildScriptIntegrationTest : AbstractKotlinIntegrationTest() {
 
     @Test
     @LeaksFileHandles("Kotlin Compiler Daemon working directory")
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `accepts lambda as SAM argument to Kotlin function`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withKotlinBuildSrc()
 
@@ -164,6 +213,41 @@ class KotlinBuildScriptIntegrationTest : AbstractKotlinIntegrationTest() {
                 STRING
                 ACTION
             """)
+        )
+    }
+
+    @Test
+    @ToBeFixedForConfigurationCache
+    fun `can create fileTree from map for backward compatibility`() {
+
+        val fileTreeFromMap = """
+            fileTree(mapOf("dir" to ".", "include" to listOf("*.txt")))
+                .joinToString { it.name }
+        """
+
+        withFile("foo.txt")
+
+        val initScript = withFile("init.gradle.kts", """
+            println("INIT: " + $fileTreeFromMap)
+        """)
+
+        withSettings("""
+            println("SETTINGS: " + $fileTreeFromMap)
+        """)
+
+        withBuildScript("""
+            task("test") {
+                doLast { println("PROJECT: " + $fileTreeFromMap) }
+            }
+        """)
+
+        assertThat(
+            build("test", "-q", "-I", initScript.absolutePath).output.trim(),
+            equalToMultiLineString("""
+                INIT: foo.txt
+                SETTINGS: foo.txt
+                PROJECT: foo.txt
+            """.replaceIndent())
         )
     }
 }

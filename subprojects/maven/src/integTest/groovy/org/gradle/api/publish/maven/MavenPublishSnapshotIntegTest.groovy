@@ -16,7 +16,9 @@
 
 package org.gradle.api.publish.maven
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.publish.maven.AbstractMavenPublishIntegTest
+
 /**
  * Tests publishing of maven snapshots
  */
@@ -75,6 +77,10 @@ class MavenPublishSnapshotIntegTest extends AbstractMavenPublishIntegTest {
             snapshotVersions == ["1.0-${snapshotTimestamp}-${snapshotBuildNumber}"]
         }
 
+        with (module.parsedModuleMetadata) {
+            variants[0].files[0].url == "snapshotPublish-1.0-SNAPSHOT.jar"
+        }
+
         when: // Publish a second time
         succeeds 'publish'
 
@@ -89,10 +95,24 @@ class MavenPublishSnapshotIntegTest extends AbstractMavenPublishIntegTest {
 
         module.snapshotMetaData.snapshotVersions == [secondVersion]
 
+        with (module.parsedModuleMetadata) {
+            variants[0].files[0].url == "snapshotPublish-1.0-SNAPSHOT.jar"
+        }
+
         and:
-        resolveArtifacts(module) { expectFiles "snapshotPublish-${secondVersion}.jar" }
+        resolveArtifacts(module) {
+            withModuleMetadata {
+                expectFiles "snapshotPublish-1.0-SNAPSHOT.jar"
+            }
+            withoutModuleMetadata {
+                // This is not ideal but also does not reflect reality, will need some work to fix
+                // This is only possible because Gradle manages to return a path to the supposedly remote file
+                expectFiles "snapshotPublish-${secondVersion}.jar"
+            }
+        }
     }
 
+    @ToBeFixedForConfigurationCache
     def "can publish a snapshot version that was previously published with uploadArchives"() {
         given:
         using m2 // uploadArchives writes to .m2/repo
@@ -129,10 +149,12 @@ class MavenPublishSnapshotIntegTest extends AbstractMavenPublishIntegTest {
         def module = mavenRepo.module('org.gradle', 'snapshotPublish', '1.0-SNAPSHOT')
 
         when:
+        executer.expectDeprecationWarnings(2)
         succeeds 'uploadArchives'
 
         then:
         List<String>  initialArtifacts = ["snapshotPublish-${module.publishArtifactVersion}.jar", "snapshotPublish-${module.publishArtifactVersion}.pom"]
+        module.withoutExtraChecksums()
         module.assertArtifactsPublished(["maven-metadata.xml"] + initialArtifacts)
 
         and:
@@ -140,11 +162,14 @@ class MavenPublishSnapshotIntegTest extends AbstractMavenPublishIntegTest {
         module.snapshotMetaData.snapshotBuildNumber == '1'
 
         when:
+        executer.expectDeprecationWarning()
         succeeds 'publish'
 
         then:
         def secondVersion = module.publishArtifactVersion
         List<String> secondArtifacts = ["snapshotPublish-${secondVersion}.module", "snapshotPublish-${secondVersion}.jar", "snapshotPublish-${secondVersion}.pom"]
+        module.withExtraChecksums()
+        module.missingExtraChecksums.addAll(initialArtifacts*.toString())
         module.assertArtifactsPublished(["maven-metadata.xml"] + initialArtifacts + secondArtifacts)
 
         and:
@@ -153,9 +178,19 @@ class MavenPublishSnapshotIntegTest extends AbstractMavenPublishIntegTest {
         module.snapshotMetaData.snapshotVersions == [secondVersion]
 
         and:
-        resolveArtifacts(module) { expectFiles "snapshotPublish-${secondVersion}.jar" }
+        resolveArtifacts(module) {
+            withModuleMetadata {
+                expectFiles "snapshotPublish-1.0-SNAPSHOT.jar"
+            }
+            withoutModuleMetadata {
+                // This is not ideal but also does not reflect reality, will need some work to fix
+                // This is only possible because Gradle manages to return a path to the supposedly remote file
+                expectFiles "snapshotPublish-${secondVersion}.jar"
+            }
+        }
     }
 
+    @ToBeFixedForConfigurationCache
     def "can install snapshot versions"() {
         using m2
 

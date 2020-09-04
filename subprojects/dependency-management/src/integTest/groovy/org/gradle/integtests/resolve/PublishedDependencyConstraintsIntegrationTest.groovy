@@ -17,19 +17,16 @@ package org.gradle.integtests.resolve
 
 import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
 import org.gradle.integtests.fixtures.RequiredFeature
-import org.gradle.integtests.fixtures.RequiredFeatures
 
 class PublishedDependencyConstraintsIntegrationTest extends AbstractModuleDependencyResolveTest {
 
     boolean featureAvailable() {
-        gradleMetadataEnabled
+        gradleMetadataPublished
     }
 
-    void "dependency constraint is ignored when feature is not enabled"() {
+    @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value="false")
+    void "published dependency constraint is ignored when Gradle module metadata is not available"() {
         given:
-        // Do not enable feature
-        settingsFile.text = "rootProject.name = '$rootProjectName'"
-
         repository {
             'org:foo:1.0'()
             'org:foo:1.1'()
@@ -148,7 +145,7 @@ class PublishedDependencyConstraintsIntegrationTest extends AbstractModuleDepend
             root(":", ":test:") {
                 module("org:first-level:1.0") {
                     if (available) {
-                        if (GradleMetadataResolveRunner.gradleMetadataEnabled) {
+                        if (GradleMetadataResolveRunner.gradleMetadataPublished) {
                             constraint("org:foo:1.1", "org:foo:1.1").byConstraint('published dependency constraint')
                         } else {
                             constraint("org:foo:1.1", "org:foo:1.1")
@@ -404,9 +401,8 @@ class PublishedDependencyConstraintsIntegrationTest extends AbstractModuleDepend
         }
     }
 
-    @RequiredFeatures(
-        [@RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value="true")]
-    )
+
+    @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value="true")
     void "deferred selector still resolved when constraint disappears"() {
         repository {
             'org:bar:1.0'()
@@ -459,6 +455,86 @@ dependencies {
                 module('org:other:1.0') {
                     module('org:bar:1.0')
                     module('org:weird:1.1')
+                }
+            }
+        }
+    }
+
+    @RequiredFeature(feature = GradleMetadataResolveRunner.REPOSITORY_TYPE, value = "maven")
+    def "platform with constraint on lower version does not cause invalid edge to remain in graph"() {
+        given:
+        repository {
+            'org:client:4.1.0'()
+            'org:client:4.1.1'()
+
+            'org:platform:1.0' {
+                constraint 'org:client:4.1.0'
+                asPlatform()
+            }
+
+            'org:first:1.0' {
+                dependsOn 'org:client:4.1.1'
+            }
+            'org:first:2.0'()
+
+            'org:second:1.0' {
+                dependsOn 'org:intermediate:1.0'
+            }
+
+            'org:intermediate:1.0' {
+                dependsOn 'org:first:2.0'
+            }
+        }
+
+        buildFile << """
+            dependencies {
+                conf(platform('org:platform:1.0'))
+                conf 'org:first:1.0'
+                conf 'org:second:1.0'
+            }
+"""
+        when:
+        repositoryInteractions {
+            'org:client:4.1.0' {
+                // In the error case, this version will be resolved
+                allowAll()
+            }
+            'org:client:4.1.1' {
+                expectGetMetadata()
+            }
+
+            'org:platform:1.0' {
+                expectGetMetadata()
+            }
+
+            'org:first:1.0' {
+                expectGetMetadata()
+            }
+            'org:first:2.0' {
+                expectResolve()
+            }
+            'org:second:1.0' {
+                expectResolve()
+            }
+            'org:intermediate:1.0' {
+                expectResolve()
+            }
+        }
+        run 'checkDeps'
+
+        then:
+        def platformConfiguration = isGradleMetadataPublished() ? 'runtimeElements' : 'platform-runtime'
+        resolve.expectGraph {
+            root(':', ':test:') {
+                module('org:platform:1.0') {
+                    noArtifacts()
+                    configuration(platformConfiguration)
+                }
+                edge('org:first:1.0', 'org:first:2.0')
+                module('org:second:1.0') {
+                    module('org:intermediate:1.0') {
+                        module('org:first:2.0')
+                    }
                 }
             }
         }

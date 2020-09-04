@@ -17,6 +17,7 @@
 package org.gradle.api
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.FluidDependenciesResolveRunner
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.integtests.fixtures.executer.ProjectLifecycleFixture
@@ -93,6 +94,7 @@ class ConfigurationOnDemandIntegrationTest extends AbstractIntegrationSpec {
         !output.contains("Configuration on demand is incubating")
     }
 
+    @ToBeFixedForConfigurationCache(because = "test expects configuration phase")
     def "follows java project dependencies"() {
         settingsFile << "include 'api', 'impl', 'util'"
         buildFile << "allprojects { apply plugin: 'java-library' } "
@@ -210,7 +212,7 @@ project(':api') {
         settingsFile << "include 'api', 'impl'"
 
         when:
-        run(":tasks")
+        run(":help")
 
         then:
         fixture.assertProjectsConfigured(":")
@@ -220,7 +222,7 @@ project(':api') {
         settingsFile << "include 'api', 'impl'"
 
         when:
-        run(":api:tasks")
+        run(":api:help")
 
         then:
         fixture.assertProjectsConfigured(":", ":api")
@@ -249,12 +251,13 @@ project(':api') {
         """
 
         when:
-        run("api:tasks")
+        run("api:help")
 
         then:
         fixture.assertProjectsConfigured(":", ":impl", ":api")
     }
 
+    @ToBeFixedForConfigurationCache(because = "test expects configuration phase")
     def "respects buildProjectDependencies setting"() {
         settingsFile << "include 'api', 'impl', 'other'"
         file("impl/build.gradle") << """

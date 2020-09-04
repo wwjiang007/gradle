@@ -20,6 +20,8 @@ import org.gradle.plugin.use.PluginDependenciesSpec
 import org.gradle.plugin.use.PluginDependencySpec
 
 import java.io.File
+import java.io.IOException
+import java.lang.IllegalArgumentException
 
 import java.util.Properties
 import java.util.jar.JarEntry
@@ -154,7 +156,7 @@ object UserGuideLink {
             "groovy" to "groovy_plugin.html",
             "groovy-base" to "plugin_reference.html#sec:base_plugins",
 
-            "help-tasks" to "tutorial_gradle_command_line.html#sec:obtaining_information_about_your_build",
+            "help-tasks" to "command_line_interface.html#sec:command_line_project_reporting",
 
             "idea" to "idea_plugin.html",
 
@@ -167,7 +169,7 @@ object UserGuideLink {
 
             "java-gradle-plugin" to "java_gradle_plugin.html",
 
-            "java-lang" to "java_software.html",
+            // "java-lang" to "java_software.html",
 
             "java-library" to "java_library_plugin.html",
             "java-library-distribution" to "java_library_distribution_plugin.html",
@@ -176,10 +178,10 @@ object UserGuideLink {
 
             // "jshint" to "jshint_plugin.html",
 
-            "junit-test-suite" to "java_software.html#sec:testing_java_libraries",
+            // "junit-test-suite" to "java_software.html#sec:testing_java_libraries",
 
-            "jvm-component" to "java_software.html",
-            "jvm-resources" to "java_software.html",
+            // "jvm-component" to "java_software.html",
+            // "jvm-resources" to "java_software.html",
 
             // "language-base" to "language_base_plugin.html",
             // "lifecycle-base" to "lifecycle_base_plugin.html",
@@ -238,8 +240,8 @@ data class PluginEntry(val pluginId: String, val implementationClass: String)
 
 
 internal
-fun pluginEntriesFrom(jar: File): List<PluginEntry> =
-    JarFile(jar).use { jarFile ->
+fun pluginEntriesFrom(jar: File): List<PluginEntry> = try {
+    JarFile(jar, false).use { jarFile ->
         jarFile.entries().asSequence().filter {
             isGradlePluginPropertiesFile(it)
         }.map { pluginEntry ->
@@ -249,6 +251,12 @@ fun pluginEntriesFrom(jar: File): List<PluginEntry> =
             PluginEntry(id, implementationClass)
         }.toList()
     }
+} catch (cause: IOException) {
+    throw IllegalArgumentException(
+        "Failed to extract plugin metadata from '" + jar.path + "'",
+        cause
+    )
+}
 
 
 private

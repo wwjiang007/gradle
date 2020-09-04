@@ -18,7 +18,6 @@ package org.gradle.api.plugins;
 
 import groovy.lang.Closure;
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.java.archives.Manifest;
@@ -41,7 +40,9 @@ public abstract class JavaPluginConvention {
      * is configured to exclude some package from compilation.
      *
      * <pre class='autoTested'>
-     * apply plugin: 'java'
+     * plugins {
+     *     id 'java'
+     * }
      *
      * sourceSets {
      *   main {
@@ -169,16 +170,14 @@ public abstract class JavaPluginConvention {
      *
      * @since 5.3
      */
-    @Incubating
     public abstract void disableAutoTargetJvm();
 
     /**
-     * Tells if automatic JVM targetting is enabled. When disabled, Gradle
+     * Tells if automatic JVM targeting is enabled. When disabled, Gradle
      * will not automatically try to get dependencies corresponding to the
      * same (or compatible) level as the target compatibility of this module.
      *
      * @since 5.3
      */
-    @Incubating
     public abstract boolean getAutoTargetJvmDisabled();
 }

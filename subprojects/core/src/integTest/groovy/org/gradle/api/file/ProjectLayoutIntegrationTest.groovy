@@ -41,30 +41,51 @@ class ProjectLayoutIntegrationTest extends AbstractIntegrationSpec {
         outputContains("build dir 2: " + testDirectory.file("output"))
     }
 
+    def "can apply convention to build dir"() {
+        buildFile << """
+            println "build dir: " + project.buildDir
+            layout.buildDirectory.convention(layout.projectDirectory.dir("out"))
+            println "build dir 2: " + project.buildDir
+            layout.buildDirectory = layout.projectDirectory.dir("target")
+            println "build dir 3: " + project.buildDir
+            layout.buildDirectory.convention(layout.projectDirectory.dir("out"))
+            println "build dir 4: " + project.buildDir
+"""
+
+        when:
+        run()
+
+        then:
+        outputContains("build dir: " + testDirectory.file("build"))
+        outputContains("build dir 2: " + testDirectory.file("out"))
+        outputContains("build dir 3: " + testDirectory.file("target"))
+        outputContains("build dir 4: " + testDirectory.file("target"))
+    }
+
     def "layout is available for injection"() {
         buildFile << """
             import javax.inject.Inject
-            
+
             class SomeTask extends DefaultTask {
                 @Inject
                 ProjectLayout getLayout() { null }
-                
+
                 @TaskAction
                 void go() {
-                    println "task build dir: " + layout.buildDirectory.get() 
+                    println "task build dir: " + layout.buildDirectory.get()
                 }
             }
-            
+
             class SomePlugin implements Plugin<Project> {
                 @Inject SomePlugin(ProjectLayout layout) {
                     println "plugin build dir: " + layout.buildDirectory.get()
                 }
-                
+
                 void apply(Project p) {
                     p.tasks.create("show", SomeTask)
                 }
             }
-            
+
             apply plugin: SomePlugin
             buildDir = "output"
 """
@@ -352,7 +373,9 @@ class ProjectLayoutIntegrationTest extends AbstractIntegrationSpec {
 
     void maybeDeprecated(String expression) {
         if (expression.contains("configurableFiles")) {
-            executer.expectDeprecationWarning()
+            executer.expectDocumentedDeprecationWarning("The ProjectLayout.configurableFiles() method has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+                "Please use the ObjectFactory.fileCollection() method instead. " +
+                "See https://docs.gradle.org/current/userguide/lazy_configuration.html#property_files_api_reference for more details.")
         }
     }
 }

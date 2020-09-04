@@ -14,6 +14,8 @@
 
 = Gradle User Manual
 
+TIP: Want to learn the tips and tricks top engineering teams use to keep builds fast and performant? https://gradle.com/training/build-cache-deep-dive/?bid=docs-userguide[Register here] for our Build Cache Training.
+
 Gradle is an open-source build automation tool focused on flexibility and performance. Gradle build scripts are written using a link:https://groovy-lang.org/[Groovy] or link:https://kotlinlang.org/[Kotlin] DSL. Read about link:{website}/features/[Gradle features] to learn what is possible with Gradle.
 
  * **Highly customizable** — Gradle is modeled in a way that is customizable and extensible in the most fundamental ways.
@@ -41,7 +43,7 @@ If you're currently using Maven, see a visual link:{website}/maven-vs-gradle/[Gr
 
 == Using existing Gradle builds
 
-Gradle supports many major IDEs, including **Android Studio, Eclipse, IntelliJ IDEA, Visual Studio 2017, and XCode**.
+Gradle supports many major IDEs, including **Android Studio, Eclipse, IntelliJ IDEA, Visual Studio 2019, and XCode**.
 You can also invoke Gradle via its <<command_line_interface.adoc#command_line_interface,command-line interface>> in your terminal or through your continuous integration server.
 link:https://scans.gradle.com/[Gradle build scans] help you understand build results, improve build performance, and collaborate to fix problems faster.
 
@@ -56,8 +58,8 @@ link:https://scans.gradle.com/[Gradle build scans] help you understand build res
 == Getting help
 
  * **Forum** — The fastest way to get help is through the link:https://discuss.gradle.org[Gradle Forum, title="Gradle help and discussion forums"]. Community members and core contributors answer your questions.
- * **Training** — Free, web-based Gradle training from Gradle developers happens every month. Head over to the link:{website}/training/[training page, title="Gradle training schedule"] to sign up.
- * **Enterprise Services** — Support and training can be purchased alongside a link:https://gradle.com/enterprise[Gradle Enterprise] subscription.
+ * **Training** — Free, web-based Gradle training from Gradle developers happens every month. Head over to the link:https://gradle.com/training/[training page, title="Gradle training schedule"] to sign up.
+ * **Enterprise Services** — Support and training can be purchased alongside a link:https://gradle.com[Gradle Enterprise] subscription.
 
 == Licenses
 

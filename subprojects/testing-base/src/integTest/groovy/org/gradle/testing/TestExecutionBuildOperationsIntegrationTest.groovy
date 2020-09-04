@@ -16,6 +16,8 @@
 
 package org.gradle.testing
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
+
 import org.gradle.api.internal.tasks.testing.operations.ExecuteTestBuildOperationType
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
@@ -90,19 +92,20 @@ class TestExecutionBuildOperationsIntegrationTest extends AbstractIntegrationSpe
         assertJunit(rootTestOp, this.operations)
     }
 
+    @ToBeFixedForConfigurationCache(because = "composite builds")
     def "emits test operations as expected for composite builds"() {
         given:
         resources.maybeCopy('TestExecutionBuildOperationsIntegrationTest')
         settingsFile.text = """
             rootProject.name = "composite"
-            includeBuild "emitsBuildOperationsForJUnitTests"
-            includeBuild "emitsBuildOperationsForTestNgTests"
+            includeBuild "emitsBuildOperationsForJUnitTests", { name = 'junit' }
+            includeBuild "emitsBuildOperationsForTestNgTests", { name = 'testng' }
         """
         buildFile.text = """
             task testng {
                 dependsOn gradle.includedBuild('testng').task(':test')
             }
-            
+
             task junit {
                 dependsOn gradle.includedBuild('junit').task(':test')
             }

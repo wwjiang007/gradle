@@ -16,6 +16,7 @@
 
 package org.gradle.nativeplatform.test.xctest
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.language.swift.AbstractSwiftMixedLanguageIntegrationTest
 import org.gradle.language.swift.SwiftTaskNames
 import org.gradle.nativeplatform.fixtures.AvailableToolChains
@@ -33,6 +34,7 @@ class SwiftXCTestCppInteroperabilityIntegrationTest extends AbstractSwiftMixedLa
     }
 
     @Unroll
+    @ToBeFixedForConfigurationCache
     def "can depend on a #linkage.toLowerCase() c++ library"() {
         given:
         def cppGreeter = new CppGreeterFunction()
@@ -43,7 +45,7 @@ class SwiftXCTestCppInteroperabilityIntegrationTest extends AbstractSwiftMixedLa
         """
         buildFile << """
             apply plugin: 'swift-library'
-            
+
             dependencies {
                 implementation project(':cppGreeter')
             }
@@ -55,7 +57,7 @@ class SwiftXCTestCppInteroperabilityIntegrationTest extends AbstractSwiftMixedLa
                     linkTask.get().linkerArgs.add("-lstdc++")
                 }
             }
-            
+
             project(':cppGreeter') {
                 apply plugin: 'cpp-library'
                 library.linkage = [Linkage.${linkage}]
@@ -76,6 +78,7 @@ class SwiftXCTestCppInteroperabilityIntegrationTest extends AbstractSwiftMixedLa
         linkage << [SHARED, STATIC]
     }
 
+    @ToBeFixedForConfigurationCache
     def "can specify a test dependency on a library with a dependency on a c++ library"() {
         def cppGreeter = new CppGreeterFunction()
         def lib = new SwiftLibWithCppDep(cppGreeter)
@@ -93,13 +96,13 @@ class SwiftXCTestCppInteroperabilityIntegrationTest extends AbstractSwiftMixedLa
                     api project(':cppGreeter')
                 }
             }
-            
+
             project(':cppGreeter') {
                 apply plugin: 'cpp-library'
             }
-            
+
             apply plugin: 'swift-library'
-            
+
             dependencies {
                 testImplementation project(':greeter')
             }

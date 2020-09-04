@@ -17,7 +17,9 @@
 package org.gradle.java
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 
+@UnsupportedWithConfigurationCache(because = "software model")
 class JavaProjectModelBridgingIntegrationTest extends AbstractIntegrationSpec {
     def "Java plugin source sets are visible in the software model as binaries and source sets"() {
         buildFile << '''

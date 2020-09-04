@@ -18,7 +18,7 @@ package org.gradle.internal.resource.transport.sftp;
 
 import com.jcraft.jsch.ChannelSftp;
 import com.jcraft.jsch.SftpATTRS;
-import org.gradle.api.artifacts.repositories.PasswordCredentials;
+import org.gradle.api.credentials.PasswordCredentials;
 import org.gradle.internal.resource.ResourceExceptions;
 import org.gradle.internal.resource.metadata.DefaultExternalResourceMetaData;
 import org.gradle.internal.resource.metadata.ExternalResourceMetaData;
@@ -58,7 +58,7 @@ public class SftpResourceAccessor implements ExternalResourceAccessor {
         long contentLength = -1;
 
         if ((attributes.getFlags() & SftpATTRS.SSH_FILEXFER_ATTR_ACMODTIME) != 0) {
-            lastModified = attributes.getMTime() * 1000;
+            lastModified = (long)attributes.getMTime() * 1000;
         }
         if ((attributes.getFlags() & SftpATTRS.SSH_FILEXFER_ATTR_SIZE) != 0) {
             contentLength = attributes.getSize();

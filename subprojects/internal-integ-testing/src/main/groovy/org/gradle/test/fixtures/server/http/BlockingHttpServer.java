@@ -22,6 +22,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.gradle.api.Action;
 import org.gradle.internal.ErroringAction;
 import org.gradle.internal.work.WorkerLeaseService;
+import org.gradle.test.fixtures.ResettableExpectations;
 import org.hamcrest.Matcher;
 import org.junit.rules.ExternalResource;
 
@@ -46,7 +47,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * An HTTP server that allows a test to synchronize and make assertions about concurrent activities that happen in another process.
  * For example, can be used to that certain tasks do or do not execute in parallel.
  */
-public class BlockingHttpServer extends ExternalResource {
+public class BlockingHttpServer extends ExternalResource implements ResettableExpectations {
     private static final AtomicInteger COUNTER = new AtomicInteger();
     private static final ExecutorService EXECUTOR_SERVICE = Executors.newCachedThreadPool();
     private final Lock lock = new ReentrantLock();
@@ -55,9 +56,10 @@ public class BlockingHttpServer extends ExternalResource {
     private final ChainingHttpHandler handler;
     private final int timeoutMs;
     private final int serverId;
-    private final String scheme;
+    private final Scheme scheme;
     private boolean running;
     private int clientVarCounter;
+    private String hostAlias;
 
     public BlockingHttpServer() throws IOException {
         this(120000);
@@ -65,10 +67,14 @@ public class BlockingHttpServer extends ExternalResource {
 
     public BlockingHttpServer(int timeoutMs) throws IOException {
         // Use an OS selected port
-        this(HttpServer.create(new InetSocketAddress(0), 10), timeoutMs, "http");
+        this(HttpServer.create(new InetSocketAddress(0), 10), timeoutMs, Scheme.HTTP);
     }
 
-    protected BlockingHttpServer(HttpServer server, int timeoutMs, String scheme) {
+    public void setHostAlias(String hostAlias) {
+        this.hostAlias = hostAlias;
+    }
+
+    protected BlockingHttpServer(HttpServer server, int timeoutMs, Scheme scheme) {
         this.server = server;
         this.server.setExecutor(EXECUTOR_SERVICE);
         this.serverId = COUNTER.incrementAndGet();
@@ -83,7 +89,11 @@ public class BlockingHttpServer extends ExternalResource {
      */
     public URI getUri() {
         try {
-            return new URI(scheme + "://localhost:" + getPort());
+            String host = hostAlias;
+            if (host == null) {
+                host = scheme.host;
+            }
+            return new URI(scheme.scheme + "://" + host + ":" + getPort());
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
@@ -94,7 +104,7 @@ public class BlockingHttpServer extends ExternalResource {
      */
     public URI uri(String resource) {
         try {
-            return new URI(scheme, null, "localhost", getPort(), "/" + resource, null, null);
+            return new URI(scheme.scheme, null, scheme.host, getPort(), "/" + resource, null, null);
         } catch (URISyntaxException e) {
             throw new RuntimeException(e);
         }
@@ -355,6 +365,11 @@ public class BlockingHttpServer extends ExternalResource {
         });
     }
 
+    @Override
+    public void resetExpectations() {
+        handler.resetExpectations();
+    }
+
     /**
      * For testing this fixture only.
      */
@@ -507,6 +522,19 @@ public class BlockingHttpServer extends ExternalResource {
             } finally {
                 lock.unlock();
             }
+        }
+    }
+
+    protected enum Scheme {
+        HTTP("http", "127.0.0.1"),
+        HTTPS("https", "localhost");
+
+        private final String scheme;
+        private final String host;
+
+        Scheme(String scheme, String host) {
+            this.scheme = scheme;
+            this.host = host;
         }
     }
 }

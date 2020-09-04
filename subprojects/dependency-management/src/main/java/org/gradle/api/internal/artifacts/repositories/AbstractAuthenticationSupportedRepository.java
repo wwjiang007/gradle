@@ -16,11 +16,13 @@
 package org.gradle.api.internal.artifacts.repositories;
 
 import org.gradle.api.Action;
-import org.gradle.api.Transformer;
 import org.gradle.api.artifacts.repositories.AuthenticationContainer;
 import org.gradle.api.artifacts.repositories.PasswordCredentials;
 import org.gradle.api.credentials.Credentials;
+import org.gradle.api.internal.FeaturePreviews;
 import org.gradle.api.model.ObjectFactory;
+import org.gradle.api.provider.Property;
+import org.gradle.api.provider.ProviderFactory;
 import org.gradle.authentication.Authentication;
 import org.gradle.internal.Cast;
 import org.gradle.internal.artifacts.repositories.AuthenticationSupportedInternal;
@@ -28,7 +30,6 @@ import org.gradle.internal.authentication.AuthenticationInternal;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.util.CollectionUtils;
 
-import javax.annotation.Nullable;
 import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
@@ -36,10 +37,12 @@ import java.util.List;
 
 public abstract class AbstractAuthenticationSupportedRepository extends AbstractResolutionAwareArtifactRepository implements AuthenticationSupportedInternal {
     private final AuthenticationSupporter delegate;
+    private final ProviderFactory providerFactory;
 
-    AbstractAuthenticationSupportedRepository(Instantiator instantiator, AuthenticationContainer authenticationContainer, ObjectFactory objectFactory) {
-        super(objectFactory);
-        this.delegate = new AuthenticationSupporter(instantiator, authenticationContainer);
+    AbstractAuthenticationSupportedRepository(Instantiator instantiator, AuthenticationContainer authenticationContainer, ObjectFactory objectFactory, ProviderFactory providerFactory, FeaturePreviews featurePreviews) {
+        super(objectFactory, featurePreviews);
+        this.delegate = new AuthenticationSupporter(instantiator, objectFactory, authenticationContainer, providerFactory);
+        this.providerFactory = providerFactory;
     }
 
     @Override
@@ -54,9 +57,8 @@ public abstract class AbstractAuthenticationSupportedRepository extends Abstract
         return delegate.getCredentials(credentialsType);
     }
 
-    @Nullable
     @Override
-    public Credentials getConfiguredCredentials() {
+    public Property<Credentials> getConfiguredCredentials() {
         return delegate.getConfiguredCredentials();
     }
 
@@ -76,6 +78,12 @@ public abstract class AbstractAuthenticationSupportedRepository extends Abstract
     public <T extends Credentials> void credentials(Class<T> credentialsType, Action<? super T> action) throws IllegalStateException {
         invalidateDescriptor();
         delegate.credentials(credentialsType, action);
+    }
+
+    @Override
+    public void credentials(Class<? extends Credentials> credentialsType) {
+        invalidateDescriptor();
+        delegate.credentials(credentialsType, providerFactory.provider(this::getName));
     }
 
     @Override
@@ -111,11 +119,10 @@ public abstract class AbstractAuthenticationSupportedRepository extends Abstract
     }
 
     List<String> getAuthenticationSchemes() {
-        return CollectionUtils.collect(getConfiguredAuthentication(), new Transformer<String, Authentication>() {
-            @Override
-            public String transform(Authentication authentication) {
-                return Cast.cast(AuthenticationInternal.class, authentication).getType().getSimpleName();
-            }
-        });
+        return CollectionUtils.collect(getConfiguredAuthentication(), authentication -> Cast.cast(AuthenticationInternal.class, authentication).getType().getSimpleName());
+    }
+
+    boolean usesCredentials() {
+        return delegate.usesCredentials();
     }
 }

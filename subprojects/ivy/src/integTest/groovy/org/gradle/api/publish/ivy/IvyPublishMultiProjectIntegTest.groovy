@@ -16,11 +16,14 @@
 
 package org.gradle.api.publish.ivy
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
+
 class IvyPublishMultiProjectIntegTest extends AbstractIvyPublishIntegTest {
     def project1 = javaLibrary(ivyRepo.module("org.gradle.test", "project1", "1.0"))
     def project2 = javaLibrary(ivyRepo.module("org.gradle.test", "project2", "2.0"))
     def project3 = javaLibrary(ivyRepo.module("org.gradle.test", "project3", "3.0"))
 
+    @ToBeFixedForConfigurationCache
     def "project dependencies are correctly bound to published project"() {
         createBuildScripts("")
 
@@ -41,6 +44,7 @@ class IvyPublishMultiProjectIntegTest extends AbstractIvyPublishIntegTest {
         resolveArtifacts(project1) { expectFiles 'project1-1.0.jar', 'project2-2.0.jar', 'project3-3.0.jar' }
     }
 
+    @ToBeFixedForConfigurationCache
     def "project dependencies reference publication identity of dependent project"() {
         def project3 = javaLibrary(ivyRepo.module("changed.org", "changed-module", "changed"))
 
@@ -105,6 +109,7 @@ Found the following publications in project ':project3':
   - Ivy publication 'extra' with coordinates extra.org:extra-module-2:extra"""
     }
 
+    @ToBeFixedForConfigurationCache
     def "referenced project can have additional non-component publications"() {
         createBuildScripts("""
 project(":project3") {
@@ -124,6 +129,7 @@ project(":project3") {
         succeeds "publish"
     }
 
+    @ToBeFixedForConfigurationCache
     def "referenced project can have multiple additional publications that contain a child of some other publication"() {
         createBuildScripts("""
 // TODO - replace this with a public API when available
@@ -134,7 +140,7 @@ class ExtraComp implements org.gradle.api.internal.component.SoftwareComponentIn
 }
 
 project(":project3") {
-    def e1 = new ExtraComp()
+    def e1 = new ExtraComp(variants: [components.java])
     def e2 = new ExtraComp(variants: [e1, components.java])
 
     publishing {
@@ -163,6 +169,7 @@ project(":project3") {
         project1.assertApiDependencies("org.gradle.test:project2:2.0", "custom:custom3:456")
     }
 
+    @ToBeFixedForConfigurationCache
     def "ivy-publish plugin does not take archivesBaseName into account"() {
         createBuildScripts("""
 project(":project2") {
@@ -185,6 +192,7 @@ project(":project2") {
         project3.parsedIvy.dependencies.isEmpty()
     }
 
+    @ToBeFixedForConfigurationCache
     def "ivy-publish plugin uses target project name for project dependency when target project does not have ivy-publish plugin applied"() {
         given:
         settingsFile << """
@@ -230,6 +238,7 @@ project(":project2") {
         project1.assertApiDependencies("org.gradle.test:project2:1.0")
     }
 
+    @ToBeFixedForConfigurationCache
     def "ivy-publish plugin publishes project dependency excludes in descriptor"() {
         given:
         settingsFile << """

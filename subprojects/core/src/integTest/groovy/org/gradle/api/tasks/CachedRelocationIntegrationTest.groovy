@@ -122,7 +122,7 @@ class CachedRelocationIntegrationTest extends AbstractIntegrationSpec implements
                     printScriptOrigin("Action", owner)
                 }
             }
-            
+
             def printScriptOrigin(def title, def o) {
                 // need to get through reflection to bypass the Groovy MOP on closures, which would cause calling the method on the owner instead of the closure itself
                 def type = o.getClass()

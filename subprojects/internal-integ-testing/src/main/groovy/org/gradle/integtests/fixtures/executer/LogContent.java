@@ -36,7 +36,8 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 public class LogContent {
-    private final static Pattern DEBUG_PREFIX = Pattern.compile("\\d{2}:\\d{2}:\\d{2}\\.\\d{3} \\[\\w+] \\[.+?] ");
+    // see org.gradle.internal.logging.console.StyledTextOutputBackedRenderer.ISO_8601_DATE_TIME_FORMAT
+    private final static Pattern DEBUG_PREFIX = Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\+\\d{4} \\[\\w+] \\[.+?] ");
     private final static Pattern JAVA_ILLEGAL_ACCESS_WARNING_PATTERN = Pattern.compile("(?ms)WARNING: An illegal reflective access operation has occurred$.+?"
         + "^WARNING: All illegal access operations will be denied in a future release\r?\n");
 
@@ -123,6 +124,13 @@ public class LogContent {
     }
 
     /**
+     * Returns the first line. The text does not include the line separator.
+     */
+    public String getFirst() {
+        return lines.get(0);
+    }
+
+    /**
      * Visits each line in this content. The line does not include the line separator.
      */
     public void eachLine(Action<? super String> action) {
@@ -134,7 +142,7 @@ public class LogContent {
     /**
      * Locates the log content starting with the first line that matches the given pattern, or null if no such line.
      *
-     * @return a pair containing (content-before-matching-line, content-from-matching-line)
+     * @return a pair containing (content-before-matching-line, content-from-matching-line) or null if no match.
      */
     public @Nullable
     Pair<LogContent, LogContent> splitOnFirstMatchingLine(Pattern pattern) {

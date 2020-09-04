@@ -87,7 +87,7 @@ class CacheTaskArchiveErrorIntegrationTest extends AbstractIntegrationSpec {
 
         remoteCache.empty
         failureHasCause "Failed to store cache entry for task ':customTask'"
-        errorOutput =~ /org.gradle.api.GradleException: Could not pack tree 'output'/
+        errorOutput =~ /${RuntimeException.name}: Could not pack tree 'output'/
     }
 
     def "corrupt archive loaded from remote cache is not copied into local cache"() {
@@ -129,12 +129,14 @@ class CacheTaskArchiveErrorIntegrationTest extends AbstractIntegrationSpec {
         buildFile << """
             apply plugin: "base"
             task customTask {
-                inputs.file "input.txt"
-                outputs.file "build/output" withPropertyName "output"
+                def inputTxt = file("input.txt")
+                def outputTxt = file("build/output")
+                inputs.file inputTxt
+                outputs.file outputTxt withPropertyName "output"
                 outputs.cacheIf { true }
                 doLast {
-                  mkdir('build')
-                  file('build/output').text = file('input.txt').text
+                  outputTxt.parentFile.mkdirs()
+                  outputTxt.text = inputTxt.text
                 }
             }
         """
@@ -149,7 +151,7 @@ class CacheTaskArchiveErrorIntegrationTest extends AbstractIntegrationSpec {
         then:
         fails("clean", "customTask")
         failureHasCause("Failed to load cache entry for task ':customTask'")
-        errorOutput.contains("Caused by: java.io.UncheckedIOException: java.io.EOFException: Unexpected end of ZLIB input stream")
+        errorOutput.contains("Caused by: java.io.EOFException: Unexpected end of ZLIB input stream")
         localCache.listCacheFailedFiles().size() == 1
 
         and:

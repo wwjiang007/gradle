@@ -21,20 +21,22 @@ import org.gradle.execution.ProjectConfigurer;
 import org.gradle.initialization.BuildLoader;
 import org.gradle.initialization.ModelConfigurationListener;
 import org.gradle.initialization.ProjectsEvaluatedNotifier;
-import org.gradle.internal.build.BuildStateRegistry;
 import org.gradle.internal.operations.BuildOperationExecutor;
-import org.gradle.util.SingleMessageLogger;
+import org.gradle.util.IncubationLogger;
 
 public class DefaultProjectsPreparer implements ProjectsPreparer {
     private final BuildLoader buildLoader;
     private final BuildOperationExecutor buildOperationExecutor;
     private final ProjectConfigurer projectConfigurer;
-    private final BuildStateRegistry buildRegistry;
     private final ModelConfigurationListener modelConfigurationListener;
 
-    public DefaultProjectsPreparer(ProjectConfigurer projectConfigurer, BuildStateRegistry buildRegistry, BuildLoader buildLoader, ModelConfigurationListener modelConfigurationListener, BuildOperationExecutor buildOperationExecutor) {
+    public DefaultProjectsPreparer(
+            ProjectConfigurer projectConfigurer,
+            BuildLoader buildLoader,
+            ModelConfigurationListener modelConfigurationListener,
+            BuildOperationExecutor buildOperationExecutor
+    ) {
         this.projectConfigurer = projectConfigurer;
-        this.buildRegistry = buildRegistry;
         this.buildLoader = buildLoader;
         this.modelConfigurationListener = modelConfigurationListener;
         this.buildOperationExecutor = buildOperationExecutor;
@@ -46,9 +48,6 @@ public class DefaultProjectsPreparer implements ProjectsPreparer {
 
         buildLoader.load(gradle.getSettings(), gradle);
 
-        if (gradle.getParent() == null) {
-            buildRegistry.beforeConfigureRootBuild();
-        }
         if (gradle.getStartParameter().isConfigureOnDemand()) {
             projectConfigurer.configure(gradle.getRootProject());
         } else {
@@ -63,7 +62,7 @@ public class DefaultProjectsPreparer implements ProjectsPreparer {
         StartParameter startParameter = gradle.getStartParameter();
 
         if (startParameter.isConfigureOnDemand()) {
-            SingleMessageLogger.incubatingFeatureUsed("Configuration on demand");
+            IncubationLogger.incubatingFeatureUsed("Configuration on demand");
         }
     }
 }

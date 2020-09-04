@@ -34,14 +34,15 @@ import org.gradle.api.internal.plugins.PluginManagerInternal;
 import org.gradle.api.internal.project.AbstractPluginAware;
 import org.gradle.api.internal.project.ProjectRegistry;
 import org.gradle.caching.configuration.BuildCacheConfiguration;
+import org.gradle.caching.configuration.internal.BuildCacheConfigurationInternal;
 import org.gradle.configuration.ScriptPluginFactory;
 import org.gradle.groovy.scripts.ScriptSource;
 import org.gradle.internal.Actions;
-import org.gradle.internal.resource.TextResourceLoader;
+import org.gradle.internal.deprecation.DeprecationLogger;
+import org.gradle.internal.resource.TextUriResourceLoader;
 import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.scopes.ServiceRegistryFactory;
 import org.gradle.plugin.management.PluginManagementSpec;
-import org.gradle.util.SingleMessageLogger;
 import org.gradle.vcs.SourceControl;
 
 import javax.inject.Inject;
@@ -50,7 +51,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public abstract class DefaultSettings extends AbstractPluginAware implements SettingsInternal {
-    public static final String DEFAULT_BUILD_SRC_DIR = "buildSrc";
     private ScriptSource settingsScript;
 
     private StartParameter startParameter;
@@ -61,25 +61,25 @@ public abstract class DefaultSettings extends AbstractPluginAware implements Set
 
     private ProjectDescriptor defaultProjectDescriptor;
 
-    private GradleInternal gradle;
+    private final GradleInternal gradle;
 
-    private final ClassLoaderScope settingsClassLoaderScope;
-    private final ClassLoaderScope buildRootClassLoaderScope;
+    private final ClassLoaderScope classLoaderScope;
+    private final ClassLoaderScope baseClassLoaderScope;
     private final ScriptHandler scriptHandler;
     private final ServiceRegistry services;
 
     private final List<IncludedBuildSpec> includedBuildSpecs = new ArrayList<IncludedBuildSpec>();
 
     public DefaultSettings(ServiceRegistryFactory serviceRegistryFactory, GradleInternal gradle,
-                           ClassLoaderScope settingsClassLoaderScope, ClassLoaderScope buildRootClassLoaderScope, ScriptHandler settingsScriptHandler,
+                           ClassLoaderScope classLoaderScope, ClassLoaderScope baseClassLoaderScope, ScriptHandler settingsScriptHandler,
                            File settingsDir, ScriptSource settingsScript, StartParameter startParameter) {
         this.gradle = gradle;
-        this.buildRootClassLoaderScope = buildRootClassLoaderScope;
+        this.classLoaderScope = classLoaderScope;
+        this.baseClassLoaderScope = baseClassLoaderScope;
         this.scriptHandler = settingsScriptHandler;
         this.settingsDir = settingsDir;
         this.settingsScript = settingsScript;
         this.startParameter = startParameter;
-        this.settingsClassLoaderScope = settingsClassLoaderScope;
         services = serviceRegistryFactory.createFor(this);
         rootProjectDescriptor = createProjectDescriptor(null, settingsDir.getName(), settingsDir);
     }
@@ -230,6 +230,11 @@ public abstract class DefaultSettings extends AbstractPluginAware implements Set
         throw new UnsupportedOperationException();
     }
 
+    @Inject
+    public TextUriResourceLoader.Factory getTextUriResourceLoaderFactory() {
+        throw new UnsupportedOperationException();
+    }
+
     @Override
     public ProjectRegistry<DefaultProjectDescriptor> getProjectRegistry() {
         return getProjectDescriptorRegistry();
@@ -241,28 +246,29 @@ public abstract class DefaultSettings extends AbstractPluginAware implements Set
             getFileResolver(),
             getScriptPluginFactory(),
             getScriptHandlerFactory(),
-            getRootClassLoaderScope(),
-            getResourceLoader(),
+            baseClassLoaderScope,
+            getTextUriResourceLoaderFactory(),
             this);
     }
 
+
     @Override
-    public ClassLoaderScope getRootClassLoaderScope() {
-        return buildRootClassLoaderScope;
+    public ClassLoaderScope getBaseClassLoaderScope() {
+        return baseClassLoaderScope;
     }
 
     @Override
     public ClassLoaderScope getClassLoaderScope() {
-        return settingsClassLoaderScope;
+        return classLoaderScope;
+    }
+
+    @Override
+    public File getBuildSrcDir() {
+        return new File(getSettingsDir(), BUILD_SRC);
     }
 
     protected ServiceRegistry getServices() {
         return services;
-    }
-
-    @Inject
-    protected TextResourceLoader getResourceLoader() {
-        throw new UnsupportedOperationException();
     }
 
     @Inject
@@ -304,7 +310,7 @@ public abstract class DefaultSettings extends AbstractPluginAware implements Set
 
     @Override
     @Inject
-    public BuildCacheConfiguration getBuildCache() {
+    public BuildCacheConfigurationInternal getBuildCache() {
         throw new UnsupportedOperationException();
     }
 
@@ -336,7 +342,12 @@ public abstract class DefaultSettings extends AbstractPluginAware implements Set
         if (feature.isActive()) {
             services.get(FeaturePreviews.class).enableFeature(feature);
         } else {
-            SingleMessageLogger.nagUserOfDeprecated("enableFeaturePreview('" + feature.name() + "')", "The feature flag is no longer relevant, please remove it from your settings file.");
+            DeprecationLogger
+                .deprecate("enableFeaturePreview('" + feature.name() + "')")
+                .withAdvice("The feature flag is no longer relevant, please remove it from your settings file.")
+                .willBeRemovedInGradle7()
+                .withUserManual("feature_lifecycle", "feature_preview")
+                .nagUser();
         }
     }
 }

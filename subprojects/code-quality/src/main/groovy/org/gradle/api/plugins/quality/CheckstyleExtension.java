@@ -15,10 +15,11 @@
  */
 package org.gradle.api.plugins.quality;
 
-import org.gradle.api.Incubating;
 import org.gradle.api.Project;
 import org.gradle.api.file.DirectoryProperty;
+import org.gradle.api.model.ReplacedBy;
 import org.gradle.api.resources.TextResource;
+import org.gradle.internal.deprecation.DeprecationLogger;
 
 import java.io.File;
 import java.util.LinkedHashMap;
@@ -38,11 +39,11 @@ public class CheckstyleExtension extends CodeQualityExtension {
     private int maxErrors;
     private int maxWarnings = Integer.MAX_VALUE;
     private boolean showViolations = true;
-    private DirectoryProperty configDir;
+    private final DirectoryProperty configDirectory;
 
     public CheckstyleExtension(Project project) {
         this.project = project;
-        configDir = project.getObjects().directoryProperty();
+        this.configDirectory = project.getObjects().directoryProperty();
     }
 
     /**
@@ -96,13 +97,18 @@ public class CheckstyleExtension extends CodeQualityExtension {
      * <p>
      * This path will be exposed as the variable {@code config_loc} in Checkstyle's configuration files.
      * </p>
+     *
      * @return path to other Checkstyle configuration files
      * @since 4.0
-     *
      */
-    @Incubating
+    @Deprecated
+    @ReplacedBy("configDirectory")
     public File getConfigDir() {
-        return configDir.get().getAsFile();
+        DeprecationLogger.deprecateMethod(CheckstyleExtension.class, "getConfigDir()").replaceWith("CheckstyleExtension.getConfigDirectory()")
+            .willBeRemovedInGradle7()
+            .withDslReference(CheckstyleExtension.class, "configDir")
+            .nagUser();
+        return configDirectory.get().getAsFile();
     }
 
     /**
@@ -110,22 +116,29 @@ public class CheckstyleExtension extends CodeQualityExtension {
      * <p>
      * This path will be exposed as the variable {@code config_loc} in Checkstyle's configuration files.
      * </p>
+     *
      * @since 4.0
      */
-    @Incubating
+    @Deprecated
     public void setConfigDir(File configDir) {
-        this.configDir.set(configDir);
+        DeprecationLogger.deprecateMethod(CheckstyleExtension.class, "setConfigDir()").replaceWith("CheckstyleExtension.getConfigDirectory().set()")
+            .willBeRemovedInGradle7()
+            .withDslReference(CheckstyleExtension.class, "configDir")
+            .nagUser();
+        this.configDirectory.set(configDir);
     }
 
     /**
-     * Gets the configuration directory.
+     * Path to other Checkstyle configuration files. By default, this path is {@code $rootProject.projectDir/config/checkstyle}
+     * <p>
+     * This path will be exposed as the variable {@code config_loc} in Checkstyle's configuration files.
+     * </p>
      *
-     * @return The configuration directory
+     * @return path to other Checkstyle configuration files
      * @since 4.7
      */
-    @Incubating
     public DirectoryProperty getConfigDirectory() {
-        return configDir;
+        return configDirectory;
     }
 
     /**
@@ -134,8 +147,8 @@ public class CheckstyleExtension extends CodeQualityExtension {
      * <p>
      * Example: maxErrors = 42
      *
-     * @since 3.4
      * @return the maximum number of errors allowed
+     * @since 3.4
      */
     public int getMaxErrors() {
         return maxErrors;
@@ -144,8 +157,8 @@ public class CheckstyleExtension extends CodeQualityExtension {
     /**
      * Set the maximum number of errors that are tolerated before breaking the build.
      *
-     * @since 3.4
      * @param maxErrors number of errors allowed
+     * @since 3.4
      */
     public void setMaxErrors(int maxErrors) {
         this.maxErrors = maxErrors;
@@ -157,8 +170,8 @@ public class CheckstyleExtension extends CodeQualityExtension {
      * <p>
      * Example: maxWarnings = 1000
      *
-     * @since 3.4
      * @return the maximum number of warnings allowed
+     * @since 3.4
      */
     public int getMaxWarnings() {
         return maxWarnings;
@@ -167,8 +180,8 @@ public class CheckstyleExtension extends CodeQualityExtension {
     /**
      * Set the maximum number of warnings that are tolerated before breaking the build.
      *
-     * @since 3.4
      * @param maxWarnings number of warnings allowed
+     * @since 3.4
      */
     public void setMaxWarnings(int maxWarnings) {
         this.maxWarnings = maxWarnings;

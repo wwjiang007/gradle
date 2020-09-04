@@ -23,8 +23,8 @@ import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.NamedDomainObjectCollectionSchema;
 import org.gradle.api.Task;
 import org.gradle.api.UnknownTaskException;
-import org.gradle.api.internal.DefaultNamedDomainObjectSet;
 import org.gradle.api.internal.CollectionCallbackActionDecorator;
+import org.gradle.api.internal.DefaultNamedDomainObjectSet;
 import org.gradle.api.internal.MutationGuard;
 import org.gradle.api.internal.collections.CollectionFilter;
 import org.gradle.api.internal.plugins.DslObject;
@@ -64,7 +64,7 @@ public class DefaultTaskCollection<T extends Task> extends DefaultNamedDomainObj
 
     @Override
     protected <S extends T> DefaultTaskCollection<S> filtered(CollectionFilter<S> filter) {
-        return getInstantiator().newInstance(DefaultTaskCollection.class, this, filter, getInstantiator(), project, parentMutationGuard);
+        return Cast.uncheckedNonnullCast(getInstantiator().newInstance(DefaultTaskCollection.class, this, filter, getInstantiator(), project, parentMutationGuard));
     }
 
     @Override
@@ -192,16 +192,19 @@ public class DefaultTaskCollection<T extends Task> extends DefaultNamedDomainObj
         };
     }
 
+    public Action<? super T> whenObjectRemovedInternal(Action<? super T> action) {
+        return super.whenObjectRemoved(action);
+    }
+
     // Cannot be private due to reflective instantiation
     public class ExistingTaskProvider<I extends T> extends ExistingNamedDomainObjectProvider<I> implements TaskProvider<I> {
-        public ExistingTaskProvider(String name, Class type) {
+        public ExistingTaskProvider(String name, Class<I> type) {
             super(name, type);
         }
 
         @Override
-        public boolean maybeVisitBuildDependencies(TaskDependencyResolveContext context) {
-            context.add(get());
-            return true;
+        public ValueProducer getProducer() {
+            return ValueProducer.taskState(get());
         }
     }
 }

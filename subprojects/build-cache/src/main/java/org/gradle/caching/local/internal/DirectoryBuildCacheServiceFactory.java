@@ -29,15 +29,15 @@ import org.gradle.caching.BuildCacheService;
 import org.gradle.caching.BuildCacheServiceFactory;
 import org.gradle.caching.local.DirectoryBuildCache;
 import org.gradle.internal.file.FileAccessTimeJournal;
+import org.gradle.internal.file.FileAccessTracker;
 import org.gradle.internal.file.PathToFileResolver;
-import org.gradle.internal.resource.local.FileAccessTracker;
+import org.gradle.internal.file.impl.SingleDepthFileAccessTracker;
 import org.gradle.internal.resource.local.PathKeyFileStore;
-import org.gradle.internal.resource.local.SingleDepthFileAccessTracker;
 
 import javax.inject.Inject;
 import java.io.File;
 
-import static org.gradle.cache.FileLockManager.LockMode.None;
+import static org.gradle.cache.FileLockManager.LockMode.OnDemand;
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
 public class DirectoryBuildCacheServiceFactory implements BuildCacheServiceFactory<DirectoryBuildCache> {
@@ -87,7 +87,7 @@ public class DirectoryBuildCacheServiceFactory implements BuildCacheServiceFacto
             .cache(target)
             .withCleanup(cleanupActionFactory.create(new LeastRecentlyUsedCacheCleanup(new SingleDepthFilesFinder(FILE_TREE_DEPTH_TO_TRACK_AND_CLEANUP), fileAccessTimeJournal, removeUnusedEntriesAfterDays)))
             .withDisplayName("Build cache")
-            .withLockOptions(mode(None))
+            .withLockOptions(mode(OnDemand))
             .withCrossVersionCache(CacheBuilder.LockTarget.DefaultTarget)
             .open();
         BuildCacheTempFileStore tempFileStore = new DefaultBuildCacheTempFileStore(target);

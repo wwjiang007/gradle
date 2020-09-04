@@ -20,22 +20,20 @@ import org.gradle.integtests.fixtures.executer.IntegrationTestBuildContext
 import org.gradle.integtests.fixtures.executer.UnderDevelopmentGradleDistribution
 import org.gradle.integtests.fixtures.versions.ReleasedVersionDistributions
 import org.gradle.performance.categories.PerformanceRegressionTest
-import org.gradle.performance.fixture.GradleProfilerBuildExperimentRunner
+import org.gradle.performance.fixture.GradleBuildExperimentRunner
 import org.gradle.performance.fixture.GradleProfilerCrossVersionPerformanceTestRunner
 import org.gradle.performance.fixture.PerformanceTestDirectoryProvider
 import org.gradle.performance.fixture.PerformanceTestIdProvider
-import org.gradle.performance.results.CrossVersionPerformanceResults
+import org.gradle.performance.results.CompositeDataReporter
 import org.gradle.performance.results.CrossVersionResultsStore
-import org.gradle.performance.results.DataReporter
-import org.gradle.performance.results.SlackReporter
-import org.gradle.profiler.BenchmarkResultCollector
-import org.gradle.profiler.report.CsvGenerator
-import org.gradle.profiler.report.HtmlGenerator
+import org.gradle.performance.results.GradleProfilerReporter
 import org.gradle.test.fixtures.file.CleanupTestDirectory
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.junit.Rule
 import org.junit.experimental.categories.Category
 import spock.lang.Specification
+
+import static org.gradle.performance.results.ResultsStoreHelper.createResultsStoreWhenDatabaseAvailable
 
 /**
  * A base class for cross version performance tests.
@@ -47,13 +45,10 @@ import spock.lang.Specification
 @CleanupTestDirectory
 class AbstractCrossVersionGradleProfilerPerformanceTest extends Specification {
 
-    private static final String DEBUG_ARTIFACTS_DIRECTORY_PROPERTY_NAME = "org.gradle.performance.debugArtifactsDirectory"
-
-    private static def resultStore = new CrossVersionResultsStore()
-    private static def reporter = SlackReporter.wrap(resultStore)
+    private static final RESULTS_STORE = createResultsStoreWhenDatabaseAvailable { new CrossVersionResultsStore() }
 
     @Rule
-    TestNameTestDirectoryProvider temporaryFolder = new PerformanceTestDirectoryProvider()
+    TestNameTestDirectoryProvider temporaryFolder = new PerformanceTestDirectoryProvider(getClass())
 
     private final IntegrationTestBuildContext buildContext = new IntegrationTestBuildContext()
 
@@ -63,32 +58,11 @@ class AbstractCrossVersionGradleProfilerPerformanceTest extends Specification {
     PerformanceTestIdProvider performanceTestIdProvider = new PerformanceTestIdProvider()
 
     def setup() {
-        def debugArtifactsDirectoryPath = System.getProperty(DEBUG_ARTIFACTS_DIRECTORY_PROPERTY_NAME)
-        def debugArtifactsDirectory = debugArtifactsDirectoryPath ? new File(debugArtifactsDirectoryPath) : temporaryFolder.testDirectory
-        def resultCollector = new BenchmarkResultCollector(
-            new CsvGenerator(new File(debugArtifactsDirectory, "benchmark.csv")),
-            new HtmlGenerator(new File(debugArtifactsDirectory, "benchmark.html"))
-        )
-        def slackReporter = reporter
-        def compositeReporter = new DataReporter<CrossVersionPerformanceResults>() {
-            @Override
-            void report(CrossVersionPerformanceResults results) {
-                slackReporter.report(results)
-                resultCollector.summarizeResults { line ->
-                    System.out.println("  " + line)
-                }
-                resultCollector.write()
-            }
-
-            @Override
-            void close() throws IOException {
-                reporter.close()
-            }
-        }
+        def gradleProfilerReporter = new GradleProfilerReporter(temporaryFolder.testDirectory)
         runner = new GradleProfilerCrossVersionPerformanceTestRunner(
-            new GradleProfilerBuildExperimentRunner(resultCollector),
-            resultStore,
-            compositeReporter,
+            new GradleBuildExperimentRunner(gradleProfilerReporter.getResultCollector()),
+            RESULTS_STORE,
+            CompositeDataReporter.of(gradleProfilerReporter, RESULTS_STORE),
             new ReleasedVersionDistributions(buildContext),
             buildContext
         )
@@ -104,8 +78,7 @@ class AbstractCrossVersionGradleProfilerPerformanceTest extends Specification {
     static {
         // TODO - find a better way to cleanup
         System.addShutdownHook {
-            resultStore.close()
-            reporter.close()
+            RESULTS_STORE.close()
         }
     }
 }

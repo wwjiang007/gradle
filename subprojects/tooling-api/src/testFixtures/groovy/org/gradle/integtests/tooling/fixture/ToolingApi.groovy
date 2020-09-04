@@ -19,6 +19,7 @@ import org.gradle.integtests.fixtures.daemon.DaemonLogsAnalyzer
 import org.gradle.integtests.fixtures.daemon.DaemonsFixture
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.integtests.fixtures.executer.GradleDistribution
+import org.gradle.integtests.fixtures.executer.GradleExecuter
 import org.gradle.integtests.fixtures.executer.IntegrationTestBuildContext
 import org.gradle.internal.service.DefaultServiceRegistry
 import org.gradle.test.fixtures.file.TestDirectoryProvider
@@ -69,6 +70,16 @@ class ToolingApi implements TestRule {
         withUserHome(testWorkDirProvider.testDirectory.file("user-home-dir"))
     }
 
+    GradleExecuter createExecuter() {
+        def executer = dist.executer(testWorkDirProvider, context)
+            .withGradleUserHomeDir(gradleUserHomeDir)
+            .withDaemonBaseDir(daemonBaseDir)
+        if (requiresDaemon) {
+            executer.requireDaemon()
+        }
+        return executer
+    }
+
     void withUserHome(TestFile userHomeDir) {
         gradleUserHomeDir = userHomeDir
         useSeparateDaemonBaseDir = false
@@ -116,12 +127,12 @@ class ToolingApi implements TestRule {
         connectorConfigurers << cl
     }
 
-    public <T> T withConnection(Closure<T> cl) {
+    def <T> T withConnection(Closure<T> cl) {
         GradleConnector connector = connector()
         withConnection(connector, cl)
     }
 
-    public <T> T withConnection(GradleConnector connector, Closure<T> cl) {
+    def <T> T withConnection(GradleConnector connector, Closure<T> cl) {
         return withConnectionRaw(connector, cl)
     }
 
@@ -165,7 +176,7 @@ class ToolingApi implements TestRule {
         }
 
         connector.forProjectDirectory(testWorkDirProvider.testDirectory)
-        if (useClasspathImplementation) {
+        if (embedded) {
             connector.useClasspathDistribution()
         } else {
             connector.useInstallation(dist.gradleHomeDir.absoluteFile)
@@ -192,6 +203,8 @@ class ToolingApi implements TestRule {
             }
         }
 
+        isolateFromGradleOwnBuild(connector)
+
         connector.useGradleUserHomeDir(new File(gradleUserHomeDir.path))
         connectorConfigurers.each {
             connector.with(it)
@@ -199,17 +212,19 @@ class ToolingApi implements TestRule {
         return connector
     }
 
-    boolean isUseClasspathImplementation() {
-        // Use classpath implementation only when running tests in embedded mode and for the current Gradle version
-        return embedded && GradleVersion.current() == dist.version
+    private void isolateFromGradleOwnBuild(DefaultGradleConnector connector) {
+        // override the `user.dir` property in order to isolate tests from the Gradle directory
+        def connection = connector.connect()
+        try {
+            connection.action(new SetWorkingDirectoryAction(testWorkDirProvider.testDirectory.absolutePath))
+        } finally {
+            connection.close()
+        }
     }
 
-    /*
-     * TODO Stefan the embedded executor has been broken by some
-     * change after 3.0. It can no longer handle changes to the
-     * serialized form of tooling models. The current -> 3.0 tests
-     * are failing as a result. Temporarily deactivating embedded
-     * mode except for current -> current.
+    /**
+     * Only 'current->[some-version]' can run embedded.
+     * If running '[other-version]->current' the other Gradle version does not know how to start Gradle from the embedded classpath.
      */
     boolean isEmbedded() {
         // Use in-process build when running tests in embedded mode and daemon is not required
@@ -222,7 +237,7 @@ class ToolingApi implements TestRule {
             @Override
             void evaluate() throws Throwable {
                 try {
-                    base.evaluate();
+                    base.evaluate()
                 } finally {
                     cleanUpIsolatedDaemonsAndServices()
                 }
@@ -254,4 +269,5 @@ class ToolingApi implements TestRule {
             }
         }
     }
+
 }

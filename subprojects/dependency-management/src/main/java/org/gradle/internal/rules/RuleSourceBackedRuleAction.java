@@ -46,12 +46,7 @@ public class RuleSourceBackedRuleAction<R, T> implements RuleAction<T> {
 
     public static <R, T> RuleSourceBackedRuleAction<R, T> create(ModelType<T> subjectType, R ruleSourceInstance) {
         ModelType<R> ruleSourceType = ModelType.typeOf(ruleSourceInstance);
-        List<Method> mutateMethods = findAllMethods(ruleSourceType.getConcreteClass(), new Spec<Method>() {
-            @Override
-            public boolean isSatisfiedBy(Method element) {
-                return element.isAnnotationPresent(Mutate.class);
-            }
-        });
+        List<Method> mutateMethods = findAllMethods(ruleSourceType.getConcreteClass(), element -> element.isAnnotationPresent(Mutate.class));
         FormattingValidationProblemCollector problemsFormatter = new FormattingValidationProblemCollector("rule source", ruleSourceType);
         RuleSourceValidationProblemCollector problems = new DefaultRuleSourceValidationProblemCollector(problemsFormatter);
 
@@ -77,7 +72,7 @@ public class RuleSourceBackedRuleAction<R, T> implements RuleAction<T> {
             throw new RuleActionValidationException(problemsFormatter.format());
         }
 
-        return new RuleSourceBackedRuleAction<R, T>(ruleSourceInstance, new JavaMethod<R, T>(subjectType.getConcreteClass(), mutateMethods.get(0)));
+        return new RuleSourceBackedRuleAction<>(ruleSourceInstance, new JavaMethod<>(subjectType.getConcreteClass(), mutateMethods.get(0)));
     }
 
     public static List<Class<?>> determineInputTypes(Class<?>[] parameterTypes) {
@@ -101,7 +96,7 @@ public class RuleSourceBackedRuleAction<R, T> implements RuleAction<T> {
     }
 
     private static List<Method> findAllMethods(Class<?> target, Spec<Method> predicate) {
-        return findAllMethodsInternal(target, predicate, new MultiMap<String, Method>(), new ArrayList<Method>(), false);
+        return findAllMethodsInternal(target, predicate, new MultiMap<>(), new ArrayList<>(), false);
     }
 
     private static class MultiMap<K, V> extends HashMap<K, List<V>> {
@@ -109,7 +104,7 @@ public class RuleSourceBackedRuleAction<R, T> implements RuleAction<T> {
         public List<V> get(Object key) {
             if (!containsKey(key)) {
                 @SuppressWarnings("unchecked") K keyCast = (K) key;
-                put(keyCast, new LinkedList<V>());
+                put(keyCast, new LinkedList<>());
             }
 
             return super.get(key);
@@ -119,13 +114,8 @@ public class RuleSourceBackedRuleAction<R, T> implements RuleAction<T> {
     private static List<Method> findAllMethodsInternal(Class<?> target, Spec<Method> predicate, MultiMap<String, Method> seen, List<Method> collector, boolean stopAtFirst) {
         for (final Method method : target.getDeclaredMethods()) {
             List<Method> seenWithName = seen.get(method.getName());
-            Method override = CollectionUtils.findFirst(seenWithName, new Spec<Method>() {
-                @Override
-                public boolean isSatisfiedBy(Method potentionOverride) {
-                    return potentionOverride.getName().equals(method.getName())
-                        && Arrays.equals(potentionOverride.getParameterTypes(), method.getParameterTypes());
-                }
-            });
+            Method override = CollectionUtils.findFirst(seenWithName, potentionOverride -> potentionOverride.getName().equals(method.getName())
+                && Arrays.equals(potentionOverride.getParameterTypes(), method.getParameterTypes()));
 
 
             if (override == null) {

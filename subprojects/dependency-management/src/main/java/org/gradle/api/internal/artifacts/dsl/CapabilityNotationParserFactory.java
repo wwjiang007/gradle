@@ -18,7 +18,6 @@ package org.gradle.api.internal.artifacts.dsl;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.capabilities.Capability;
-import org.gradle.api.tasks.Optional;
 import org.gradle.internal.Factory;
 import org.gradle.internal.component.external.model.ImmutableCapability;
 import org.gradle.internal.exceptions.DiagnosticsVisitor;
@@ -34,10 +33,10 @@ public class CapabilityNotationParserFactory implements Factory<NotationParser<O
     private final static NotationParser<Object, Capability> STRICT_CONVERTER = createSingletonConverter(true);
     private final static NotationParser<Object, Capability> LENIENT_CONVERTER = createSingletonConverter(false);
 
-    private final boolean strict;
+    private final boolean versionIsRequired;
 
-    public CapabilityNotationParserFactory(boolean strict) {
-        this.strict = strict;
+    public CapabilityNotationParserFactory(boolean versionIsRequired) {
+        this.versionIsRequired = versionIsRequired;
     }
 
     private static NotationParser<Object, Capability> createSingletonConverter(boolean strict) {
@@ -51,15 +50,15 @@ public class CapabilityNotationParserFactory implements Factory<NotationParser<O
     @Override
     public NotationParser<Object, Capability> create() {
         // Currently the converter is stateless, doesn't need any external context, so for performance we return a singleton
-        return strict ? STRICT_CONVERTER : LENIENT_CONVERTER;
+        return versionIsRequired ? STRICT_CONVERTER : LENIENT_CONVERTER;
     }
 
     private static class StringNotationParser extends TypedNotationConverter<CharSequence, Capability> {
-        private final boolean strict;
+        private final boolean versionIsRequired;
 
-        StringNotationParser(boolean strict) {
+        StringNotationParser(boolean versionIsRequired) {
             super(CharSequence.class);
-            this.strict = strict;
+            this.versionIsRequired = versionIsRequired;
         }
 
         @Override
@@ -67,7 +66,7 @@ public class CapabilityNotationParserFactory implements Factory<NotationParser<O
             String stringNotation = notation.toString();
             String[] parts = stringNotation.split(":");
             if (parts.length != 3) {
-                if (strict || parts.length != 2) {
+                if (versionIsRequired || parts.length != 2) {
                     reportInvalidNotation(stringNotation);
                 }
             }
@@ -108,7 +107,7 @@ public class CapabilityNotationParserFactory implements Factory<NotationParser<O
 
         protected Capability parseMap(@MapKey("group") String group,
                                       @MapKey("name") String name,
-                                      @MapKey("version") @Optional String version) {
+                                      @MapKey("version") @Nullable String version) {
             return new ImmutableCapability(group, name, version);
         }
     }

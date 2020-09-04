@@ -19,6 +19,8 @@ package org.gradle.api.internal.tasks.scala;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ClassPathRegistry;
 import org.gradle.initialization.ClassLoaderRegistry;
+import org.gradle.internal.classloader.ClasspathHasher;
+import org.gradle.internal.classpath.DefaultClassPath;
 import org.gradle.language.base.internal.compile.Compiler;
 import org.gradle.language.base.internal.compile.CompilerFactory;
 import org.gradle.process.internal.JavaForkOptionsFactory;
@@ -33,25 +35,26 @@ public class ScalaCompilerFactory implements CompilerFactory<ScalaJavaJointCompi
     private FileCollection scalaClasspath;
     private FileCollection zincClasspath;
     private final File daemonWorkingDir;
-    private final File gradleUserHomeDir;
     private final JavaForkOptionsFactory forkOptionsFactory;
     private final ClassPathRegistry classPathRegistry;
     private final ClassLoaderRegistry classLoaderRegistry;
     private final ActionExecutionSpecFactory actionExecutionSpecFactory;
+    private final ClasspathHasher classpathHasher;
 
     public ScalaCompilerFactory(
-            File daemonWorkingDir, WorkerDaemonFactory workerDaemonFactory, FileCollection scalaClasspath,
-            FileCollection zincClasspath, File gradleUserHomeDir, JavaForkOptionsFactory forkOptionsFactory,
-            ClassPathRegistry classPathRegistry, ClassLoaderRegistry classLoaderRegistry, ActionExecutionSpecFactory actionExecutionSpecFactory) {
+        File daemonWorkingDir, WorkerDaemonFactory workerDaemonFactory, FileCollection scalaClasspath,
+        FileCollection zincClasspath, JavaForkOptionsFactory forkOptionsFactory,
+        ClassPathRegistry classPathRegistry, ClassLoaderRegistry classLoaderRegistry, ActionExecutionSpecFactory actionExecutionSpecFactory,
+        ClasspathHasher classpathHasher) {
         this.daemonWorkingDir = daemonWorkingDir;
         this.workerDaemonFactory = workerDaemonFactory;
         this.scalaClasspath = scalaClasspath;
         this.zincClasspath = zincClasspath;
-        this.gradleUserHomeDir = gradleUserHomeDir;
         this.forkOptionsFactory = forkOptionsFactory;
         this.classPathRegistry = classPathRegistry;
         this.classLoaderRegistry = classLoaderRegistry;
         this.actionExecutionSpecFactory = actionExecutionSpecFactory;
+        this.classpathHasher = classpathHasher;
     }
 
     @Override
@@ -59,9 +62,11 @@ public class ScalaCompilerFactory implements CompilerFactory<ScalaJavaJointCompi
         Set<File> scalaClasspathFiles = scalaClasspath.getFiles();
         Set<File> zincClasspathFiles = zincClasspath.getFiles();
 
+        HashedClasspath hashedScalaClasspath = new HashedClasspath(DefaultClassPath.of(scalaClasspathFiles), classpathHasher);
+
         // currently, we leave it to ZincScalaCompiler to also compile the Java code
         Compiler<ScalaJavaJointCompileSpec> scalaCompiler = new DaemonScalaCompiler<ScalaJavaJointCompileSpec>(
-            daemonWorkingDir, ZincScalaCompiler.class, new Object[] {scalaClasspathFiles, zincClasspathFiles, gradleUserHomeDir},
+            daemonWorkingDir, ZincScalaCompilerFacade.class, new Object[] {hashedScalaClasspath, false},
             workerDaemonFactory, zincClasspathFiles, forkOptionsFactory, classPathRegistry, classLoaderRegistry, actionExecutionSpecFactory);
         return new NormalizingScalaCompiler(scalaCompiler);
     }

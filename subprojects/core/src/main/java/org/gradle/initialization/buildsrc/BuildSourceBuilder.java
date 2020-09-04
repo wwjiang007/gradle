@@ -17,24 +17,28 @@
 package org.gradle.initialization.buildsrc;
 
 import org.gradle.StartParameter;
-import org.gradle.api.Transformer;
 import org.gradle.api.internal.BuildDefinition;
+import org.gradle.api.internal.GradleInternal;
+import org.gradle.api.internal.SettingsInternal;
+import org.gradle.api.internal.StartParameterInternal;
 import org.gradle.api.internal.initialization.ClassLoaderScope;
 import org.gradle.cache.FileLock;
 import org.gradle.cache.FileLockManager;
 import org.gradle.cache.LockOptions;
-import org.gradle.initialization.DefaultSettings;
+import org.gradle.internal.Actions;
 import org.gradle.internal.build.BuildState;
 import org.gradle.internal.build.BuildStateRegistry;
 import org.gradle.internal.build.PublicBuildPath;
 import org.gradle.internal.build.StandAloneNestedBuild;
 import org.gradle.internal.classpath.CachedClasspathTransformer;
 import org.gradle.internal.classpath.ClassPath;
-import org.gradle.internal.invocation.BuildController;
 import org.gradle.internal.operations.BuildOperationContext;
 import org.gradle.internal.operations.BuildOperationDescriptor;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.operations.CallableBuildOperation;
+import org.gradle.internal.service.scopes.Scopes;
+import org.gradle.internal.service.scopes.ServiceScope;
+import org.gradle.plugin.management.internal.PluginRequests;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,14 +46,13 @@ import java.io.File;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
+@ServiceScope(Scopes.Build.class)
 public class BuildSourceBuilder {
     private static final Logger LOGGER = LoggerFactory.getLogger(BuildSourceBuilder.class);
     private static final BuildBuildSrcBuildOperationType.Result BUILD_BUILDSRC_RESULT = new BuildBuildSrcBuildOperationType.Result() {
     };
-    public static final String BUILD_SRC = "buildSrc";
 
     private final BuildState currentBuild;
-    private final ClassLoaderScope classLoaderScope;
     private final FileLockManager fileLockManager;
     private final BuildOperationExecutor buildOperationExecutor;
     private final CachedClasspathTransformer cachedClasspathTransformer;
@@ -57,9 +60,8 @@ public class BuildSourceBuilder {
     private final BuildStateRegistry buildRegistry;
     private final PublicBuildPath publicBuildPath;
 
-    public BuildSourceBuilder(BuildState currentBuild, ClassLoaderScope classLoaderScope, FileLockManager fileLockManager, BuildOperationExecutor buildOperationExecutor, CachedClasspathTransformer cachedClasspathTransformer, BuildSrcBuildListenerFactory buildSrcBuildListenerFactory, BuildStateRegistry buildRegistry, PublicBuildPath publicBuildPath) {
+    public BuildSourceBuilder(BuildState currentBuild, FileLockManager fileLockManager, BuildOperationExecutor buildOperationExecutor, CachedClasspathTransformer cachedClasspathTransformer, BuildSrcBuildListenerFactory buildSrcBuildListenerFactory, BuildStateRegistry buildRegistry, PublicBuildPath publicBuildPath) {
         this.currentBuild = currentBuild;
-        this.classLoaderScope = classLoaderScope;
         this.fileLockManager = fileLockManager;
         this.buildOperationExecutor = buildOperationExecutor;
         this.cachedClasspathTransformer = cachedClasspathTransformer;
@@ -68,15 +70,18 @@ public class BuildSourceBuilder {
         this.publicBuildPath = publicBuildPath;
     }
 
-    public ClassLoaderScope buildAndCreateClassLoader(File rootDir, StartParameter containingBuildParameters) {
-        File buildSrcDir = new File(rootDir, DefaultSettings.DEFAULT_BUILD_SRC_DIR);
-        ClassPath classpath = createBuildSourceClasspath(buildSrcDir, containingBuildParameters);
-        return classLoaderScope.createChild(buildSrcDir.getAbsolutePath())
+    public ClassLoaderScope buildAndCreateClassLoader(GradleInternal gradle) {
+        SettingsInternal settings = gradle.getSettings();
+        File buildSrcDir = settings.getBuildSrcDir();
+        ClassLoaderScope parentClassLoaderScope = settings.getClassLoaderScope();
+
+        ClassPath classpath = createBuildSourceClasspath(buildSrcDir, gradle.getStartParameter(), parentClassLoaderScope);
+        return parentClassLoaderScope.createChild(buildSrcDir.getAbsolutePath())
             .export(classpath)
             .lock();
     }
 
-    private ClassPath createBuildSourceClasspath(File buildSrcDir, final StartParameter containingBuildParameters) {
+    private ClassPath createBuildSourceClasspath(File buildSrcDir, final StartParameter containingBuildParameters, ClassLoaderScope parentClassLoaderScope) {
         if (!buildSrcDir.isDirectory()) {
             LOGGER.debug("Gradle source dir does not exist. We leave.");
             return ClassPath.EMPTY;
@@ -85,46 +90,53 @@ public class BuildSourceBuilder {
         final StartParameter buildSrcStartParameter = containingBuildParameters.newBuild();
         buildSrcStartParameter.setCurrentDir(buildSrcDir);
         buildSrcStartParameter.setProjectProperties(containingBuildParameters.getProjectProperties());
-        buildSrcStartParameter.setSearchUpwards(false);
+        ((StartParameterInternal) buildSrcStartParameter).setSearchUpwardsWithoutDeprecationWarning(false);
         buildSrcStartParameter.setProfile(containingBuildParameters.isProfile());
-        final BuildDefinition buildDefinition = BuildDefinition.fromStartParameterForBuild(buildSrcStartParameter, "buildSrc", buildSrcDir, publicBuildPath);
+        final BuildDefinition buildDefinition = BuildDefinition.fromStartParameterForBuild(
+            buildSrcStartParameter,
+            "buildSrc",
+            buildSrcDir,
+            PluginRequests.EMPTY,
+            Actions.doNothing(),
+            publicBuildPath
+        );
         assert buildSrcStartParameter.getBuildFile() == null;
 
         return buildOperationExecutor.call(new CallableBuildOperation<ClassPath>() {
             @Override
             public ClassPath call(BuildOperationContext context) {
-                ClassPath classPath = buildBuildSrc(buildDefinition);
+                ClassPath classPath = buildBuildSrc(buildDefinition, parentClassLoaderScope);
                 context.setResult(BUILD_BUILDSRC_RESULT);
                 return classPath;
             }
 
             @Override
             public BuildOperationDescriptor.Builder description() {
+                //noinspection Convert2Lambda
                 return BuildOperationDescriptor.displayName("Build buildSrc").
                     progressDisplayName("Building buildSrc").
-                    details(new BuildBuildSrcBuildOperationType.Details() {
-
-                        @Override
-                        public String getBuildPath() {
-                            return publicBuildPath.getBuildPath().toString();
+                    details(
+                        new BuildBuildSrcBuildOperationType.Details() {
+                            @Override
+                            public String getBuildPath() {
+                                return publicBuildPath.getBuildPath().toString();
+                            }
                         }
-                    });
+                    );
             }
         });
     }
 
-    private ClassPath buildBuildSrc(final BuildDefinition buildDefinition) {
-        StandAloneNestedBuild nestedBuild = buildRegistry.addNestedBuild(buildDefinition, currentBuild);
-        return nestedBuild.run(new Transformer<ClassPath, BuildController>() {
-            @Override
-            public ClassPath transform(BuildController buildController) {
-                File lockTarget = new File(buildDefinition.getBuildRootDir(), ".gradle/noVersion/buildSrc");
-                FileLock lock = fileLockManager.lock(lockTarget, LOCK_OPTIONS, "buildSrc build lock");
-                try {
-                    return new BuildSrcUpdateFactory(buildController, buildSrcBuildListenerFactory, cachedClasspathTransformer).create();
-                } finally {
-                    lock.close();
-                }
+    @SuppressWarnings("try")
+    private ClassPath buildBuildSrc(final BuildDefinition buildDefinition, ClassLoaderScope parentClassLoaderScope) {
+        StandAloneNestedBuild nestedBuild = buildRegistry.addBuildSrcNestedBuild(buildDefinition, currentBuild);
+        return nestedBuild.run(buildController -> {
+            // Expose any contributions from the parent's settings
+            buildController.getGradle().setClassLoaderScope(parentClassLoaderScope);
+
+            File lockTarget = new File(buildDefinition.getBuildRootDir(), ".gradle/noVersion/buildSrc");
+            try (FileLock ignored = fileLockManager.lock(lockTarget, LOCK_OPTIONS, "buildSrc build lock")) {
+                return new BuildSrcUpdateFactory(buildController, buildSrcBuildListenerFactory, cachedClasspathTransformer).create();
             }
         });
     }

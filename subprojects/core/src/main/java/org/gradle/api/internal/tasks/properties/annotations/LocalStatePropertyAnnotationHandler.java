@@ -21,10 +21,11 @@ import org.gradle.api.internal.tasks.properties.PropertyValue;
 import org.gradle.api.internal.tasks.properties.PropertyVisitor;
 import org.gradle.api.tasks.LocalState;
 import org.gradle.internal.reflect.AnnotationCategory;
-import org.gradle.internal.reflect.ParameterValidationContext;
 import org.gradle.internal.reflect.PropertyMetadata;
 
 import java.lang.annotation.Annotation;
+
+import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.OPTIONAL;
 
 public class LocalStatePropertyAnnotationHandler implements PropertyAnnotationHandler {
     @Override
@@ -34,7 +35,7 @@ public class LocalStatePropertyAnnotationHandler implements PropertyAnnotationHa
 
     @Override
     public ImmutableSet<? extends AnnotationCategory> getAllowedModifiers() {
-        return ImmutableSet.of();
+        return ImmutableSet.of(OPTIONAL);
     }
 
     @Override
@@ -44,15 +45,11 @@ public class LocalStatePropertyAnnotationHandler implements PropertyAnnotationHa
 
     @Override
     public boolean shouldVisit(PropertyVisitor visitor) {
-        return !visitor.visitOutputFilePropertiesOnly();
+        return true;
     }
 
     @Override
     public void visitPropertyValue(String propertyName, PropertyValue value, PropertyMetadata propertyMetadata, PropertyVisitor visitor, BeanPropertyContext context) {
         visitor.visitLocalStateProperty(value);
-    }
-
-    @Override
-    public void validatePropertyMetadata(PropertyMetadata propertyMetadata, ParameterValidationContext visitor) {
     }
 }

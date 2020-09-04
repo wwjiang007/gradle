@@ -1,12 +1,13 @@
 package org.gradle.kotlin.dsl.integration
 
 import org.gradle.integtests.fixtures.RepoScriptBlockUtil.jcenterRepository
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.kotlin.dsl.fixtures.normalisedPath
 import org.gradle.test.fixtures.dsl.GradleDsl
 import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.hamcrest.CoreMatchers.containsString
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThat
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,12 +16,13 @@ import org.junit.Test
 class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `generated code follows kotlin-dsl coding conventions`() {
 
         withBuildScript("""
             plugins {
                 `kotlin-dsl`
-                id("org.gradle.kotlin-dsl.ktlint-convention") version "0.3.0"
+                id("org.gradle.kotlin-dsl.ktlint-convention") version "0.5.0"
             }
 
             $repositoriesBlock
@@ -41,14 +43,12 @@ class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
 
         build("generateScriptPluginAdapters")
 
-        executer.expectDeprecationWarning()
-        build("ktlintC")
+        build("ktlintCheck", "-x", "ktlintKotlinScriptCheck")
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `precompiled script plugins tasks are cached and relocatable`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         val firstLocation = "first-location"
         val secondLocation = "second-location"
@@ -57,7 +57,7 @@ class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
         withDefaultSettingsIn(firstLocation).appendText("""
             rootProject.name = "test"
             buildCache {
-                local<DirectoryBuildCache> {
+                local {
                     directory = file("${cacheDir.normalisedPath}")
                 }
             }
@@ -107,6 +107,7 @@ class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `precompiled script plugins adapters generation clean stale outputs`() {
 
         withBuildScript("""
@@ -127,9 +128,8 @@ class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can apply precompiled script plugin from groovy script`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withKotlinBuildSrc()
         withFile("buildSrc/src/main/kotlin/my-plugin.gradle.kts", """
@@ -147,9 +147,8 @@ class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `accessors are available after script body change`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withKotlinBuildSrc()
         val myPluginScript = withFile("buildSrc/src/main/kotlin/my-plugin.gradle.kts", """
@@ -183,9 +182,8 @@ class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `accessors are available after re-running tasks`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withKotlinBuildSrc()
         withFile("buildSrc/src/main/kotlin/my-plugin.gradle.kts", """
@@ -204,5 +202,91 @@ class PrecompiledScriptPluginIntegrationTest : AbstractPluginIntegrationTest() {
         build("clean")
 
         build("clean", "--rerun-tasks")
+    }
+
+    @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
+    fun `accessors are available after renaming precompiled script plugin from project dependency`() {
+
+        withSettings("""
+            $defaultSettingsScript
+
+            include("consumer", "producer")
+        """)
+
+        withBuildScript("""
+            plugins {
+                `java-library`
+                `kotlin-dsl` apply false
+            }
+
+            allprojects {
+                $repositoriesBlock
+            }
+
+            dependencies {
+                api(project(":consumer"))
+            }
+        """)
+
+        withFolders {
+
+            "consumer" {
+                withFile("build.gradle.kts", """
+                    plugins {
+                        id("org.gradle.kotlin.kotlin-dsl")
+                    }
+
+                    configurations {
+                        compileClasspath {
+                            attributes {
+                                // Forces dependencies to be visible as jars
+                                // to reproduce the failure that happens in forkingIntegTest.
+                                // Incidentally, this also allows us to write `stable-producer-plugin`
+                                // in the plugins block below instead of id("stable-producer-plugin").
+                                attribute(
+                                    LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE,
+                                    objects.named(LibraryElements.JAR)
+                                )
+                            }
+                        }
+                    }
+
+                    dependencies {
+                        implementation(project(":producer"))
+                    }
+                """)
+
+                withFile("src/main/kotlin/consumer-plugin.gradle.kts", """
+                    plugins { `stable-producer-plugin` }
+                """)
+            }
+
+            "producer" {
+                withFile("build.gradle.kts", """
+                    plugins { id("org.gradle.kotlin.kotlin-dsl") }
+                """)
+                withFile("src/main/kotlin/changing-producer-plugin.gradle.kts")
+                withFile("src/main/kotlin/stable-producer-plugin.gradle.kts", """
+                    println("*42*")
+                """)
+            }
+        }
+
+        build("assemble").run {
+            assertTaskExecuted(
+                ":consumer:generateExternalPluginSpecBuilders"
+            )
+        }
+
+        existing("producer/src/main/kotlin/changing-producer-plugin.gradle.kts").run {
+            renameTo(resolveSibling("changed-producer-plugin.gradle.kts"))
+        }
+
+        build("assemble").run {
+            assertTaskExecuted(
+                ":consumer:generateExternalPluginSpecBuilders"
+            )
+        }
     }
 }

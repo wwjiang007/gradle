@@ -17,12 +17,26 @@
 package org.gradle.language.scala
 
 import org.gradle.api.tasks.compile.AbstractCachedCompileIntegrationTest
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.test.fixtures.file.TestFile
 
 class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileIntegrationTest {
 
     String compilationTask = ':compileMainJarMainScala'
     String compiledFile = "build/classes/main/jar/Person.class"
+
+    def setup() {
+        executer.withFullDeprecationStackTraceDisabled()
+    }
+
+    def expectDeprecationWarnings() {
+        executer.expectDocumentedDeprecationWarning("The jvm-component plugin has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_6.html#upgrading_jvm_plugins")
+        executer.expectDocumentedDeprecationWarning("The scala-lang plugin has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_6.html#upgrading_jvm_plugins")
+        executer.expectDocumentedDeprecationWarning("The jvm-resources plugin has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_6.html#upgrading_jvm_plugins")
+    }
 
     @Override
     def setupProjectInDirectory(TestFile project) {
@@ -42,7 +56,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
                 id 'java-lang'
                 id 'scala-lang'
             }
-            
+
             ${mavenCentralRepository()}
 
             model {
@@ -72,6 +86,9 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
         def compiledScalaClass = file('/build/classes/main/jar/UsesJava.class')
 
         when:
+        expectDeprecationWarnings()
+        executer.expectDocumentedDeprecationWarning("The java-lang plugin has been deprecated. This is scheduled to be removed in Gradle 7.0. " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_6.html#upgrading_jvm_plugins")
         withBuildCache().succeeds 'compileMainJarMainJava', compilationTask, '--info'
 
         then:
@@ -81,6 +98,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
             "\n  Gradle does not know how file 'build")
     }
 
+    @ToBeFixedForConfigurationCache
     def "incremental compilation works with caching"() {
         def warmupDir = testDirectory.file('warmupCache')
         setupProjectInDirectory(warmupDir)
@@ -91,6 +109,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
         classes.classDependingOnBasicClassSource.change()
 
         when:
+        expectDeprecationWarnings()
         executer.inDirectory(warmupDir)
         withBuildCache().succeeds compilationTask
 
@@ -99,6 +118,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
         classes.analysisFile.assertIsFile()
 
         when:
+        expectDeprecationWarnings()
         executer.inDirectory(warmupDir)
         withBuildCache().succeeds compilationTask
 
@@ -106,6 +126,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
         skipped compilationTask
 
         when:
+        expectDeprecationWarnings()
         warmupDir.deleteDir()
         setupProjectInDirectory(testDirectory)
         executer.inDirectory(testDirectory)
@@ -118,6 +139,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
         classes.analysisFile.assertIsFile()
 
         when:
+        expectDeprecationWarnings()
         classes.classDependingOnBasicClassSource.change()
         withBuildCache().succeeds compilationTask
 
@@ -127,6 +149,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
         classes.analysisFile.assertDoesNotExist()
 
         when:
+        expectDeprecationWarnings()
         cleanBuildDir()
         withBuildCache().succeeds compilationTask
 
@@ -136,6 +159,7 @@ class CachedPlatformScalaCompileIntegrationTest extends AbstractCachedCompileInt
         classes.analysisFile.assertDoesNotExist()
 
         when:
+        expectDeprecationWarnings()
         // Make sure we notice when classes are recompiled
         classes.all*.compiledClass*.makeOlder()
         classes.independentClassSource.change()

@@ -72,14 +72,14 @@ class TestNGFailFastIntegrationTest extends AbstractJvmFailFastIntegrationSpec {
         }
 
         where:
-        parallel    | threadCount | maxWorkers
-        'methods'   | 1           | 1
-        'methods'   | 2           | 1
-        'methods'   | 1           | 2
-        'methods'   | 2           | 2
-        'classes'   | 1           | 1
-        'classes'   | 2           | 1
-        'classes'   | 1           | 2
-        'classes'   | 2           | 2
+        parallel  | threadCount | maxWorkers
+        'methods' | 1           | 1
+        'methods' | 2           | 1
+        'methods' | 1           | 2
+        'methods' | 2           | 2
+        'classes' | 1           | 1
+        'classes' | 2           | 1
+        'classes' | 1           | 2
+        'classes' | 2           | 2
     }
 }

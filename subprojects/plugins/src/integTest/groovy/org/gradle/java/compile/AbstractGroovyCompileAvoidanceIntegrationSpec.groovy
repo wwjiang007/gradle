@@ -17,6 +17,7 @@
 package org.gradle.java.compile
 
 import org.gradle.integtests.fixtures.CompiledLanguage
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 
 
 abstract class AbstractGroovyCompileAvoidanceIntegrationSpec extends AbstractJavaGroovyCompileAvoidanceIntegrationSpec {
@@ -106,7 +107,7 @@ abstract class AbstractGroovyCompileAvoidanceIntegrationSpec extends AbstractJav
         """
         def sourceFile = file("a/src/main/groovy/ToolImpl.groovy")
         sourceFile << """
-            public class ToolImpl { 
+            public class ToolImpl {
                 public String thing() { return null; }
             }
         """
@@ -124,7 +125,7 @@ abstract class AbstractGroovyCompileAvoidanceIntegrationSpec extends AbstractJav
 
         when:
         sourceFile.text = """
-            public class ToolImpl { 
+            public class ToolImpl {
                 public String thing() { return ""; }
             }
         """
@@ -135,6 +136,7 @@ abstract class AbstractGroovyCompileAvoidanceIntegrationSpec extends AbstractJav
         executedAndNotSkipped ":b:compileGroovy"
     }
 
+    @ToBeFixedForConfigurationCache(because = "groovy ast transformation")
     def "recompile with change of local ast transformation"() {
         given:
         executer.beforeExecute {
@@ -144,7 +146,7 @@ abstract class AbstractGroovyCompileAvoidanceIntegrationSpec extends AbstractJav
         file("a/src/main/groovy/MyAnnotation.groovy") << astTransformationAnnotation()
         def astTransformationSourceFile = file("a/src/main/groovy/MyASTTransformation.groovy")
         file("b/src/main/groovy/Main.groovy") << """
-            @MyAnnotation 
+            @MyAnnotation
             public class Main {}
         """
 
@@ -176,6 +178,7 @@ abstract class AbstractGroovyCompileAvoidanceIntegrationSpec extends AbstractJav
         failure.assertHasCause('Bad AST transformation!')
     }
 
+    @ToBeFixedForConfigurationCache(because = "groovy ast transformation")
     def "recompile with change of global ast transformation"() {
         given:
         executer.beforeExecute {

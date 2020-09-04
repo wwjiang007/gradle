@@ -36,7 +36,7 @@ import java.net.URI;
  * <p>
  * Repositories of this type are created by the {@link org.gradle.api.artifacts.dsl.RepositoryHandler#ivy(org.gradle.api.Action)} group of methods.
  */
-public interface IvyArtifactRepository extends ArtifactRepository, AuthenticationSupported, MetadataSupplierAware {
+public interface IvyArtifactRepository extends ArtifactRepository, UrlArtifactRepository, AuthenticationSupported, MetadataSupplierAware {
 
     String IVY_ARTIFACT_PATTERN = "[organisation]/[module]/[revision]/[type]s/[artifact](.[ext])";
 
@@ -51,6 +51,7 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      *
      * @return The URL.
      */
+    @Override
     URI getUrl();
 
     /**
@@ -59,6 +60,7 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      * @param url The base URL.
      * @since 4.0
      */
+    @Override
     void setUrl(URI url);
 
     /**
@@ -69,6 +71,7 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      *
      * @param url The base URL.
      */
+    @Override
     void setUrl(Object url);
 
     /**
@@ -212,7 +215,6 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      * @param config The action used to configure the layout.
      * @since 5.0
      */
-    @Incubating
     void patternLayout(Action<? super  IvyPatternRepositoryLayout> config);
 
     /**
@@ -244,7 +246,6 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      * @since 4.0
      */
     @Override
-    @Incubating
     void setMetadataSupplier(Class<? extends ComponentMetadataSupplier> rule);
 
     /**
@@ -256,7 +257,6 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      * @since 4.0
      */
     @Override
-    @Incubating
     void setMetadataSupplier(Class<? extends ComponentMetadataSupplier> rule, Action<? super ActionConfiguration> configureAction);
 
     /**
@@ -267,8 +267,15 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      *
      * @since 4.5
      */
-    @Incubating
     void metadataSources(Action<? super MetadataSources> configureAction);
+
+    /**
+     * Returns the current metadata sources configuration for the repository.
+     *
+     * @since 6.4
+     */
+    @Incubating
+    MetadataSources getMetadataSources();
 
     /**
      * Allows configuring the sources of metadata for a specific repository.
@@ -276,7 +283,6 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
      * @since 4.5
      *
      */
-    @Incubating
     interface MetadataSources {
         /**
          * Indicates that this repository will contain Gradle metadata.
@@ -304,6 +310,38 @@ public interface IvyArtifactRepository extends ArtifactRepository, Authenticatio
          *
          */
         void ignoreGradleMetadataRedirection();
+
+        /**
+         * Indicates if this repository contains Gradle module metadata.
+         *
+         * @since 6.4
+         */
+        @Incubating
+        boolean isGradleMetadataEnabled();
+
+        /**
+         * Indicates if this repository contains Ivy descriptors.
+         *
+         * @since 6.4
+         */
+        @Incubating
+        boolean isIvyDescriptorEnabled();
+
+        /**
+         * Indicates if this repository only contains artifacts.
+         *
+         * @since 6.4
+         */
+        @Incubating
+        boolean isArtifactEnabled();
+
+        /**
+         * Indicates if this repository ignores Gradle module metadata redirection markers.
+         *
+         * @since 6.4
+         */
+        @Incubating
+        boolean isIgnoreGradleMetadataRedirectionEnabled();
     }
 
 }

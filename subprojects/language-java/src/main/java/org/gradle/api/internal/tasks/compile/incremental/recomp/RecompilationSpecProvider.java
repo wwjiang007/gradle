@@ -30,7 +30,12 @@ public interface RecompilationSpecProvider {
 
     RecompilationSpec provideRecompilationSpec(CurrentCompilation current, PreviousCompilation previous);
 
-    void initializeCompilation(JavaCompileSpec spec, RecompilationSpec recompilationSpec);
+    boolean initializeCompilation(JavaCompileSpec spec, RecompilationSpec recompilationSpec);
 
-    WorkResult decorateResult(RecompilationSpec recompilationSpec, WorkResult workResult);
+    default WorkResult decorateResult(RecompilationSpec recompilationSpec, WorkResult workResult) {
+        if (!recompilationSpec.isFullRebuildNeeded()) {
+            return new DefaultIncrementalCompileResult(workResult);
+        }
+        return workResult;
+    }
 }

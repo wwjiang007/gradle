@@ -19,6 +19,7 @@ package org.gradle.api.internal
 import org.gradle.api.Action
 import org.gradle.api.internal.collections.IterationOrderRetainingSetElementSource
 import org.gradle.api.internal.provider.ProviderInternal
+import org.gradle.api.internal.provider.ValueSupplier
 import org.gradle.api.specs.Spec
 
 import static org.gradle.util.WrapUtil.toList
@@ -30,6 +31,8 @@ class DefaultDomainObjectCollectionTest extends AbstractDomainObjectCollectionSp
     StringBuffer c = new StringBuffer("c")
     StringBuilder d = new StringBuilder("d")
     boolean externalProviderAllowed = true
+    boolean directElementAdditionAllowed = true
+    boolean elementRemovalAllowed = true
     boolean supportsBuildOperations = true
     def canGetAllMatchingDomainObjectsOrderedByOrderAdded() {
         def spec = new Spec<CharSequence>() {
@@ -296,7 +299,7 @@ class DefaultDomainObjectCollectionTest extends AbstractDomainObjectCollectionSp
     def callsRemoveActionWhenObjectRemovedUsingIteratorNoFlushAndLastElementIsUnrealized() {
         def action = Mock(Action)
         def provider = Mock(ProviderInternal)
-        _ * provider.get() >> "c"
+        _ * provider.calculateValue(_) >> ValueSupplier.Value.of("c")
 
         container.whenObjectRemoved(action)
         container.add("a")

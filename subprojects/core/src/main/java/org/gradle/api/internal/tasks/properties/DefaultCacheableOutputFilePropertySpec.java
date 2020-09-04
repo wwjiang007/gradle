@@ -16,18 +16,24 @@
 
 package org.gradle.api.internal.tasks.properties;
 
-import org.gradle.api.file.FileCollection;
+import org.gradle.api.internal.file.FileCollectionInternal;
 import org.gradle.internal.file.TreeType;
 import org.gradle.internal.fingerprint.OutputNormalizer;
 
 import javax.annotation.Nullable;
 import java.io.File;
 
+/**
+ * An output property consisting of a single output file/directory.
+ *
+ * When using directory trees as outputs (e.g. via {@link org.gradle.api.Project#fileTree(Object)}), {@link DirectoryTreeOutputFilePropertySpec} is used.
+ * Everything else will use this class.
+ */
 public class DefaultCacheableOutputFilePropertySpec extends AbstractFilePropertySpec implements CacheableOutputFilePropertySpec {
     private final String propertySuffix;
     private final TreeType outputType;
 
-    public DefaultCacheableOutputFilePropertySpec(String propertyName, @Nullable String propertySuffix, FileCollection outputFiles, TreeType outputType) {
+    public DefaultCacheableOutputFilePropertySpec(String propertyName, @Nullable String propertySuffix, FileCollectionInternal outputFiles, TreeType outputType) {
         super(propertyName, OutputNormalizer.class, outputFiles);
         this.propertySuffix = propertySuffix;
         this.outputType = outputType;

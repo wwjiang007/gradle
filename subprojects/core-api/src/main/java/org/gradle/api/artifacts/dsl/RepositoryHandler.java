@@ -20,6 +20,7 @@ import org.gradle.api.Action;
 import org.gradle.api.Incubating;
 import org.gradle.api.artifacts.ArtifactRepositoryContainer;
 import org.gradle.api.artifacts.repositories.ArtifactRepository;
+import org.gradle.api.artifacts.repositories.ExclusiveContentRepository;
 import org.gradle.api.artifacts.repositories.FlatDirectoryArtifactRepository;
 import org.gradle.api.artifacts.repositories.IvyArtifactRepository;
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository;
@@ -87,17 +88,15 @@ public interface RepositoryHandler extends ArtifactRepositoryContainer {
      * @return The Gradle Central Plugin Repository
      * @since 4.4
      */
-    @Incubating
     ArtifactRepository gradlePluginPortal();
-    
+
     /**
      * Adds a repository which looks in Gradle Central Plugin Repository for dependencies.
-     * 
+     *
      * @param action a configuration action
      * @return the added resolver
      * @since 5.4
      */
-    @Incubating
     ArtifactRepository gradlePluginPortal(Action<? super ArtifactRepository> action);
 
     /**
@@ -327,4 +326,16 @@ public interface RepositoryHandler extends ArtifactRepositoryContainer {
      */
     IvyArtifactRepository ivy(Action<? super IvyArtifactRepository> action);
 
+    /**
+     * Declares exclusive content repositories. Exclusive content repositories are
+     * repositories for which you can declare an inclusive content filter. Artifacts
+     * matching the filter will then only be searched in the repositories which
+     * exclusively match it.
+     *
+     * @param action the configuration of the repositories
+     *
+     * @since 6.2
+     */
+    @Incubating
+    void exclusiveContent(Action<? super ExclusiveContentRepository> action);
 }

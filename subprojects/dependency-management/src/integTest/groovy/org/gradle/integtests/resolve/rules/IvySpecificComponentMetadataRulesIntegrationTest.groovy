@@ -19,16 +19,14 @@ package org.gradle.integtests.resolve.rules
 import org.gradle.api.internal.artifacts.ivyservice.NamespaceId
 import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
 import org.gradle.integtests.fixtures.RequiredFeature
-import org.gradle.integtests.fixtures.RequiredFeatures
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.resolve.ResolveTestFixture
 import org.gradle.integtests.resolve.AbstractModuleDependencyResolveTest
 import org.gradle.test.fixtures.encoding.Identifier
 import spock.lang.Unroll
 
-@RequiredFeatures([
-    @RequiredFeature(feature = GradleMetadataResolveRunner.REPOSITORY_TYPE, value = "ivy"),
-    @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "false"),
-])
+@RequiredFeature(feature = GradleMetadataResolveRunner.REPOSITORY_TYPE, value = "ivy")
+@RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "false")
 class IvySpecificComponentMetadataRulesIntegrationTest extends AbstractModuleDependencyResolveTest implements ComponentMetadataRulesSupport {
 
     def setup() {
@@ -52,6 +50,7 @@ task resolve {
         new ResolveTestFixture(buildFile).addDefaultVariantDerivationStrategy()
     }
 
+    @ToBeFixedForConfigurationCache
     def "can access Ivy metadata"() {
         given:
         repository {
@@ -260,6 +259,7 @@ resolve.doLast { assert ruleInvoked }
         succeeds 'resolve'
     }
 
+    @ToBeFixedForConfigurationCache
     def "changed Ivy metadata becomes visible once module is refreshed"() {
         def baseScript = buildFile.text
 
@@ -358,7 +358,7 @@ resolve.doLast { assert ruleInvoked }
                 withModule {
                     // todo: handle this properly in ModuleVersionSpec test fixture
                     getArtifact(name: 'ivy', ext: 'xml.sha1').allowGetOrHead()
-                    if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
+                    if (GradleMetadataResolveRunner.isGradleMetadataPublished()) {
                         getArtifact(ext: 'module.sha1').allowGetOrHead()
                     }
                 }

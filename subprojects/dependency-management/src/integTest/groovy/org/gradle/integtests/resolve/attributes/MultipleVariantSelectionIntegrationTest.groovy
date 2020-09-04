@@ -18,15 +18,14 @@ package org.gradle.integtests.resolve.attributes
 
 import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
 import org.gradle.integtests.fixtures.RequiredFeature
-import org.gradle.integtests.fixtures.RequiredFeatures
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.resolve.AbstractModuleDependencyResolveTest
 import spock.lang.Ignore
 import spock.lang.Issue
 import spock.lang.Unroll
 
-@RequiredFeatures(
-        @RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true")
-)
+
+@RequiredFeature(feature = GradleMetadataResolveRunner.GRADLE_METADATA, value = "true")
 class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyResolveTest {
 
     def setup() {
@@ -103,6 +102,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
         }
     }
 
+    @ToBeFixedForConfigurationCache
     void "fails selecting distinct variants of the same component by using attributes if they have different capabilities but incompatible values"() {
         given:
         repository {
@@ -161,6 +161,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
    - Variant org:test:1.0 variant runtime2 has attributes {custom=c2, org.gradle.status=${defaultStatus()}}""")
     }
 
+    @ToBeFixedForConfigurationCache
     void "cannot select distinct variants of the same component by using different attributes if they have the same capabilities"() {
         given:
         repository {
@@ -203,6 +204,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
     }
 
     @Unroll("can select distinct variants of the same component by using different attributes with capabilities (conflict=#conflict)")
+    @ToBeFixedForConfigurationCache(iterationMatchers = [".*conflict=true.*"])
     void "can select distinct variants of the same component by using different attributes with capabilities"() {
         given:
         repository {
@@ -213,7 +215,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
                 }
                 variant('runtime') {
                     attribute('custom', 'c2')
-                    capability('org.test', 'cap', conflict?'1.0':'1.1')
+                    capability('org.test', 'cap', conflict ? '1.0' : '1.1')
                 }
             }
         }
@@ -237,8 +239,8 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
                     }
                 }
             }
-            
-                        
+
+
             configurations.conf.resolutionStrategy.capabilitiesResolution.all { selectHighestVersion() }
         """
 
@@ -265,10 +267,10 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
             resolve.expectGraph {
                 root(":", ":test:") {
                     edge('org:test:1.0', 'org:test:1.0') {
-                        variant('runtime', ['org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar', custom: 'c2'])
+                        variant('runtime', ['org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar', 'org.gradle.category': 'library', custom: 'c2'])
                     }
                     module('org:test:1.0') {
-                        variant('runtime', ['org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar', custom: 'c2'])
+                        variant('runtime', ['org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar', 'org.gradle.category': 'library', custom: 'c2'])
                     }
                 }
             }
@@ -361,7 +363,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
                     byConflictResolution('between versions 1.1 and 1.0')
                     // the following assertion is true but limitations to the test fixtures make it hard to check
                     //variant('altruntime', [custom: 'c3', 'org.gradle.status': defaultStatus()])
-                    variant('runtime', [custom: 'c2', 'org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar'])
+                    variant('runtime', [custom: 'c2', 'org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar', 'org.gradle.category': 'library'])
                     artifact group: 'org', module: 'foo', version: '1.1', classifier: 'c2'
                     artifact group: 'org', module: 'foo', version: '1.1', classifier: 'c3'
                 }
@@ -373,6 +375,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
 
     }
 
+    @ToBeFixedForConfigurationCache
     def "prevents selection of 2 variants of the same component with transitive dependency if they have different capabilities but incompatible attributes"() {
         given:
         repository {
@@ -450,10 +453,11 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
         then:
         failure.assertHasCause("""Multiple incompatible variants of org:foo:1.1 were selected:
    - Variant org:foo:1.1 variant altruntime has attributes {custom=c3, org.gradle.status=${defaultStatus()}}
-   - Variant org:foo:1.1 variant runtime has attributes {custom=c2, org.gradle.libraryelements=jar, org.gradle.status=${defaultStatus()}, org.gradle.usage=java-runtime}""")
+   - Variant org:foo:1.1 variant runtime has attributes {custom=c2, org.gradle.category=library, org.gradle.libraryelements=jar, org.gradle.status=${defaultStatus()}, org.gradle.usage=java-runtime}""")
 
     }
 
+    @ToBeFixedForConfigurationCache
     def "cannot select 2 variants of the same component with transitive dependency if they use the same capability"() {
         given:
         repository {
@@ -590,7 +594,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
             root(":", ":test:") {
                 edge('org:foo:1.0', 'org:foo:1.1') {
                     byConflictResolution('between versions 1.1 and 1.0')
-                    variant('runtime', [custom: 'c2', 'org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar'])
+                    variant('runtime', [custom: 'c2', 'org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar', 'org.gradle.category': 'library'])
                     artifact group: 'org', module: 'foo', version: '1.0', classifier: 'c2'
                 }
                 module('org:bar:1.0') {
@@ -637,7 +641,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
         resolve.expectGraph {
             root(":", ":test:") {
                 module('org:foo:1.0') {
-                    variant('runtime', ['org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar'])
+                    variant('runtime', ['org.gradle.status': defaultStatus(), 'org.gradle.usage': 'java-runtime', 'org.gradle.libraryelements': 'jar', 'org.gradle.category': 'library'])
                     artifact group: 'org', module: 'foo', version: '1.0'
                 }
                 module('org:foo:1.0') {
@@ -648,6 +652,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
         }
     }
 
+    @ToBeFixedForConfigurationCache
     def "detects conflicts between component with a capability and a variant with the same capability"() {
         given:
         repository {
@@ -688,10 +693,11 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
    Cannot select module with conflict on capability 'org:foo:1.0' also provided by [org:foo:1.0(runtime)]""")
     }
 
+    @ToBeFixedForConfigurationCache
     def "detects conflicts between 2 variants of 2 different components with the same capability"() {
         given:
         repository {
-            'org:foo:1.0'{
+            'org:foo:1.0' {
                 variant('api') {
                     capability('org', 'foo', '1.0')
                     capability('org', 'blah', '1.0')
@@ -762,10 +768,10 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
                     }
                 }
             }
-            
+
             dependencies {
                 conf('org:test:1.0')
-                
+
                 registerTransform {
                     artifactTransform(FooToBar.class)
                     from.attribute(Attribute.of("usage", String), "api")
@@ -774,7 +780,7 @@ class MultipleVariantSelectionIntegrationTest extends AbstractModuleDependencyRe
                     to.attribute(Attribute.of("format", String), "bar")
                 }
             }
-            
+
             class FooToBar extends ArtifactTransform {
                 public List<File> transform(File fooFile) {
                     return java.util.Collections.singletonList(fooFile)

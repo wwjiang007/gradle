@@ -16,7 +16,6 @@
 
 package org.gradle.api.plugins;
 
-import org.gradle.api.Incubating;
 import org.gradle.api.Project;
 import org.gradle.api.file.CopySpec;
 
@@ -59,7 +58,6 @@ public abstract class ApplicationPluginConvention {
      *
      * @since 4.5
      */
-    @Incubating
     public abstract String getExecutableDir();
 
     /**
@@ -67,7 +65,6 @@ public abstract class ApplicationPluginConvention {
      *
      * @since 4.5
      */
-    @Incubating
     public abstract void setExecutableDir(String executableDir);
 
     /**
@@ -75,7 +72,9 @@ public abstract class ApplicationPluginConvention {
      * <p>
      * Use this {@link org.gradle.api.file.CopySpec} to include extra files/resource in the application distribution.
      * <pre class='autoTested'>
-     * apply plugin: 'application'
+     * plugins {
+     *     id 'application'
+     * }
      *
      * applicationDistribution.from("some/dir") {
      *   include "*.txt"

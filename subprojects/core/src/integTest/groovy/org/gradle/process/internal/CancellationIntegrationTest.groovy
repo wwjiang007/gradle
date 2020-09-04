@@ -17,6 +17,7 @@
 package org.gradle.process.internal
 
 import org.gradle.integtests.fixtures.DirectoryBuildCacheFixture
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.gradle.integtests.fixtures.daemon.DaemonClientFixture
 import org.gradle.integtests.fixtures.daemon.DaemonIntegrationSpec
 import org.gradle.internal.jvm.Jvm
@@ -29,6 +30,7 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
     private int daemonLogCheckpoint
 
     @Unroll
+    @UnsupportedWithConfigurationCache(iterationMatchers = ".* project.exec")
     def "can cancel #scenario"() {
         given:
         blockCode()
@@ -39,7 +41,7 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
                 dependsOn 'compileJava'
                 commandLine '${fileToPath(Jvm.current().javaExecutable)}', '-cp', '${fileToPath(file('build/classes/java/main'))}', 'Block'
             }
-            
+
             task projectExecTask {
                 dependsOn 'compileJava'
                 doLast {
@@ -47,12 +49,12 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
                     assert result.exitValue == 0
                 }
             }
-            
+
             task javaExec(type: JavaExec) {
                 classpath = sourceSets.main.output
                 main = 'Block'
             }
-            
+
             task blockingCustomTask() {
                 doLast {
                     System.out.println("$START_UP_MESSAGE")
@@ -79,16 +81,16 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
         blockCode()
         buildFile << """
             apply plugin: 'java'
-            
+
             @CacheableTask
             class MyJavaExec extends JavaExec {
                 @Input
                 String getInput() { "input" }
-                
+
                 @OutputFile
                 File getOutputFile() { new java.io.File('${fileToPath(file('outputFile'))}') }
             }
-            
+
             task exec(type: MyJavaExec) {
                 classpath = sourceSets.main.output
                 main = 'Block'
@@ -113,20 +115,25 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
         file('outputFile') << ''
         blockCode()
         buildFile << """
+            import javax.inject.Inject
+
             apply plugin: 'java'
-            
+
             @CacheableTask
-            class MyExec extends DefaultTask {
+            abstract class MyExec extends DefaultTask {
                 @Input
                 String getInput() { "input" }
-                
+
                 @OutputFile
                 File getOutputFile() { new java.io.File('${fileToPath(file('outputFile'))}') }
+
+                @Inject
+                abstract ExecOperations getExecOperations()
 
                 @TaskAction
                 void action() {
                     try {
-                        def result = project.exec { commandLine '${fileToPath(Jvm.current().javaExecutable)}', '-cp', '${fileToPath(file('build/classes/java/main'))}', 'Block' }
+                        def result = execOperations.exec { commandLine '${fileToPath(Jvm.current().javaExecutable)}', '-cp', '${fileToPath(file('build/classes/java/main'))}', 'Block' }
                     } catch (Throwable t) {
                         if(!${ignored}) {
                             throw t
@@ -134,7 +141,7 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
                     }
                 }
             }
-           
+
             task exec(type: MyExec) {
                 dependsOn 'compileJava'
             }
@@ -156,7 +163,7 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
     }
 
     void blockCode() {
-        file('src/main/java/Block.java') << """ 
+        file('src/main/java/Block.java') << """
             import java.util.concurrent.CountDownLatch;
 
             public class Block {
@@ -201,7 +208,7 @@ class CancellationIntegrationTest extends DaemonIntegrationSpec implements Direc
         startBuild(task, buildCacheEnabled)
         cancelBuild(task)
 
-        def build = executer.withTasks("tasks").withArguments("--debug").start()
+        def build = executer.withTasks("help").withArguments("--debug").start()
         build.waitForFinish()
         assert daemons.daemons.size() == 1
     }

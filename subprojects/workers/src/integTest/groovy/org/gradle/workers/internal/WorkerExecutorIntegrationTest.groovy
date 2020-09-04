@@ -144,6 +144,48 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         isolationMode << ISOLATION_MODES
     }
 
+    @Issue("https://github.com/gradle/gradle/issues/12636")
+    def "can use work actions from multiple projects when running with --parallel"() {
+        settingsFile << """
+            include('project1')
+            include('project2')
+            include('project3')
+            include('project4')
+            include('project5')
+        """
+        buildFile << """
+            import javax.inject.Inject
+
+            abstract class SubmitsAndWaits extends DefaultTask {
+                @Inject
+                abstract WorkerExecutor getWorkerExecutor()
+
+                @TaskAction
+                def go() {
+                    workerExecutor.submit(SomeWork) { }
+                    workerExecutor.submit(SomeWork) { }
+                    workerExecutor.await()
+                }
+            }
+
+            class SomeWork implements Runnable {
+                void run() {
+                    Thread.sleep(50)
+                }
+            }
+
+            allprojects {
+                task run(type: SubmitsAndWaits)
+            }
+        """
+
+        when:
+        succeeds("run", "--parallel")
+
+        then:
+        noExceptionThrown()
+    }
+
     def "re-uses an existing idle worker daemon"() {
         executer.withWorkerDaemonsExpirationDisabled()
         fixture.withWorkActionClassInBuildSrc()
@@ -188,6 +230,37 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
 
         then:
         assertDifferentDaemonsWereUsed("runInDaemon", "startNewDaemon")
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/10411")
+    def "does not leak project state across multiple builds"() {
+        fixture.withWorkActionClassInBuildSrc()
+        executer.withBuildJvmOpts('-Xms256m', '-Xmx512m').requireIsolatedDaemons().requireDaemon()
+
+        buildFile << """
+            ext.memoryHog = new byte[1024*1024*150] // ~150MB
+
+            tasks.withType(WorkerTask) { task ->
+                isolationMode = IsolationMode.PROCESS
+                // Force a new daemon to be used
+                additionalForkOptions = {
+                    it.systemProperty("foobar", task.name)
+                }
+            }
+            task startDaemon1(type: WorkerTask)
+            task startDaemon2(type: WorkerTask)
+            task startDaemon3(type: WorkerTask)
+        """
+
+        when:
+        succeeds("startDaemon1")
+        succeeds("startDaemon2")
+        succeeds("startDaemon3")
+
+        then:
+        assertDifferentDaemonsWereUsed("startDaemon1", "startDaemon2")
+        assertDifferentDaemonsWereUsed("startDaemon2", "startDaemon3")
+        assertDifferentDaemonsWereUsed("startDaemon1", "startDaemon3")
     }
 
     def "starts a new worker daemon when there are no idle compatible worker daemons available"() {
@@ -368,22 +441,22 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             class MutableItem {
                 static String value = "foo"
             }
-            
+
             abstract class MutatingWorkAction extends TestWorkAction {
                 @Inject
                 public MutatingWorkAction() { }
-                
+
                 public void execute() {
                     MutableItem.value = getParameters().files[0]
                 }
             }
-            
+
             task mutateValue(type: WorkerTask) {
                 list = [ "bar" ]
                 isolationMode = IsolationMode.NONE
                 workActionClass = MutatingWorkAction.class
-            } 
-            
+            }
+
             task verifyNotIsolated {
                 dependsOn mutateValue
                 doLast {
@@ -403,22 +476,22 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             class MutableItem {
                 static String value = "foo"
             }
-            
+
             abstract class MutatingWorkAction extends TestWorkAction {
                 @Inject
                 public MutatingWorkAction() { }
-                
+
                 public void execute() {
                     MutableItem.value = getParameters().files[0]
                 }
             }
-            
+
             task mutateValue(type: WorkerTask) {
                 list = [ "bar" ]
                 isolationMode = IsolationMode.CLASSLOADER
                 workActionClass = MutatingWorkAction.class
-            } 
-            
+            }
+
             task verifyIsolated {
                 dependsOn mutateValue
                 doLast {
@@ -435,24 +508,24 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
         fixture.withWorkActionClassInBuildScript()
 
         buildFile << """
-            import java.util.jar.Manifest 
-            
+            import java.util.jar.Manifest
+
             repositories {
                 mavenCentral()
             }
-            
+
             configurations {
                 customGuava
             }
-            
+
             dependencies {
                 customGuava "com.google.guava:guava:23.1-jre"
             }
-            
+
             abstract class GuavaVersionWorkAction extends TestWorkAction {
                 @Inject
                 public GuavaVersionWorkAction() { }
-                
+
                 public void execute() {
                     Enumeration<URL> resources = this.getClass().getClassLoader()
                             .getResources("META-INF/MANIFEST.MF")
@@ -466,18 +539,18 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
                             break
                         }
                     }
-                    
+
                     // This method was removed in Guava 24.0
                     def predicatesClass = this.getClass().getClassLoader().loadClass("com.google.common.base.Predicates")
                     assert predicatesClass.getDeclaredMethods().any { it.name == "assignableFrom" }
                 }
             }
-            
+
             task checkGuavaVersion(type: WorkerTask) {
                 isolationMode = IsolationMode.${isolationMode}
                 workActionClass = GuavaVersionWorkAction.class
                 additionalClasspath = configurations.customGuava
-            } 
+            }
         """
 
         expect:
@@ -493,14 +566,14 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
     def "classloader is minimal when using #isolationMode"() {
         fixture.withWorkActionClassInBuildSrc()
 
-        buildFile << """         
-            abstract class SneakyWorkAction extends TestWorkAction {            
+        buildFile << """
+            abstract class SneakyWorkAction extends TestWorkAction {
                 @Inject
                 public SneakyWorkAction() { }
-                
+
                 public void execute() {
                     super.execute()
-                    // These classes were chosen to be relatively stable and would be unusual to see in a worker. 
+                    // These classes were chosen to be relatively stable and would be unusual to see in a worker.
                     def gradleApiClasses = [
                         "${com.google.common.collect.Lists.canonicalName}",
                     ]
@@ -509,7 +582,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
                         throw new IllegalArgumentException("These classes should not be visible to the worker action: " + reachableClasses)
                     }
                 }
-                
+
                 boolean reachable(String classname) {
                     try {
                         Class.forName(classname)
@@ -521,11 +594,11 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
                     }
                 }
             }
-            
+
             task runInWorker(type: WorkerTask) {
                 isolationMode = IsolationMode.$isolationMode
                 workActionClass = SneakyWorkAction
-            } 
+            }
         """
 
         when:
@@ -567,7 +640,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
                 workActionClass = ResourceWorkAction
                 additionalClasspath = tasks.jarFoo.outputs.files
                 dependsOn jarFoo
-            } 
+            }
         """
 
         when:
@@ -608,7 +681,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
                 isolationMode = $isolationMode
                 workActionClass = ${workerThatChangesContextClassLoader.name}.class
             }
-            
+
             task checkClassLoader(type: WorkerTask) {
                 dependsOn changeClassloader
                 isolationMode = $isolationMode
@@ -630,9 +703,9 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
     void withParameterClassReferencingClassInAnotherPackage() {
         file("buildSrc/src/main/java/org/gradle/another/Bar.java").text = """
             package org.gradle.another;
-            
+
             import java.io.Serializable;
-            
+
             public class Bar implements Serializable { }
         """
 
@@ -642,7 +715,7 @@ class WorkerExecutorIntegrationTest extends AbstractWorkerExecutorIntegrationTes
             import java.io.Serializable;
             import org.gradle.another.Bar;
 
-            public class Foo implements Serializable { 
+            public class Foo implements Serializable {
                 Bar bar = new Bar();
             }
         """

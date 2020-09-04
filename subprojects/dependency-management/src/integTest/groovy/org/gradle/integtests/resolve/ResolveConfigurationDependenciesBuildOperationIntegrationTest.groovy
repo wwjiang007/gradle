@@ -20,6 +20,7 @@ import org.gradle.api.internal.artifacts.configurations.ResolveConfigurationDepe
 import org.gradle.integtests.fixtures.AbstractHttpDependencyResolutionTest
 import org.gradle.integtests.fixtures.BuildOperationNotificationsFixture
 import org.gradle.integtests.fixtures.BuildOperationsFixture
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.test.fixtures.maven.MavenFileRepository
 import org.gradle.test.fixtures.server.http.AuthScheme
 import org.gradle.test.fixtures.server.http.MavenHttpModule
@@ -34,9 +35,10 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
     @SuppressWarnings("GroovyUnusedDeclaration")
     def operationNotificationsFixture = new BuildOperationNotificationsFixture(executer, temporaryFolder)
 
+    @ToBeFixedForConfigurationCache
     def "resolved configurations are exposed via build operation"() {
         setup:
-        buildFile << """                
+        buildFile << """
             allprojects {
                 apply plugin: "java"
                 repositories {
@@ -82,13 +84,14 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         op.result.resolvedDependenciesCount == 4
     }
 
+    @ToBeFixedForConfigurationCache(because = "Task.getProject() during execution")
     def "resolved detached configurations are exposed"() {
         setup:
-        buildFile << """                
+        buildFile << """
         repositories {
             maven { url '${mavenHttpRepo.uri}' }
         }
-        
+
         task resolve {
             doLast {
                 project.configurations.detachedConfiguration(dependencies.create('org.foo:dep:1.0')).files
@@ -116,13 +119,14 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         op.result.resolvedDependenciesCount == 1
     }
 
+    @ToBeFixedForConfigurationCache
     def "resolved configurations in composite builds are exposed via build operation"() {
         setup:
         def m1 = mavenHttpRepo.module('org.foo', 'app-dep').publish()
         def m2 = mavenHttpRepo.module('org.foo', 'root-dep').publish()
 
         setupComposite()
-        buildFile << """                
+        buildFile << """
             allprojects {
                 apply plugin: "java"
                 repositories {
@@ -170,11 +174,12 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         resolveOperations[1].result.resolvedDependenciesCount == 1
     }
 
+    @ToBeFixedForConfigurationCache(because = ":buildEnvironment and composite builds")
     def "resolved configurations of composite builds as build dependencies are exposed"() {
         setup:
         def m1 = mavenHttpRepo.module('org.foo', 'root-dep').publish()
         setupComposite()
-        buildFile << """                
+        buildFile << """
             buildscript {
                 repositories {
                     maven { url '${mavenHttpRepo.uri}' }
@@ -184,7 +189,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
                     classpath 'org.foo:my-composite-app:1.0'
                 }
             }
-            
+
             apply plugin: "java"
         """
 
@@ -233,7 +238,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         apply from: 'scriptPlugin.gradle'
         '''
 
-        file(scriptFileName) << """                
+        file(scriptFileName) << """
             $scriptBlock {
                 repositories {
                     maven { url '${mavenHttpRepo.uri}' }
@@ -269,6 +274,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         "init"          | 'initscript'  | 'init.gradle'
     }
 
+    @ToBeFixedForConfigurationCache(because = "composite builds")
     def "included build classpath configuration resolution result is exposed"() {
         setup:
         def m1 = mavenHttpRepo.module('org.foo', 'some-dep').publish()
@@ -292,7 +298,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
                     group "org.sample"
                     version "1.0"
                 }
-                
+
         """
 
         settingsFile << """
@@ -316,7 +322,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
 
         then:
         def op = operations.first(ResolveConfigurationDependenciesBuildOperationType) {
-            it.details.configurationName == 'classpath' && it.details.buildPath == ':project-b'
+            it.details.configurationName == 'classpath' && it.details.buildPath == ':projectB'
         }
         op.result.resolvedDependenciesCount == 1
     }
@@ -331,11 +337,11 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
             repositories {
                 maven { url '${mavenHttpRepo.uri}' }
             }
-            
+
             dependencies {
                 implementation 'org.foo:app-dep:1.0'
             }
-            
+
             tasks.withType(JavaCompile) {
                 options.annotationProcessorPath = files()
             }
@@ -363,22 +369,22 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         }
 
         when:
-        buildFile << """    
+        buildFile << """
             repositories {
                 maven { url = '${mavenHttpRepo.uri}' }
             }
-            
+
             configurations {
                 compile {
                     resolutionStrategy.failOnVersionConflict()
                 }
             }
-                        
+
             dependencies {
                compile 'org:a:1.0'
                compile 'org:b:1.0'
             }
-            
+
             task resolve {
               doLast {
                   println(configurations.compile.files.name)
@@ -410,19 +416,19 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         mod.pomFile << "corrupt"
 
         when:
-        buildFile << """    
+        buildFile << """
             repositories {
                 maven { url = '${mavenHttpRepo.uri}' }
             }
-            
+
             configurations {
                 compile
             }
-                        
+
             dependencies {
                compile 'org:a:1.0'
             }
-            
+
             task resolve {
               doLast {
                   println(configurations.compile.files.name)
@@ -445,19 +451,19 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         def mod = mavenHttpRepo.module('org', 'a', '1.0').publish()
 
         when:
-        buildFile << """    
+        buildFile << """
             repositories {
                 maven { url = '${mavenHttpRepo.uri}' }
             }
-            
+
             configurations {
                 compile
             }
-                        
+
             dependencies {
                implementation 'org:a:1.0'
             }
-            
+
             task resolve {
               doLast {
                   // this will shutdown the project scope services, which is going to trigger a
@@ -466,7 +472,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
                   println(configurations.compileClasspath.files.name)
               }
             }
-            
+
 """
         then:
         mod.allowAll()
@@ -479,6 +485,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         op.result == null
     }
 
+    @ToBeFixedForConfigurationCache
     def "resolved components contain their source repository name, even when taken from the cache"() {
         setup:
         def secondMavenHttpRepo = new MavenHttpRepository(server, '/repo-2', new MavenFileRepository(file('maven-repo-2')))
@@ -499,14 +506,14 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         mavenHttpRepo.module('org.foo', 'child-transitive2').allowAll()
         secondMavenHttpRepo.module('org.foo', 'child-transitive2').publish().allowAll()
 
-        buildFile << """                
+        buildFile << """
             apply plugin: "java"
             repositories {
-                maven { 
+                maven {
                     name 'maven1'
                     url '${mavenHttpRepo.uri}'
                 }
-                maven { 
+                maven {
                     name 'maven2'
                     url '${secondMavenHttpRepo.uri}'
                 }
@@ -518,7 +525,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
             }
 
             task resolve { doLast { configurations.runtimeClasspath.resolve() } }
-            
+
             project(':child') {
                 apply plugin: "java"
                 dependencies {
@@ -568,10 +575,10 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
             .dependsOn('org.foo', 'transitive1', '1.0')
             .publish().allowAll()
 
-        buildFile << """                
+        buildFile << """
             apply plugin: "java"
             repositories {
-                maven { 
+                maven {
                     name 'maven1'
                     url '${mavenHttpRepo.uri}'
                 }
@@ -583,7 +590,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
             }
 
             task resolve { doLast { configurations.runtimeClasspath.resolve() } }
-            
+
             project(':child') {
                 apply plugin: "java"
                 dependencies {
@@ -610,16 +617,17 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         resolvedComponents.'org.foo:transitive1:1.0'.repoName == 'maven1'
     }
 
+    @ToBeFixedForConfigurationCache
     def "resolved components contain their source repository id, even when they are structurally identical"() {
         setup:
-        buildFile << """                
+        buildFile << """
             apply plugin: "java"
             repositories {
-                maven { 
+                maven {
                     name 'withoutCreds'
                     url '${mavenHttpRepo.uri}'
                 }
-                maven { 
+                maven {
                     name 'withCreds'
                     url '${mavenHttpRepo.uri}'
                     credentials {
@@ -665,7 +673,7 @@ class ResolveConfigurationDependenciesBuildOperationIntegrationTest extends Abst
         mavenHttpRepo.module('org.foo', 'stuff').publish().allowAll()
 
         settingsFile << "include 'fixtures'"
-        buildFile << """                
+        buildFile << """
             allprojects {
                 apply plugin: "java"
                 apply plugin: "java-test-fixtures"

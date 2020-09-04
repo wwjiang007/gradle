@@ -54,7 +54,9 @@ public interface ModuleDependency extends Dependency, HasConfigurableAttributes<
      * then consider using forced versions' feature: {@link ResolutionStrategy#force(Object...)}.
      *
      * <pre class='autoTested'>
-     * apply plugin: 'java' //so that I can declare 'implementation' dependencies
+     * plugins {
+     *     id 'java' // so that I can declare 'implementation' dependencies
+     * }
      *
      * dependencies {
      *   implementation('org.hibernate:hibernate:3.1') {
@@ -152,7 +154,6 @@ public interface ModuleDependency extends Dependency, HasConfigurableAttributes<
      *
      * @since 4.0
      */
-    @Incubating
     void setTargetConfiguration(@Nullable String name);
 
     /**
@@ -170,7 +171,6 @@ public interface ModuleDependency extends Dependency, HasConfigurableAttributes<
      * @since 4.8
      */
     @Override
-    @Incubating
     AttributeContainer getAttributes();
 
     /**
@@ -182,7 +182,6 @@ public interface ModuleDependency extends Dependency, HasConfigurableAttributes<
      * @since 4.8
      */
     @Override
-    @Incubating
     ModuleDependency attributes(Action<? super AttributeContainer> configureAction);
 
     /**
@@ -191,7 +190,6 @@ public interface ModuleDependency extends Dependency, HasConfigurableAttributes<
      *
      * @since 5.3
      */
-    @Incubating
     ModuleDependency capabilities(Action<? super ModuleDependencyCapabilitiesHandler> configureAction);
 
     /**
@@ -200,6 +198,32 @@ public interface ModuleDependency extends Dependency, HasConfigurableAttributes<
      *
      * @since 5.3
      */
-    @Incubating
     List<Capability> getRequestedCapabilities();
+
+    /**
+     * Endorse version constraints with {@link VersionConstraint#getStrictVersion()} strict versions} from the target module.
+     *
+     * Endorsing strict versions of another module/platform means that all strict versions will be interpreted during dependency
+     * resolution as if they where defined by the endorsing module itself.
+     *
+     * @since 6.0
+     */
+    @Incubating
+    void endorseStrictVersions();
+
+    /**
+     * Resets the {@link #isEndorsingStrictVersions()} state of this dependency.
+     *
+     * @since 6.0
+     */
+    @Incubating
+    void doNotEndorseStrictVersions();
+
+    /**
+     * Are the {@link VersionConstraint#getStrictVersion()} strict version} dependency constraints of the target module endorsed?
+     *
+     * @since 6.0
+     */
+    @Incubating
+    boolean isEndorsingStrictVersions();
 }

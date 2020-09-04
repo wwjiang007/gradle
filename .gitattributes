@@ -41,3 +41,5 @@
 *.7z            binary
 *.ttf           binary
 *.pyc           binary
+*.gpg           binary
+*.bin           binary

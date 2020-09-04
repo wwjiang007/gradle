@@ -26,14 +26,18 @@ open class AbstractPrecompiledScriptPluginTest : AbstractPluginTest() {
 
     @Before
     fun setupPluginTest() {
-        requireGradleDistributionOnEmbeddedExecuter()
+        executer.beforeExecute {
+            // Ignore stacktraces when the Kotlin daemon fails
+            // See https://github.com/gradle/gradle-private/issues/2936
+            it.withStackTraceChecksDisabled()
+        }
     }
 
     protected
     inline fun <reified T> instantiatePrecompiledScriptOf(target: T, className: String): Any =
         loadCompiledKotlinClass(className)
-            .getConstructor(T::class.java)
-            .newInstance(target)
+            .getConstructor(T::class.java, T::class.java)
+            .newInstance(target, target)
 
     protected
     fun loadCompiledKotlinClass(className: String): Class<*> =

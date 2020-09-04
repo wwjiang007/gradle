@@ -15,12 +15,14 @@
  */
 
 package org.gradle.api.internal.provider;
+
 import com.google.common.base.Objects;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.provider.SetProperty;
+import org.gradle.internal.Cast;
 import org.gradle.internal.state.ManagedFactory;
 
 import javax.annotation.Nullable;
@@ -38,11 +40,7 @@ public class ManagedFactories {
             if (!type.isAssignableFrom(PUBLIC_TYPE)) {
                 return null;
             }
-            if (state == null) {
-                return type.cast(Providers.notDefined());
-            } else {
-                return type.cast(Providers.of(state));
-            }
+            return type.cast(Providers.ofNullable(state));
         }
 
         @Override
@@ -55,6 +53,11 @@ public class ManagedFactories {
         private static final Class<?> PUBLIC_TYPE = Property.class;
         private static final Class<?> IMPL_TYPE = DefaultProperty.class;
         public static final int FACTORY_ID = Objects.hashCode(IMPL_TYPE.getName());
+        private final PropertyFactory propertyFactory;
+
+        public PropertyManagedFactory(PropertyFactory propertyFactory) {
+            this.propertyFactory = propertyFactory;
+        }
 
         @Nullable
         @Override
@@ -62,7 +65,13 @@ public class ManagedFactories {
             if (!type.isAssignableFrom(PUBLIC_TYPE)) {
                 return null;
             }
-            return type.cast(new DefaultProperty<>(Object.class).value(state));
+            // TODO - should preserve the property type (which may be different to the provider type)
+            ProviderInternal<S> provider = Cast.uncheckedNonnullCast(state);
+            return type.cast(propertyOf(provider.getType(), provider));
+        }
+
+        <V> Property<V> propertyOf(Class<V> type, Provider<V> value) {
+            return propertyFactory.property(type).value(value);
         }
 
         @Override
@@ -75,6 +84,11 @@ public class ManagedFactories {
         private static final Class<?> PUBLIC_TYPE = ListProperty.class;
         private static final Class<?> IMPL_TYPE = DefaultListProperty.class;
         public static final int FACTORY_ID = Objects.hashCode(IMPL_TYPE.getName());
+        private final PropertyFactory propertyFactory;
+
+        public ListPropertyManagedFactory(PropertyFactory propertyFactory) {
+            this.propertyFactory = propertyFactory;
+        }
 
         @Nullable
         @Override
@@ -82,8 +96,9 @@ public class ManagedFactories {
             if (!type.isAssignableFrom(PUBLIC_TYPE)) {
                 return null;
             }
-            DefaultListProperty<?> property = new DefaultListProperty<>(Object.class);
-            property.set((Iterable) state);
+            // TODO - should preserve the element type
+            DefaultListProperty<Object> property = propertyFactory.listProperty(Object.class);
+            property.set(Cast.<Iterable<Object>>uncheckedNonnullCast(state));
             return type.cast(property);
         }
 
@@ -98,14 +113,21 @@ public class ManagedFactories {
         private static final Class<?> IMPL_TYPE = DefaultSetProperty.class;
         public static final int FACTORY_ID = Objects.hashCode(IMPL_TYPE.getName());
 
+        private final PropertyFactory propertyFactory;
+
+        public SetPropertyManagedFactory(PropertyFactory propertyFactory) {
+            this.propertyFactory = propertyFactory;
+        }
+
         @Nullable
         @Override
         public <T> T fromState(Class<T> type, Object state) {
             if (!type.isAssignableFrom(PUBLIC_TYPE)) {
                 return null;
             }
-            DefaultSetProperty<?> property = new DefaultSetProperty<>(Object.class);
-            property.set((Iterable) state);
+            // TODO - should preserve the element type
+            DefaultSetProperty<Object> property = propertyFactory.setProperty(Object.class);
+            property.set(Cast.<Iterable<Object>>uncheckedNonnullCast(state));
             return type.cast(property);
         }
 
@@ -120,14 +142,21 @@ public class ManagedFactories {
         private static final Class<?> IMPL_TYPE = MapProperty.class;
         public static final int FACTORY_ID = Objects.hashCode(IMPL_TYPE.getName());
 
+        private final PropertyFactory propertyFactory;
+
+        public MapPropertyManagedFactory(PropertyFactory propertyFactory) {
+            this.propertyFactory = propertyFactory;
+        }
+
         @Nullable
         @Override
         public <S> S fromState(Class<S> type, Object state) {
             if (!type.isAssignableFrom(PUBLIC_TYPE)) {
                 return null;
             }
-            DefaultMapProperty<?, ?> property = new DefaultMapProperty<>(Object.class, Object.class);
-            property.set((Map) state);
+            // TODO - should preserve the key and value types
+            DefaultMapProperty<Object, Object> property = propertyFactory.mapProperty(Object.class, Object.class);
+            property.set(Cast.<Map<Object, Object>>uncheckedNonnullCast(state));
             return type.cast(property);
         }
 

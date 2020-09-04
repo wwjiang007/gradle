@@ -16,6 +16,7 @@
 
 package org.gradle.language.swift
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationSpec
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
 import org.gradle.nativeplatform.fixtures.ToolChainRequirement
@@ -26,6 +27,7 @@ import org.gradle.vcs.fixtures.GitFileRepository
 class SwiftDependenciesIntegrationTest extends AbstractInstalledToolChainIntegrationSpec {
     def app = new SwiftAppWithLibraries()
 
+    @ToBeFixedForConfigurationCache
     def "can combine swift builds in a composite"() {
         given:
         settingsFile << """
@@ -51,6 +53,7 @@ class SwiftDependenciesIntegrationTest extends AbstractInstalledToolChainIntegra
         assertAppHasOutputFor("release")
     }
 
+    @ToBeFixedForConfigurationCache
     def "can depend on swift libraries from VCS"() {
         given:
         settingsFile << """
@@ -119,7 +122,7 @@ class SwiftDependenciesIntegrationTest extends AbstractInstalledToolChainIntegra
             apply plugin: 'swift-library'
             group = 'org.gradle.swift'
             version = '1.0'
-        
+
             dependencies {
                 api 'org.gradle.swift:log:latest.integration'
             }

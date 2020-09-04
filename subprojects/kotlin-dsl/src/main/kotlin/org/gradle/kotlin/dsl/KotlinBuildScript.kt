@@ -23,6 +23,7 @@ import org.gradle.kotlin.dsl.resolver.KotlinBuildScriptDependenciesResolver
 import org.gradle.kotlin.dsl.support.KotlinScriptHost
 import org.gradle.kotlin.dsl.support.delegates.ProjectDelegate
 import org.gradle.kotlin.dsl.support.internalError
+import org.gradle.kotlin.dsl.support.invalidPluginsCall
 
 import org.gradle.plugin.use.PluginDependenciesSpec
 
@@ -32,31 +33,25 @@ import kotlin.script.templates.ScriptTemplateDefinition
 
 
 /**
- * Temporary workaround for Kotlin 1.2.50.
- *
- * [KT-24926](https://youtrack.jetbrains.com/issue/KT-24926#comment=27-2914219)
- */
-annotation class KotlinScriptTemplate
-
-
-/**
  * Base class for Kotlin build scripts.
  */
-@KotlinScriptTemplate
 @ScriptTemplateDefinition(
     resolver = KotlinBuildScriptDependenciesResolver::class,
-    scriptFilePattern = ".*\\.gradle\\.kts")
+    scriptFilePattern = ".*\\.gradle\\.kts"
+)
 @ScriptTemplateAdditionalCompilerArguments([
+    "-language-version", "1.3",
     "-jvm-target", "1.8",
     "-Xjsr305=strict",
     "-XXLanguage:+NewInference",
-    "-XXLanguage:+SamConversionForKotlinFunctions"
+    "-XXLanguage:+SamConversionForKotlinFunctions",
+    "-XXLanguage:+ReferencesToSyntheticJavaProperties"
 ])
 @SamWithReceiverAnnotations("org.gradle.api.HasImplicitReceiver")
 @GradleDsl
 abstract class KotlinBuildScript(
     private val host: KotlinScriptHost<Project>
-) : ProjectDelegate() {
+) : ProjectDelegate() /* TODO:kotlin-dsl configure Project as implicit receiver */ {
 
     override val delegate: Project
         get() = host.target
@@ -83,6 +78,5 @@ abstract class KotlinBuildScript(
      */
     @Suppress("unused")
     fun plugins(@Suppress("unused_parameter") block: PluginDependenciesSpecScope.() -> Unit): Unit =
-        throw Exception("The plugins {} block must not be used here. "
-            + "If you need to apply a plugin imperatively, please use apply<PluginType>() or apply(plugin = \"id\") instead.")
+        invalidPluginsCall()
 }

@@ -23,7 +23,7 @@ import org.gradle.test.fixtures.archive.ZipTestFixture
 import spock.lang.IgnoreIf
 import spock.lang.Issue
 
-@IgnoreIf({GradleContextualExecuter.parallel})
+@IgnoreIf({ GradleContextualExecuter.parallel })
 class JavadocWorkAvoidanceIntegrationTest extends AbstractIntegrationSpec {
     def setup() {
         settingsFile << "include 'a', 'b'"
@@ -91,16 +91,16 @@ class JavadocWorkAvoidanceIntegrationTest extends AbstractIntegrationSpec {
                 from("external/b")
                 from("external/c")
                 from("external/d")
-                
-                archiveName = "external.jar"
+
+                archiveFileName = "external.jar"
             }
             task reverseAlphabetic(type: Jar) {
                 from("external/d")
                 from("external/c")
                 from("external/b")
                 from("external/a")
-                
-                archiveName = "external.jar"
+
+                archiveFileName = "external.jar"
             }
         """
         ['a', 'b', 'c', 'd'].each {
@@ -136,16 +136,16 @@ class JavadocWorkAvoidanceIntegrationTest extends AbstractIntegrationSpec {
                 from("external/b")
                 from("external/c")
                 from("external/d")
-                
-                archiveName = "external.jar"
+
+                archiveFileName = "external.jar"
             }
             task oldTime(type: Jar) {
                 from("external/a")
                 from("external/b")
                 from("external/c")
                 from("external/d")
-                
-                archiveName = "external.jar"
+
+                archiveFileName = "external.jar"
                 preserveFileTimestamps = false
             }
         """
@@ -183,7 +183,7 @@ class JavadocWorkAvoidanceIntegrationTest extends AbstractIntegrationSpec {
                 from("external/c")
                 from("external/d")
                 from("duplicate/a")
-                archiveName = "external.jar"
+                archiveFileName = "external.jar"
             }
         """
         def externalJar = file("build/libs/external.jar")

@@ -20,6 +20,7 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.initialization.StartParameterBuildOptions
 import org.gradle.integtests.fixtures.AbstractDependencyResolutionTest
 import org.gradle.integtests.fixtures.DirectoryBuildCacheFixture
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import spock.lang.Unroll
 
 import java.util.regex.Pattern
@@ -38,11 +39,11 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
             project(':b') {
                 tasks.producer.doLast { throw new RuntimeException('broken') }
             }
-            
+
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -79,7 +80,7 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @InputArtifact ${annotation}
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -193,7 +194,7 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @InputArtifact ${annotation}
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     if (input.exists()) {
@@ -320,11 +321,11 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':c')
                 }
             }
-            
+
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     if (input.exists()) {
@@ -355,7 +356,7 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
         outputContains("result = [b.jar.green, c.jar.green]")
 
         when:
-        succeeds(":a:resolve", "-PbProduceNothing")
+        succeeds(":a:resolve", "-PbContent=")
 
         then: // file is missing, should run
         result.assertTasksNotSkipped(":b:producer", ":a:resolve")
@@ -381,13 +382,13 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':b')
                 }
             }
-            
+
             @CacheableTransform
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @PathSensitive(PathSensitivity.NONE)
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -421,13 +422,13 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':c')
                 }
             }
-            
+
             @CacheableTransform
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @PathSensitive(PathSensitivity.NONE)
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -503,13 +504,13 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':c')
                 }
             }
-            
+
             @CacheableTransform
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @PathSensitive(PathSensitivity.${sensitivity})
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -595,13 +596,13 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':c')
                 }
             }
-            
+
             @CacheableTransform
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @PathSensitive(PathSensitivity.${sensitivity})
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -684,7 +685,7 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                 @PathSensitive(PathSensitivity.NONE)
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -774,7 +775,7 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                 @PathSensitive(PathSensitivity.NONE)
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -859,25 +860,21 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
 
         buildFile << """
             repositories {
-                maven { 
-                    url = '${mavenRepo.uri}' 
+                maven {
+                    url = '${mavenRepo.uri}'
                     metadataSources { gradleMetadata() }
                 }
             }
             dependencies {
-                if (project.hasProperty('externalCoords')) {
-                    implementation project.externalCoords
-                } else {
-                    implementation 'group1:lib:1.0'
-                }
+                implementation providers.gradleProperty('externalCoords').forUseAtConfigurationTime().orElse('group1:lib:1.0')
                 implementation 'group2:lib2:1.0'
             }
-            
+
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @PathSensitive(PathSensitivity.NONE)
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -946,25 +943,21 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
 
         buildFile << """
             repositories {
-                maven { 
-                    url = '${mavenRepo.uri}' 
+                maven {
+                    url = '${mavenRepo.uri}'
                     metadataSources { gradleMetadata() }
                 }
             }
             dependencies {
-                if (project.hasProperty('externalCoords')) {
-                    implementation project.externalCoords
-                } else {
-                    implementation 'group1:lib:1.0'
-                }
+                implementation providers.gradleProperty('externalCoords').forUseAtConfigurationTime().orElse('group1:lib:1.0')
                 implementation 'group2:lib2:1.0'
             }
-            
+
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @PathSensitive(PathSensitivity.${sensitivity})
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -1027,11 +1020,11 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':c')
                 }
             }
-            
+
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @InputArtifact @${annotation}
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -1127,12 +1120,12 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':c')
                 }
             }
-            
+
             @CacheableTransform
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @InputArtifact @${annotation}
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"
@@ -1215,6 +1208,7 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
         annotation << ["Classpath", "CompileClasspath"]
     }
 
+    @ToBeFixedForConfigurationCache(because = "classpath normalization configuration is not serialized")
     def "honors runtime classpath normalization for input artifact"() {
         settingsFile << "include 'a', 'b', 'c'"
         setupBuildWithColorTransformAction {
@@ -1226,18 +1220,18 @@ class ArtifactTransformInputArtifactIntegrationTest extends AbstractDependencyRe
                     implementation project(':b')
                     implementation project(':c')
                 }
-                
+
                 normalization {
                     runtimeClasspath {
                         ignore("ignored.txt")
                     }
                 }
             }
-            
+
             abstract class MakeGreen implements TransformAction<TransformParameters.None> {
                 @InputArtifact @Classpath
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name}"

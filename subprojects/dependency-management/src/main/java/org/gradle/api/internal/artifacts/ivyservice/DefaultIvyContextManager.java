@@ -22,7 +22,6 @@ import org.apache.ivy.core.settings.IvySettings;
 import org.apache.ivy.util.Message;
 import org.gradle.api.Action;
 import org.gradle.api.Transformer;
-import org.gradle.internal.Factory;
 import org.gradle.internal.SystemProperties;
 import org.gradle.internal.Transformers;
 
@@ -34,8 +33,8 @@ public class DefaultIvyContextManager implements IvyContextManager {
     private static final int MAX_CACHED_IVY_INSTANCES = 4;
     private final Lock lock = new ReentrantLock();
     private boolean messageAdapterAttached;
-    private final LinkedList<Ivy> cached = new LinkedList<Ivy>();
-    private final ThreadLocal<Integer> depth = new ThreadLocal<Integer>();
+    private final LinkedList<Ivy> cached = new LinkedList<>();
+    private final ThreadLocal<Integer> depth = new ThreadLocal<>();
 
     @Override
     public void withIvy(final Action<? super Ivy> action) {
@@ -67,7 +66,7 @@ public class DefaultIvyContextManager implements IvyContextManager {
                     releaseIvy(ivy);
                 }
             } finally {
-                depth.set(null);
+                depth.remove();
             }
         } finally {
             IvyContext.popContext();
@@ -96,12 +95,7 @@ public class DefaultIvyContextManager implements IvyContextManager {
      * process sets a system property at that moment.
      */
     private Ivy createNewIvyInstance() {
-        return SystemProperties.getInstance().withSystemProperties(new Factory<Ivy>() {
-            @Override
-            public Ivy create() {
-                return Ivy.newInstance(new IvySettings());
-            }
-        });
+        return SystemProperties.getInstance().withSystemProperties(() -> Ivy.newInstance(new IvySettings()));
     }
 
     private void releaseIvy(Ivy ivy) {

@@ -18,25 +18,34 @@ package org.gradle.api.internal.file;
 import org.gradle.api.internal.cache.StringInterner;
 import org.gradle.api.internal.file.collections.DefaultDirectoryFileTreeFactory;
 import org.gradle.api.internal.file.collections.DirectoryFileTreeFactory;
+import org.gradle.api.internal.provider.PropertyHost;
+import org.gradle.api.internal.resources.ApiTextResourceAdapter;
+import org.gradle.api.internal.resources.DefaultResourceHandler;
+import org.gradle.api.internal.tasks.DefaultTaskDependencyFactory;
+import org.gradle.api.internal.tasks.TaskDependencyFactory;
 import org.gradle.api.tasks.util.PatternSet;
 import org.gradle.api.tasks.util.internal.PatternSets;
 import org.gradle.internal.Factory;
 import org.gradle.internal.concurrent.DefaultExecutorFactory;
+import org.gradle.internal.file.Deleter;
 import org.gradle.internal.file.PathToFileResolver;
 import org.gradle.internal.file.impl.DefaultDeleter;
-import org.gradle.internal.file.impl.Deleter;
+import org.gradle.internal.fingerprint.GenericFileTreeSnapshotter;
 import org.gradle.internal.fingerprint.impl.DefaultFileCollectionSnapshotter;
+import org.gradle.internal.fingerprint.impl.DefaultGenericFileTreeSnapshotter;
 import org.gradle.internal.hash.DefaultFileHasher;
 import org.gradle.internal.hash.DefaultStreamHasher;
 import org.gradle.internal.nativeintegration.filesystem.FileSystem;
-import org.gradle.internal.resource.BasicTextResourceLoader;
-import org.gradle.internal.resource.TextResourceLoader;
 import org.gradle.internal.resource.local.FileResourceConnector;
 import org.gradle.internal.resource.local.FileResourceRepository;
-import org.gradle.internal.snapshot.FileSystemMirror;
-import org.gradle.internal.snapshot.impl.DefaultFileSystemMirror;
-import org.gradle.internal.snapshot.impl.DefaultFileSystemSnapshotter;
+import org.gradle.internal.snapshot.CaseSensitivity;
+import org.gradle.internal.snapshot.SnapshotHierarchy;
 import org.gradle.internal.time.Time;
+import org.gradle.internal.vfs.FileSystemAccess;
+import org.gradle.internal.vfs.VirtualFileSystem;
+import org.gradle.internal.vfs.impl.DefaultFileSystemAccess;
+import org.gradle.internal.vfs.impl.DefaultSnapshotHierarchy;
+import org.gradle.internal.vfs.impl.VfsRootReference;
 import org.gradle.process.internal.DefaultExecActionFactory;
 import org.gradle.process.internal.ExecActionFactory;
 import org.gradle.process.internal.ExecFactory;
@@ -47,11 +56,28 @@ import org.gradle.util.TestUtil;
 
 import javax.annotation.Nullable;
 import java.io.File;
+import java.util.List;
+
+import static org.gradle.internal.snapshot.CaseSensitivity.CASE_INSENSITIVE;
+import static org.gradle.internal.snapshot.CaseSensitivity.CASE_SENSITIVE;
+import static org.gradle.util.TestUtil.objectFactory;
 
 public class TestFiles {
     private static final FileSystem FILE_SYSTEM = NativeServicesTestFixture.getInstance().get(FileSystem.class);
-    private static final DefaultFileLookup FILE_LOOKUP = new DefaultFileLookup(PatternSets.getNonCachingPatternSetFactory());
+    private static final DefaultFileLookup FILE_LOOKUP = new DefaultFileLookup();
     private static final DefaultExecActionFactory EXEC_FACTORY = DefaultExecActionFactory.of(resolver(), fileCollectionFactory(), new DefaultExecutorFactory());
+
+    public static FileCollectionInternal empty() {
+        return fileCollectionFactory().empty();
+    }
+
+    public static FileCollectionInternal fixed(File... files) {
+        return fileCollectionFactory().fixed(files);
+    }
+
+    public static FileCollectionInternal fixed(List<File> files) {
+        return fileCollectionFactory().fixed(files);
+    }
 
     public static FileLookup fileLookup() {
         return FILE_LOOKUP;
@@ -101,29 +127,55 @@ public class TestFiles {
         return new DefaultDeleter(Time.clock()::getCurrentTime, fileSystem()::isSymlink, false);
     }
 
+    public static FilePropertyFactory filePropertyFactory() {
+        return new DefaultFilePropertyFactory(PropertyHost.NO_OP, resolver(), fileCollectionFactory());
+    }
+
+    public static FilePropertyFactory filePropertyFactory(File baseDir) {
+        return new DefaultFilePropertyFactory(PropertyHost.NO_OP, resolver(baseDir), fileCollectionFactory(baseDir));
+    }
+
+    public static FileFactory fileFactory() {
+        return new DefaultFilePropertyFactory(PropertyHost.NO_OP, resolver(), fileCollectionFactory());
+    }
+
     public static FileOperations fileOperations(File basedDir) {
         return fileOperations(basedDir, null);
     }
 
     public static FileOperations fileOperations(File basedDir, @Nullable TemporaryFileProvider temporaryFileProvider) {
+        FileResolver fileResolver = resolver(basedDir);
+        FileSystem fileSystem = fileSystem();
+
+        DefaultResourceHandler.Factory resourceHandlerFactory = DefaultResourceHandler.Factory.from(
+            fileResolver,
+            fileSystem,
+            temporaryFileProvider,
+            textResourceAdapterFactory(temporaryFileProvider)
+        );
+
         return new DefaultFileOperations(
-            resolver(basedDir),
-            null,
+            fileResolver,
             temporaryFileProvider,
             TestUtil.instantiatorFactory().inject(),
-            fileLookup(),
             directoryFileTreeFactory(),
             streamHasher(),
             fileHasher(),
-            textResourceLoader(),
+            resourceHandlerFactory,
             fileCollectionFactory(basedDir),
-            fileSystem(),
+            fileSystem,
+            getPatternSetFactory(),
             deleter()
         );
     }
 
-    public static TextResourceLoader textResourceLoader() {
-        return new BasicTextResourceLoader();
+    public static ApiTextResourceAdapter.Factory textResourceAdapterFactory(@Nullable TemporaryFileProvider temporaryFileProvider) {
+        return new ApiTextResourceAdapter.Factory(
+            __ -> {
+                throw new IllegalStateException("Can't create TextUriResourceLoader");
+            },
+            temporaryFileProvider
+        );
     }
 
     public static DefaultStreamHasher streamHasher() {
@@ -134,29 +186,54 @@ public class TestFiles {
         return new DefaultFileHasher(streamHasher());
     }
 
+    public static GenericFileTreeSnapshotter genericFileTreeSnapshotter() {
+        return new DefaultGenericFileTreeSnapshotter(fileHasher(), new StringInterner());
+    }
+
     public static DefaultFileCollectionSnapshotter fileCollectionSnapshotter() {
-        return new DefaultFileCollectionSnapshotter(fileSystemSnapshotter(), fileSystem());
+        return new DefaultFileCollectionSnapshotter(fileSystemAccess(), genericFileTreeSnapshotter(), fileSystem());
     }
 
-    public static DefaultFileSystemSnapshotter fileSystemSnapshotter() {
-        return fileSystemSnapshotter(new DefaultFileSystemMirror(file -> false), new StringInterner());
+    public static VirtualFileSystem virtualFileSystem() {
+        CaseSensitivity caseSensitivity = fileSystem().isCaseSensitive() ? CASE_SENSITIVE : CASE_INSENSITIVE;
+        VfsRootReference rootReference = new VfsRootReference(DefaultSnapshotHierarchy.empty(caseSensitivity));
+        return new VirtualFileSystem() {
+            @Override
+            public SnapshotHierarchy getRoot() {
+                return rootReference.getRoot();
+            }
+
+            @Override
+            public void update(UpdateFunction updateFunction) {
+                rootReference.update(root -> updateFunction.update(root, SnapshotHierarchy.NodeDiffListener.NOOP));
+            }
+        };
     }
 
-    public static DefaultFileSystemSnapshotter fileSystemSnapshotter(FileSystemMirror fileSystemMirror, StringInterner stringInterner) {
-        return new DefaultFileSystemSnapshotter(
+    public static FileSystemAccess fileSystemAccess() {
+        return fileSystemAccess(virtualFileSystem());
+    }
+
+    public static FileSystemAccess fileSystemAccess(VirtualFileSystem virtualFileSystem) {
+        return new DefaultFileSystemAccess(
             fileHasher(),
-            stringInterner,
+            new StringInterner(),
             fileSystem(),
-            fileSystemMirror
+            virtualFileSystem,
+            locations -> {}
         );
     }
 
     public static FileCollectionFactory fileCollectionFactory() {
-        return new DefaultFileCollectionFactory(pathToFileResolver(), null);
+        return new DefaultFileCollectionFactory(pathToFileResolver(), DefaultTaskDependencyFactory.withNoAssociatedProject(), directoryFileTreeFactory(), getPatternSetFactory(), PropertyHost.NO_OP, fileSystem());
     }
 
     public static FileCollectionFactory fileCollectionFactory(File baseDir) {
-        return new DefaultFileCollectionFactory(pathToFileResolver(baseDir), null);
+        return new DefaultFileCollectionFactory(pathToFileResolver(baseDir), DefaultTaskDependencyFactory.withNoAssociatedProject(), directoryFileTreeFactory(), getPatternSetFactory(), PropertyHost.NO_OP, fileSystem());
+    }
+
+    public static FileCollectionFactory fileCollectionFactory(File baseDir, TaskDependencyFactory taskDependencyFactory) {
+        return new DefaultFileCollectionFactory(pathToFileResolver(baseDir), taskDependencyFactory, directoryFileTreeFactory(), getPatternSetFactory(), PropertyHost.NO_OP, fileSystem());
     }
 
     public static ExecFactory execFactory() {
@@ -164,7 +241,7 @@ public class TestFiles {
     }
 
     public static ExecFactory execFactory(File baseDir) {
-        return execFactory().forContext(resolver(baseDir), fileCollectionFactory(baseDir), TestUtil.instantiatorFactory().inject(), TestUtil.objectFactory());
+        return execFactory().forContext(resolver(baseDir), fileCollectionFactory(baseDir), TestUtil.instantiatorFactory().inject(), objectFactory());
     }
 
     public static ExecActionFactory execActionFactory() {
@@ -183,8 +260,9 @@ public class TestFiles {
         return execFactory(baseDir);
     }
 
+    @SuppressWarnings("deprecation")
     public static Factory<PatternSet> getPatternSetFactory() {
-        return resolver().getPatternSetFactory();
+        return PatternSets.getNonCachingPatternSetFactory();
     }
 
     public static String systemSpecificAbsolutePath(String path) {

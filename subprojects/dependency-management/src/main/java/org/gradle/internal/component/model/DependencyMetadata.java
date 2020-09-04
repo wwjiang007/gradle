@@ -21,6 +21,7 @@ import org.gradle.api.capabilities.Capability;
 import org.gradle.api.internal.attributes.AttributesSchemaInternal;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 
+import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
 
@@ -58,6 +59,8 @@ public interface DependencyMetadata {
      */
     DependencyMetadata withTarget(ComponentSelector target);
 
+    DependencyMetadata withTargetAndArtifacts(ComponentSelector target, List<IvyArtifactName> artifacts);
+
     /**
      * Is the target component of this dependency considered 'changing'.
      */
@@ -76,9 +79,15 @@ public interface DependencyMetadata {
     boolean isConstraint();
 
     /**
+     * Is this a dependency that "pulls up" strict version constraints from the target node?
+     */
+    boolean isEndorsingStrictVersions();
+
+    /**
      * An optional human readable reason why this dependency is used.
      * @return if not null, a description why this dependency is used.
      */
+    @Nullable
     String getReason();
 
     /**

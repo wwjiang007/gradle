@@ -18,6 +18,7 @@ package org.gradle.integtests.resolve.transform
 
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.integtests.fixtures.AbstractDependencyResolutionTest
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import spock.lang.Unroll
 
 class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyResolutionTest implements ArtifactTransformTestFixture {
@@ -36,10 +37,10 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                     $inputAnnotations
                     ConfigurableFileCollection getSomeFiles()
                 }
-            
+
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name} using \${parameters.someFiles*.name}"
@@ -60,7 +61,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
             allprojects {
                 ext.inputFiles = files('a.txt', 'b.txt')
             }
-            
+
             project(':a') {
                 dependencies {
                     implementation project(':b')
@@ -94,7 +95,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                 repositories.maven { url = '${mavenRepo.uri}' }
                 ext.inputFiles = configurations.tools
             }
-            
+
             project(':a') {
                 dependencies {
                     tools 'test:tool-a:1.2'
@@ -148,10 +149,10 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                     @Nested
                     NestedInputFiles getNestedBean()
                 }
-            
+
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def inputFiles = parameters.nestedBean.inputFiles
                     def input = inputArtifact.get().asFile
@@ -181,7 +182,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                 task tool(type: FileProducer) {
                     output = file("build/tool-\${project.name}.jar")
                 }
-                ext.inputFiles = files(tool.output)                
+                ext.inputFiles = files(tool.output)
             }
 
             project(':a') {
@@ -211,7 +212,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
             abstract class MakeRed implements TransformAction<TransformParameters.None> {
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name} wit MakeRedAction"
@@ -242,7 +243,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                     }
                 }
             }
-            
+
             project(':a') {
                 dependencies {
                     tools project(':d')
@@ -264,12 +265,13 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
         outputContains("result = [b.jar.green, c.jar.green]")
     }
 
+    @ToBeFixedForConfigurationCache(because = "included build is used but not detected by problem reporting")
     def "transform can receive a file collection containing substituted external dependencies as parameter"() {
         file("tools/settings.gradle") << """
             include 'tool-a', 'tool-b'
         """
         file("tools/build.gradle") << """
-            allprojects { 
+            allprojects {
                 group = 'test'
                 configurations.create("default")
                 task producer(type: Producer) {
@@ -277,11 +279,11 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                 }
                 artifacts."default" producer.outputFile
             }
-            
+
             class Producer extends DefaultTask {
                 @OutputFile
-                RegularFileProperty outputFile = project.objects.fileProperty()
-            
+                final RegularFileProperty outputFile = project.objects.fileProperty()
+
                 @TaskAction
                 def go() {
                     outputFile.get().asFile.text = "output"
@@ -298,7 +300,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                 configurations.create("tools") { }
                 ext.inputFiles = configurations.tools
             }
-            
+
             project(':a') {
                 dependencies {
                     tools 'test:tool-a:1.2'
@@ -334,7 +336,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
         """
         setupBuildWithColorTransform {
             params("""
-                someFile.set(project.inputFile)
+                someFile = project.inputFile
             """)
         }
         buildFile << """
@@ -350,10 +352,10 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                     @InputFile
                     RegularFileProperty getSomeFile()
                 }
-            
+
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name} using \${parameters.someFile.get().asFile.name}"
@@ -386,7 +388,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
         """
         setupBuildWithColorTransform {
             params("""
-                someDir.set(project.inputDir)
+                someDir = project.inputDir
             """)
         }
         buildFile << """
@@ -402,10 +404,10 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                     @InputDirectory
                     DirectoryProperty getSomeDir()
                 }
-            
+
                 @InputArtifact
                 abstract Provider<FileSystemLocation> getInputArtifact()
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     println "processing \${input.name} using \${parameters.someDir.get().asFile.name}"
@@ -435,7 +437,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
                     output = file("build/tool-\${project.name}.jar")
                     doLast { throw new RuntimeException('broken') }
                 }
-                ext.inputFiles = files(tool.output)                
+                ext.inputFiles = files(tool.output)
             }
 
             project(':a') {
@@ -466,9 +468,9 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
         setupBuildWithTransformFileInputs("@PathSensitive(PathSensitivity.$pathSensitivity) @InputFiles")
         buildFile << """
             allprojects {
-                ext.inputFiles = files(rootProject.file(project.property('fileName')))
+                ext.inputFiles = rootProject.files(providers.gradleProperty('fileName'))
             }
-            
+
             project(':a') {
                 dependencies {
                     implementation project(':b')
@@ -513,6 +515,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
         PathSensitivity.ABSOLUTE  | [['first/input', 'foo'], ['first/input', 'foo'], ['third/input', 'foo']]
     }
 
+    @ToBeFixedForConfigurationCache(because = "classpath normalization configuration is not serialized")
     def "can use classpath normalization for parameter object"() {
         settingsFile << """
                 include 'a', 'b', 'c'
@@ -522,7 +525,7 @@ class ArtifactTransformWithFileInputsIntegrationTest extends AbstractDependencyR
             allprojects {
                 ext.inputFiles = files(rootProject.file("inputDir"), rootProject.file("input.jar"))
             }
-            
+
             project(':a') {
                 dependencies {
                     implementation project(':b')

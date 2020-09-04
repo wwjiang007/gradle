@@ -16,6 +16,7 @@
 
 package org.gradle.play.plugins.ide
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.plugins.ide.fixtures.IdeaModuleFixture
 
 import static org.gradle.plugins.ide.fixtures.IdeaFixtures.parseIml
@@ -52,6 +53,7 @@ abstract class PlayIdeaPluginIntegrationTest extends PlayIdePluginIntegrationTes
     abstract String[] getSourcePaths()
     abstract int getExpectedScalaClasspathSize()
 
+    @ToBeFixedForConfigurationCache
     def "IML contains path to Play app sources"() {
         applyIdePlugin()
 
@@ -63,6 +65,7 @@ abstract class PlayIdeaPluginIntegrationTest extends PlayIdePluginIntegrationTes
         content.assertContainsExcludes("build", ".gradle")
     }
 
+    @ToBeFixedForConfigurationCache
     def "IDEA metadata contains correct Scala version"() {
         applyIdePlugin()
         buildFile << """
@@ -99,6 +102,7 @@ abstract class PlayIdeaPluginIntegrationTest extends PlayIdePluginIntegrationTes
         scalaClasspath.size() == expectedScalaClasspathSize
     }
 
+    @ToBeFixedForConfigurationCache
     def "IDEA metadata contains correct Java version"() {
         applyIdePlugin()
         buildFile << """
@@ -124,6 +128,7 @@ abstract class PlayIdeaPluginIntegrationTest extends PlayIdePluginIntegrationTes
         outputContains("Validated Java Version")
     }
 
+    @ToBeFixedForConfigurationCache
     def "IDEA metadata contains correct dependencies for RUNTIME, COMPILE, TEST"() {
         applyIdePlugin()
         succeeds("assemble") // Need generated directories to exist
@@ -145,6 +150,7 @@ abstract class PlayIdeaPluginIntegrationTest extends PlayIdePluginIntegrationTes
         !testDeps.empty
     }
 
+    @ToBeFixedForConfigurationCache
     def "IDEA plugin depends on source generation tasks"() {
         applyIdePlugin()
 

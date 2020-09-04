@@ -16,6 +16,7 @@
 package org.gradle.integtests.resolve.api
 
 import org.gradle.integtests.fixtures.AbstractDependencyResolutionTest
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import spock.lang.Issue
 
 class ConfigurationDefaultsIntegrationTest extends AbstractDependencyResolutionTest {
@@ -33,14 +34,14 @@ repositories {
     maven { url '${mavenRepo.uri}' }
 }
 
-if (project.hasProperty('explicitDeps')) {
+if (providers.systemProperty('explicitDeps').forUseAtConfigurationTime().present) {
     dependencies {
         conf "org:explicit-dependency:1.0"
     }
 }
 task checkDefault {
     doLast {
-        if (project.hasProperty('resolveChild')) {
+        if (System.getProperty('resolveChild')) {
             configurations.child.resolve()
         }
 
@@ -63,6 +64,7 @@ task checkExplicit {
 """
     }
 
+    @ToBeFixedForConfigurationCache
     def "can use defaultDependencies to specify default dependencies"() {
         buildFile << """
 configurations.conf.defaultDependencies { deps ->
@@ -74,13 +76,13 @@ configurations.conf.defaultDependencies { deps ->
         succeeds "checkDefault"
 
         when:
-        executer.withArgument("-PresolveChild")
+        executer.withArgument("-DresolveChild=yes")
 
         then:
         succeeds "checkDefault"
 
         when:
-        executer.withArgument("-PexplicitDeps")
+        executer.withArgument("-DexplicitDeps=yes")
 
         then:
         succeeds "checkExplicit"
@@ -113,6 +115,7 @@ project.status = 'foo'
     }
 
     @Issue("gradle/gradle#812")
+    @ToBeFixedForConfigurationCache
     def "can use defaultDependencies in a multi-project build"() {
         buildFile.text = """
 subprojects {
@@ -132,7 +135,7 @@ project(":producer") {
         }
     }
     dependencies {
-        if (project.hasProperty('explicitDeps')) {
+        if (System.getProperty('explicitDeps')) {
             implementation "org:explicit-dependency:1.0"
         }
     }
@@ -150,7 +153,7 @@ subprojects {
 
         doLast {
             def resolvedJars = configurations.runtimeClasspath.files.collect { it.name }
-            if (project.hasProperty('explicitDeps')) {
+            if (System.getProperty('explicitDeps')) {
                 assert "explicit-dependency-1.0.jar" in resolvedJars
             } else {
                 assert "default-dependency-1.0.jar" in resolvedJars
@@ -164,12 +167,13 @@ include 'consumer', 'producer'
 """
         expect:
         // relying on explicit dependency
-        succeeds("resolve", "-PexplicitDeps")
+        succeeds("resolve", "-DexplicitDeps=yes")
 
         // relying on default dependency
         succeeds("resolve")
 
     }
+    @ToBeFixedForConfigurationCache
     def "can use defaultDependencies in a composite build"() {
         buildTestFixture.withBuildInSubDir()
 
@@ -235,7 +239,7 @@ configurations.conf.incoming.beforeResolve {
         succeeds "checkDefault"
 
         when:
-        executer.withArgument("-PexplicitDeps")
+        executer.withArgument("-DexplicitDeps=yes")
 
         then:
         succeeds "checkExplicit"
@@ -252,15 +256,16 @@ configurations.conf.incoming.beforeResolve {
 
 
         when:
-        executer.withArgument("-PresolveChild")
+        executer.withArgument("-DresolveChild=yes")
 
         then:
         fails "checkDefault"
 
         and:
-        failure.assertHasCause "Cannot change dependencies of configuration ':conf' after it has been included in dependency resolution."
+        failure.assertHasCause "Cannot change dependencies of dependency configuration ':conf' after it has been included in dependency resolution."
     }
 
+    @ToBeFixedForConfigurationCache
     def "copied configuration has independent set of listeners"() {
         buildFile << """
 configurations {

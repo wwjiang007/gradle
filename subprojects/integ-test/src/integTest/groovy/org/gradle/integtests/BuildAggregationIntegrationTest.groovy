@@ -16,12 +16,14 @@
 package org.gradle.integtests
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.test.fixtures.file.TestFile
 import org.hamcrest.CoreMatchers
 import spock.lang.Issue
 
 class BuildAggregationIntegrationTest extends AbstractIntegrationSpec {
 
+    @ToBeFixedForConfigurationCache(because = "GradleBuild task")
     def canExecuteAnotherBuildFromBuild() {
         when:
         buildFile << '''
@@ -68,6 +70,7 @@ class BuildAggregationIntegrationTest extends AbstractIntegrationSpec {
         succeeds "build"
     }
 
+    @ToBeFixedForConfigurationCache(because = "GradleBuild task")
     def reportsNestedBuildFailure() {
         when:
         file('other/settings.gradle') << "rootProject.name = 'other'"
@@ -103,6 +106,7 @@ class BuildAggregationIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @Issue("https://issues.gradle.org//browse/GRADLE-3052")
+    @ToBeFixedForConfigurationCache(because = "GradleBuild task")
     def buildTaskCanHaveInputsAndOutputs() {
         file("input") << "foo"
         settingsFile << "rootProject.name = 'proj'"
@@ -136,7 +140,7 @@ class BuildAggregationIntegrationTest extends AbstractIntegrationSpec {
         succeeds "build"
 
         then:
-        executed ":upper", ":build", ":proj:upper"
-        skipped ":proj:upper"
+        executed ":upper", ":build", ":${testDirectory.name}:upper"
+        skipped ":${testDirectory.name}:upper"
     }
 }

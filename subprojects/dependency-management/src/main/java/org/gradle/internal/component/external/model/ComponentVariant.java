@@ -21,8 +21,10 @@ import org.gradle.api.artifacts.VersionConstraint;
 import org.gradle.api.capabilities.Capability;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.internal.component.model.ExcludeMetadata;
+import org.gradle.internal.component.model.IvyArtifactName;
 import org.gradle.internal.component.model.VariantResolveMetadata;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -31,9 +33,6 @@ import java.util.List;
  * TODO - this should replace or merge into VariantResolveMetadata, OutgoingVariant, ConfigurationMetadata
  */
 public interface ComponentVariant extends VariantResolveMetadata {
-    @Override
-    String getName();
-
     ImmutableList<? extends Dependency> getDependencies();
 
     ImmutableList<? extends DependencyConstraint> getDependencyConstraints();
@@ -54,6 +53,11 @@ public interface ComponentVariant extends VariantResolveMetadata {
         ImmutableAttributes getAttributes();
 
         List<Capability> getRequestedCapabilities();
+
+        boolean isEndorsingStrictVersions();
+
+        @Nullable
+        IvyArtifactName getDependencyArtifact();
     }
 
     interface DependencyConstraint {

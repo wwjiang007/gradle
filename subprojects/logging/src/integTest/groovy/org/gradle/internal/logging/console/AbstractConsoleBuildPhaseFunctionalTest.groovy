@@ -16,7 +16,7 @@
 
 package org.gradle.internal.logging.console
 
-
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.console.AbstractConsoleGroupedTaskFunctionalTest
 import org.gradle.integtests.fixtures.executer.GradleHandle
 import org.gradle.test.fixtures.ConcurrentTestUtil
@@ -32,6 +32,7 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         server.start()
     }
 
+    @ToBeFixedForConfigurationCache(because = "Gradle.buildFinished", skip =  ToBeFixedForConfigurationCache.Skip.LONG_TIMEOUT)
     def "shows progress bar and percent phase completion"() {
         settingsFile << """
             ${server.callFromBuild('settings')}
@@ -39,21 +40,21 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         """
         buildFile << """
             ${server.callFromBuild('root-build-script')}
-            task hello { 
-                dependsOn {                         
+            task hello {
+                dependsOn {
                     // call during task graph calculation
                     ${server.callFromBuild('task-graph')}
                     null
                 }
                 doFirst {
                     ${server.callFromBuild('task1')}
-                } 
+                }
             }
-            task hello2 { 
+            task hello2 {
                 dependsOn hello
                 doFirst {
                     ${server.callFromBuild('task2')}
-                } 
+                }
             }
             gradle.buildFinished {
                 ${server.callFromBuild('build-finished')}
@@ -121,6 +122,7 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         gradle.waitForFinish()
     }
 
+    @ToBeFixedForConfigurationCache(because = "composite builds", skip = ToBeFixedForConfigurationCache.Skip.FAILS_TO_CLEANUP)
     def "shows progress bar and percent phase completion with included build"() {
         settingsFile << """
             ${server.callFromBuild('settings')}
@@ -128,11 +130,11 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         """
         buildFile << """
             ${server.callFromBuild('root-build-script')}
-            task hello2 { 
+            task hello2 {
                 dependsOn gradle.includedBuild("child").task(":hello")
                 doFirst {
                     ${server.callFromBuild('task2')}
-                } 
+                }
             }
             gradle.buildFinished {
                 ${server.callFromBuild('root-build-finished')}
@@ -144,14 +146,14 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         file("child/build.gradle") << """
             ${server.callFromBuild('child-build-script')}
             task hello {
-                dependsOn {                         
+                dependsOn {
                     // call during task graph calculation
                     ${server.callFromBuild('child-task-graph')}
                     null
                 }
                 doFirst {
                     ${server.callFromBuild('task1')}
-                } 
+                }
             }
         """
 
@@ -172,12 +174,12 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
 
         and:
         childBuildScript.waitForAllPendingCalls()
-        assertHasBuildPhase("0% CONFIGURING")
+        assertHasBuildPhase("0% INITIALIZING")
         childBuildScript.releaseAll()
 
         and:
         rootBuildScript.waitForAllPendingCalls()
-        assertHasBuildPhase("75% CONFIGURING")
+        assertHasBuildPhase("0% CONFIGURING")
         rootBuildScript.releaseAll()
 
         and:
@@ -204,16 +206,17 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         gradle.waitForFinish()
     }
 
+    @ToBeFixedForConfigurationCache(because = "Gradle.buildFinished", skip =  ToBeFixedForConfigurationCache.Skip.LONG_TIMEOUT)
     def "shows progress bar and percent phase completion with buildSrc build"() {
         settingsFile << """
             ${server.callFromBuild('settings')}
         """
         buildFile << """
             ${server.callFromBuild('root-build-script')}
-            task hello { 
+            task hello {
                 doFirst {
                     ${server.callFromBuild('task2')}
-                } 
+                }
             }
             gradle.buildFinished {
                 ${server.callFromBuild('root-build-finished')}
@@ -225,7 +228,7 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         file("buildSrc/build.gradle") << """
             ${server.callFromBuild('buildsrc-build-script')}
             assemble {
-                dependsOn {                         
+                dependsOn {
                     // call during task graph calculation
                     ${server.callFromBuild('buildsrc-task-graph')}
                     null
@@ -240,17 +243,22 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         """
 
         given:
+        def settings = server.expectAndBlock('settings')
         def childBuildScript = server.expectAndBlock('buildsrc-build-script')
         def childTaskGraph = server.expectAndBlock('buildsrc-task-graph')
         def task1 = server.expectAndBlock('buildsrc-task')
         def childBuildFinished = server.expectAndBlock('buildsrc-build-finished')
-        def settings = server.expectAndBlock('settings')
         def rootBuildScript = server.expectAndBlock('root-build-script')
         def task2 = server.expectAndBlock('task2')
         def rootBuildFinished = server.expectAndBlock('root-build-finished')
         gradle = executer.withTasks("hello").start()
 
         expect:
+        settings.waitForAllPendingCalls()
+        assertHasBuildPhase("0% INITIALIZING")
+        settings.releaseAll()
+
+        and:
         childBuildScript.waitForAllPendingCalls()
         assertHasBuildPhase("0% INITIALIZING")
         childBuildScript.releaseAll()
@@ -271,11 +279,6 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         childBuildFinished.releaseAll()
 
         and:
-        settings.waitForAllPendingCalls()
-        assertHasBuildPhase("0% INITIALIZING")
-        settings.releaseAll()
-
-        and:
         rootBuildScript.waitForAllPendingCalls()
         assertHasBuildPhase("0% CONFIGURING")
         rootBuildScript.releaseAll()
@@ -294,6 +297,7 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         gradle.waitForFinish()
     }
 
+    @ToBeFixedForConfigurationCache(because = "Gradle.buildFinished", skip =  ToBeFixedForConfigurationCache.Skip.LONG_TIMEOUT)
     def "shows progress bar and percent phase completion with artifact transforms"() {
         given:
         settingsFile << """
@@ -303,7 +307,7 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
         buildFile << """
             def usage = Attribute.of('usage', String)
             def artifactType = Attribute.of('artifactType', String)
-                  
+
             abstract class FileSizer implements TransformAction<Parameters> {
                 interface Parameters extends TransformParameters {
                     @Input
@@ -323,14 +327,14 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
                     output.text = String.valueOf(input.length())
                 }
             }
-            
+
             class FileDoubler extends ArtifactTransform {
                 List<File> transform(File input) {
                     ${server.callFromBuild('double-transform')}
                     return [input, input]
                 }
             }
-            
+
             allprojects {
                 dependencies {
                     attributesSchema {
@@ -347,8 +351,8 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
             project(':lib') {
                 apply plugin: 'base'
                 task jar(type: Jar) {
-                    destinationDir = buildDir
-                    archiveName = 'lib.jar'
+                    destinationDirectory = buildDir
+                    archiveFileName = 'lib.jar'
                     doLast {
                         ${server.callFromBuild('jar')}
                     }
@@ -357,7 +361,7 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
                     compile jar
                 }
             }
-    
+
             project(':util') {
                 dependencies {
                     compile project(':lib')
@@ -436,6 +440,6 @@ abstract class AbstractConsoleBuildPhaseFunctionalTest extends AbstractConsoleGr
     }
 
     String regexFor(String message) {
-        /<.*> $message \[\d+s]/
+        /<.*> $message \[[\dms ]+]/
     }
 }

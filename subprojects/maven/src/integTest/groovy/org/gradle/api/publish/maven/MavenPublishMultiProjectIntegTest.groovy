@@ -16,6 +16,7 @@
 
 package org.gradle.api.publish.maven
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import org.gradle.integtests.fixtures.publish.maven.AbstractMavenPublishIntegTest
 import spock.lang.IgnoreIf
@@ -134,7 +135,7 @@ class ExtraComp implements org.gradle.api.internal.component.SoftwareComponentIn
 }
 
 project(":project3") {
-    def c1 = new ExtraComp()
+    def c1 = new ExtraComp(variants: [components.java])
     def c2 = new ExtraComp(variants: [c1, components.java])
     publishing {
         publications {
@@ -177,6 +178,8 @@ project(":project2") {
     }
 
     def "maven-publish plugin does not take mavenDeployer.pom.artifactId into account when publishing"() {
+        executer.expectDeprecationWarning()
+
         createBuildScripts("""
 project(":project2") {
     apply plugin: 'maven'
@@ -214,6 +217,8 @@ project(":project2") {
     }
 
     def "maven-publish plugin uses target project name for project dependency when target project does not have maven-publish plugin applied"() {
+        executer.expectDeprecationWarning()
+
         given:
         settingsFile << """
 include "project1", "project2"
@@ -262,9 +267,11 @@ project(":project2") {
 
     @Issue("https://github.com/gradle/gradle-native/issues/867")
     @IgnoreIf({ GradleContextualExecuter.parallel })
+    @ToBeFixedForConfigurationCache
     def "can resolve non-build dependencies while projects are configured in parallel"() {
         def parallelProjectCount = 20
         using m2
+        executer.expectDeprecationWarning()
 
         given:
         settingsFile << """
@@ -280,7 +287,7 @@ project(":project2") {
             subprojects {
                 apply plugin: 'java'
                 apply plugin: 'maven'
-                
+
                 group = "org.gradle.test"
                 version = "1.0"
 
@@ -289,7 +296,7 @@ project(":project2") {
                     println project.name + " RESOLUTION"
                 }
             }
-           
+
             subprojects {
                 if (name.startsWith("consumer")) {
                     dependencies {
@@ -299,7 +306,7 @@ project(":project2") {
                     }
                 }
             }
-            
+
             def verify = tasks.register("verify") {
                 dependsOn ((0..${parallelProjectCount}).collect { ":consumer" + it + ":install" })
                 doLast {
@@ -388,6 +395,7 @@ project(":project2") {
     }
 
     @Unroll
+    @ToBeFixedForConfigurationCache
     def "publish and resolve java-library with dependency on java-platform (named #platformName)"() {
         given:
         javaLibrary(mavenRepo.module("org.test", "foo", "1.0")).withModuleMetadata().publish()
@@ -454,7 +462,7 @@ project(":library") {
         then:
         platformModule.parsedPom.packaging == 'pom'
         platformModule.parsedPom.scopes.compile.assertDependsOn("org.test:foo:1.0")
-        platformModule.parsedPom.scopes.compile.assertDependencyManagement("org.test:bar:1.1")
+        platformModule.parsedPom.scopes.no_scope.assertDependencyManagement("org.test:bar:1.1")
         platformModule.parsedModuleMetadata.variant('apiElements') {
             dependency("org.test:foo:1.0").exists()
             constraint("org.test:bar:1.1").exists()

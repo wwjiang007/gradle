@@ -17,8 +17,6 @@
 package org.gradle.vcs;
 
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
-import org.gradle.internal.HasInternalProtocol;
 
 /**
  * Allows VCS mapping rules to be specified for a build. A VCS mapping rule is responsible for calculating the VCS information for a particular dependency.
@@ -45,8 +43,6 @@ import org.gradle.internal.HasInternalProtocol;
  *
  * @since 4.4
  */
-@Incubating
-@HasInternalProtocol
 public interface VcsMappings {
     /**
      * Adds a mapping rule that may define VCS information for any dependency. The supplied action is executed for all components.

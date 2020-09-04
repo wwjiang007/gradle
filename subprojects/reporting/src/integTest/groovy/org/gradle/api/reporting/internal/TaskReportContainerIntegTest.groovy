@@ -17,6 +17,7 @@
 package org.gradle.api.reporting.internal
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
 import spock.lang.IgnoreIf
 
@@ -82,6 +83,7 @@ class TaskReportContainerIntegTest extends AbstractIntegrationSpec {
     }
 
     @IgnoreIf({GradleContextualExecuter.parallel})
+    @ToBeFixedForConfigurationCache(because = "Task.getProject() during execution")
     def "task up to date when no reporting configuration change"() {
         expect:
         succeeds(task)
@@ -93,6 +95,7 @@ class TaskReportContainerIntegTest extends AbstractIntegrationSpec {
     }
 
     @IgnoreIf({GradleContextualExecuter.parallel})
+    @ToBeFixedForConfigurationCache
     def "task not up to date when enabled set changes"() {
         expect:
         succeeds(task)
@@ -109,6 +112,7 @@ class TaskReportContainerIntegTest extends AbstractIntegrationSpec {
     }
 
     @IgnoreIf({GradleContextualExecuter.parallel})
+    @ToBeFixedForConfigurationCache
     def "task not up to date when enabled set changes but output files stays the same"() {
         given:
         buildFile << """

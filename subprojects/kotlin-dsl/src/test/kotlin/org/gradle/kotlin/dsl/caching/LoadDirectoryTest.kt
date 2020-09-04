@@ -24,7 +24,7 @@ import org.gradle.kotlin.dsl.fixtures.TestWithTempFiles
 
 import org.hamcrest.CoreMatchers.equalTo
 import org.hamcrest.CoreMatchers.not
-import org.junit.Assert.assertThat
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Test
 
 import java.io.InputStream
@@ -47,13 +47,13 @@ class LoadDirectoryTest : TestWithTempFiles() {
 
         // then:
         assertThat(
-            subject.load(packProducedBy(currentBuildInvocation))!!.metadata.buildInvocationId,
+            subject.load(packProducedBy(currentBuildInvocation)).metadata.buildInvocationId,
             equalTo(currentBuildInvocation)
         )
 
         // and:
         assertThat(
-            subject.load(packProducedBy(previousBuildInvocation))!!.metadata.buildInvocationId,
+            subject.load(packProducedBy(previousBuildInvocation)).metadata.buildInvocationId,
             not(equalTo(currentBuildInvocation))
         )
     }

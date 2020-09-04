@@ -18,6 +18,7 @@
 package org.gradle.integtests.resolve.attributes
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.FluidDependenciesResolveRunner
 import org.gradle.test.fixtures.archive.JarTestFixture
 import org.junit.runner.RunWith
@@ -74,7 +75,7 @@ class VariantAwareResolutionWithConfigurationAttributesIntegrationTest extends A
                                 }
                                 def mergedResourcesConf = p.configurations.create("resources${f.capitalize()}${bt.capitalize()}") {
                                     extendsFrom p.configurations.implementation
-                                    
+
                                     attributes.attribute(buildType, bt)
                                     attributes.attribute(flavor, f)
                                     attributes.attribute(usage, 'resources')
@@ -83,7 +84,7 @@ class VariantAwareResolutionWithConfigurationAttributesIntegrationTest extends A
                                 def compileTask = p.tasks.create("compileJava${f.capitalize()}${bt.capitalize()}", JavaCompile) { task ->
                                     def taskName = task.name
                                     task.source(p.tasks.compileJava.source)
-                                    task.destinationDir = project.file("${p.buildDir}/classes/$taskName")
+                                    task.destinationDirectory = project.file("${p.buildDir}/classes/$taskName")
                                     task.classpath = _compileConfig
                                     task.doFirst {
                                        // this is only for assertions in tests
@@ -91,19 +92,19 @@ class VariantAwareResolutionWithConfigurationAttributesIntegrationTest extends A
                                     }
                                 }
                                 def mergeResourcesTask = p.tasks.create("merge${f.capitalize()}${bt.capitalize()}Resources", Zip) { task ->
-                                    task.baseName = "resources-${p.name}-${f}${bt}"
+                                    task.archiveBaseName = "resources-${p.name}-${f}${bt}"
                                     task.from mergedResourcesConf
                                 }
                                 def aarTask = p.tasks.create("${f}${bt.capitalize()}Aar", Jar) { task ->
                                     // it's called AAR to reflect something that bundles everything
                                     task.dependsOn mergeResourcesTask
-                                    task.baseName = "${p.name}-${f}${bt}"
-                                    task.extension = 'aar'
+                                    task.archiveBaseName = "${p.name}-${f}${bt}"
+                                    task.archiveExtension = 'aar'
                                     task.from compileTask.outputs.files
                                     task.from p.zipTree(mergeResourcesTask.outputs.files.singleFile)
                                 }
                                 def jarTask = p.tasks.create("${f}${bt.capitalize()}Jar", Jar) { task ->
-                                    task.baseName = "${p.name}-${f}${bt}"
+                                    task.archiveBaseName = "${p.name}-${f}${bt}"
                                     task.from compileTask.outputs.files
                                 }
                                 p.artifacts.add("compile$baseName", jarTask)
@@ -140,6 +141,7 @@ class VariantAwareResolutionWithConfigurationAttributesIntegrationTest extends A
         noExceptionThrown()
     }
 
+    @ToBeFixedForConfigurationCache
     def "compiling project variant doesn't imply execution of other variants build tasks"() {
         def projectDir = new FileTreeBuilder(testDirectory)
         given:
@@ -174,6 +176,7 @@ class VariantAwareResolutionWithConfigurationAttributesIntegrationTest extends A
         notExecuted ':compileJavaPaidRelease'
     }
 
+    @ToBeFixedForConfigurationCache
     def "consuming subproject variant builds the project with the appropriate tasks"() {
         given:
         subproject('core') {

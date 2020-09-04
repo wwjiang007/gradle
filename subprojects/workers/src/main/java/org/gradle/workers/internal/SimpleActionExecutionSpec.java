@@ -19,36 +19,26 @@ package org.gradle.workers.internal;
 import org.gradle.workers.WorkAction;
 import org.gradle.workers.WorkParameters;
 
-public class SimpleActionExecutionSpec<T extends WorkParameters> implements ActionExecutionSpec<T> {
+public class SimpleActionExecutionSpec<T extends WorkParameters> {
     private final Class<? extends WorkAction<T>> implementationClass;
-    private final String displayName;
     private final T params;
-    private final ClassLoaderStructure classLoaderStructure;
+    private final boolean usesInternalServices;
 
-    public SimpleActionExecutionSpec(Class<? extends WorkAction<T>> implementationClass, String displayName, T params, ClassLoaderStructure classLoaderStructure) {
+    public SimpleActionExecutionSpec(Class<? extends WorkAction<T>> implementationClass, T params, boolean usesInternalServices) {
         this.implementationClass = implementationClass;
-        this.displayName = displayName;
         this.params = params;
-        this.classLoaderStructure = classLoaderStructure;
+        this.usesInternalServices = usesInternalServices;
     }
 
-    @Override
+    public boolean isInternalServicesRequired() {
+        return usesInternalServices;
+    }
+
     public Class<? extends WorkAction<T>> getImplementationClass() {
         return implementationClass;
     }
 
-    @Override
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    @Override
     public T getParameters() {
         return params;
-    }
-
-    @Override
-    public ClassLoaderStructure getClassLoaderStructure() {
-        return classLoaderStructure;
     }
 }

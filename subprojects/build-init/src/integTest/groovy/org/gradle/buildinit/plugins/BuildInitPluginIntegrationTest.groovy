@@ -17,6 +17,7 @@ package org.gradle.buildinit.plugins
 
 import org.gradle.buildinit.plugins.fixtures.ScriptDslFixture
 import org.gradle.buildinit.plugins.internal.modifiers.BuildInitDsl
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.executer.ExecutionResult
 import org.hamcrest.Matcher
 import spock.lang.Unroll
@@ -28,6 +29,10 @@ import static org.hamcrest.CoreMatchers.not
 
 class BuildInitPluginIntegrationTest extends AbstractInitIntegrationSpec {
 
+    @Override
+    String subprojectName() { 'app' }
+
+    @ToBeFixedForConfigurationCache(because = ":tasks")
     def "init shows up on tasks overview "() {
         given:
         targetDir.file("settings.gradle").touch()
@@ -42,14 +47,13 @@ class BuildInitPluginIntegrationTest extends AbstractInitIntegrationSpec {
     @Unroll
     def "creates a simple project with #scriptDsl build scripts when no pom file present and no type specified"() {
         given:
-        def dslFixture = dslFixtureFor(scriptDsl)
+        def dslFixture = ScriptDslFixture.of(scriptDsl, targetDir, null)
 
         when:
         runInitWith scriptDsl
 
         then:
-        dslFixture.assertGradleFilesGenerated()
-        targetDir.file(".gitignore").assertIsFile()
+        commonFilesGenerated(scriptDsl, dslFixture)
 
         and:
         dslFixture.buildFile.assertContents(
@@ -59,7 +63,7 @@ class BuildInitPluginIntegrationTest extends AbstractInitIntegrationSpec {
         outputContains("Get more help with your project: ")
 
         expect:
-        succeeds 'tasks'
+        succeeds 'help'
 
         where:
         scriptDsl << ScriptDslFixture.SCRIPT_DSLS
@@ -68,14 +72,14 @@ class BuildInitPluginIntegrationTest extends AbstractInitIntegrationSpec {
     @Unroll
     def "#targetScriptDsl build file generation is skipped when #existingScriptDsl build file already exists"() {
         given:
-        def existingDslFixture = dslFixtureFor(existingScriptDsl)
-        def targetDslFixture = dslFixtureFor(targetScriptDsl)
+        def existingDslFixture = rootProjectDslFixtureFor(existingScriptDsl as BuildInitDsl)
+        def targetDslFixture = dslFixtureFor(targetScriptDsl as BuildInitDsl)
 
         and:
         existingDslFixture.buildFile.createFile()
 
         when:
-        runInitWith targetScriptDsl
+        runInitWith targetScriptDsl as BuildInitDsl
 
         then:
         result.assertTasksExecuted(":init")
@@ -92,14 +96,14 @@ class BuildInitPluginIntegrationTest extends AbstractInitIntegrationSpec {
     @Unroll
     def "#targetScriptDsl build file generation is skipped when #existingScriptDsl settings file already exists"() {
         given:
-        def existingDslFixture = dslFixtureFor(existingScriptDsl)
-        def targetDslFixture = dslFixtureFor(targetScriptDsl)
+        def existingDslFixture = dslFixtureFor(existingScriptDsl as BuildInitDsl)
+        def targetDslFixture = dslFixtureFor(targetScriptDsl as BuildInitDsl)
 
         and:
         existingDslFixture.settingsFile.createFile()
 
         when:
-        runInitWith targetScriptDsl
+        runInitWith targetScriptDsl as BuildInitDsl
 
         then:
         result.assertTasksExecuted(":init")
@@ -116,15 +120,15 @@ class BuildInitPluginIntegrationTest extends AbstractInitIntegrationSpec {
     @Unroll
     def "#targetScriptDsl build file generation is skipped when custom #existingScriptDsl build file exists"() {
         given:
-        def existingDslFixture = dslFixtureFor(existingScriptDsl)
-        def targetDslFixture = dslFixtureFor(targetScriptDsl)
+        def existingDslFixture = dslFixtureFor(existingScriptDsl as BuildInitDsl)
+        def targetDslFixture = dslFixtureFor(targetScriptDsl as BuildInitDsl)
 
         and:
         def customBuildScript = existingDslFixture.scriptFile("customBuild").createFile()
 
         when:
         executer.usingBuildScript(customBuildScript)
-        runInitWith targetScriptDsl
+        runInitWith targetScriptDsl as BuildInitDsl
 
         then:
         result.assertTasksExecuted(":init")
@@ -142,8 +146,8 @@ class BuildInitPluginIntegrationTest extends AbstractInitIntegrationSpec {
     @Unroll
     def "#targetScriptDsl build file generation is skipped when part of a multi-project build with non-standard #existingScriptDsl settings file location"() {
         given:
-        def existingDslFixture = dslFixtureFor(existingScriptDsl)
-        def targetDslFixture = dslFixtureFor(targetScriptDsl)
+        def existingDslFixture = dslFixtureFor(existingScriptDsl as BuildInitDsl)
+        def targetDslFixture = dslFixtureFor(targetScriptDsl as BuildInitDsl)
 
         and:
         def customSettings = existingDslFixture.scriptFile("customSettings")
@@ -153,7 +157,7 @@ include("child")
 
         when:
         executer.usingSettingsFile(customSettings)
-        runInitWith targetScriptDsl
+        runInitWith targetScriptDsl as BuildInitDsl
 
         then:
         result.assertTasksExecuted(":init")
@@ -176,7 +180,7 @@ include("child")
         run('init')
 
         then:
-        pomValuesUsed(dslFixtureFor(GROOVY))
+        pomValuesUsed(rootProjectDslFixtureFor(GROOVY))
     }
 
     @Unroll
@@ -185,7 +189,7 @@ include("child")
         pom()
 
         when:
-        succeeds('init', '--type', 'java-library', '--dsl', scriptDsl.id)
+        succeeds('init', '--type', 'java-application', '--dsl', scriptDsl.id)
 
         then:
         pomValuesNotUsed(dslFixtureFor(scriptDsl))
@@ -213,6 +217,7 @@ include("child")
   - 'kotlin-gradle-plugin'
   - 'kotlin-library'
   - 'pom'
+  - 'scala-application'
   - 'scala-library'""")
     }
 
@@ -299,6 +304,7 @@ include("child")
                      kotlin-gradle-plugin
                      kotlin-library
                      pom
+                     scala-application
                      scala-library""")
     }
 

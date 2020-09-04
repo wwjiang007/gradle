@@ -23,7 +23,6 @@ import org.gradle.internal.UncheckedException;
 import org.gradle.internal.concurrent.CompositeStoppable;
 import org.gradle.internal.concurrent.DefaultExecutorFactory;
 import org.gradle.internal.concurrent.ExecutorFactory;
-import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.internal.event.DefaultListenerManager;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.io.ClassLoaderObjectInputStream;
@@ -39,6 +38,7 @@ import org.gradle.internal.serialize.Decoder;
 import org.gradle.internal.serialize.InputStreamBackedDecoder;
 import org.gradle.internal.service.DefaultServiceRegistry;
 import org.gradle.internal.service.ServiceRegistry;
+import org.gradle.internal.service.scopes.Scope.Global;
 import org.gradle.process.internal.health.memory.DefaultJvmMemoryInfo;
 import org.gradle.process.internal.health.memory.DefaultMemoryManager;
 import org.gradle.process.internal.health.memory.DisabledOsMemoryInfo;
@@ -49,6 +49,7 @@ import org.gradle.process.internal.health.memory.MemoryManager;
 import org.gradle.process.internal.health.memory.OsMemoryInfo;
 import org.gradle.process.internal.worker.WorkerJvmMemoryInfoSerializer;
 import org.gradle.process.internal.worker.WorkerLoggingSerializer;
+import org.gradle.process.internal.worker.WorkerProcessContext;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -103,99 +104,92 @@ public class SystemApplicationClassLoaderWorker implements Callable<Void> {
         basicWorkerServices.add(ExecutorFactory.class, new DefaultExecutorFactory());
         basicWorkerServices.addProvider(new MessagingServices());
         final WorkerServices workerServices = new WorkerServices(basicWorkerServices, gradleUserHomeDir);
+        WorkerLogEventListener workerLogEventListener = new WorkerLogEventListener();
+        workerServices.add(WorkerLogEventListener.class, workerLogEventListener);
+
+        File workingDirectory = workerServices.get(WorkerDirectoryProvider.class).getWorkingDirectory();
+        File errorLog = getLastResortErrorLogFile(workingDirectory);
+        PrintUnrecoverableErrorToFileHandler unrecoverableErrorHandler = new PrintUnrecoverableErrorToFileHandler(errorLog);
 
         ObjectConnection connection = null;
-        WorkerLogEventListener workerLogEventListener = null;
-        PrintUnrecoverableErrorToFileHandler unrecoverableErrorHandler = new PrintUnrecoverableErrorToFileHandler(workerServices.get(WorkerDirectoryProvider.class));
-        try {
-            // Read serialized worker
-            byte[] serializedWorker = decoder.readBinary();
 
-            // Deserialize the worker action
-            Action<WorkerContext> action;
-            try {
-                ObjectInputStream instr = new ClassLoaderObjectInputStream(new ByteArrayInputStream(serializedWorker), getClass().getClassLoader());
-                action = (Action<WorkerContext>) instr.readObject();
-            } catch (Exception e) {
-                throw UncheckedException.throwAsUncheckedException(e);
-            }
+        try {
+            // Read serialized worker details
+            final long workerId = decoder.readSmallLong();
+            final String displayName = decoder.readString();
+            byte[] serializedWorker = decoder.readBinary();
+            Action<WorkerProcessContext> workerAction = deserializeWorker(serializedWorker);
 
             connection = basicWorkerServices.get(MessagingClient.class).getConnection(serverAddress);
             connection.addUnrecoverableErrorHandler(unrecoverableErrorHandler);
-            workerLogEventListener = configureLogging(loggingManager, connection);
+            configureLogging(loggingManager, connection, workerLogEventListener);
             // start logging now that the logging manager is connected
             loggingManager.start();
             if (shouldPublishJvmMemoryInfo) {
                 configureWorkerJvmMemoryInfoEvents(workerServices, connection);
             }
 
-            final ObjectConnection serverConnection = connection;
-            action.execute(new WorkerContext() {
-                @Override
-                public ClassLoader getApplicationClassLoader() {
-                    return ClassLoader.getSystemClassLoader();
-                }
-
-                @Override
-                public ObjectConnection getServerConnection() {
-                    return serverConnection;
-                }
-
-                @Override
-                public ServiceRegistry getServiceRegistry() {
-                    return workerServices;
-                }
-            });
+            ActionExecutionWorker worker = new ActionExecutionWorker(workerAction);
+            worker.execute(new ContextImpl(workerId, displayName, connection, workerServices));
         } finally {
-            if (workerLogEventListener != null) {
+            try {
                 loggingManager.removeOutputEventListener(workerLogEventListener);
+                CompositeStoppable.stoppable(connection, basicWorkerServices).stop();
+                loggingManager.stop();
+            } catch (Throwable t) {
+                // We're failing while shutting down, so log whatever might have happened.
+                unrecoverableErrorHandler.execute(t);
             }
-            CompositeStoppable.stoppable(connection, unrecoverableErrorHandler, basicWorkerServices).stop();
-            loggingManager.stop();
         }
 
         return null;
     }
 
-    private class PrintUnrecoverableErrorToFileHandler implements Action<Throwable>, Stoppable {
-        private final File workerDirectory;
-        private PrintStream ps;
+    private Action<WorkerProcessContext> deserializeWorker(byte[] serializedWorker) {
+        Action<WorkerProcessContext> action;
+        try {
+            ObjectInputStream instr = new ClassLoaderObjectInputStream(new ByteArrayInputStream(serializedWorker), getClass().getClassLoader());
+            @SuppressWarnings("unchecked")
+            Action<WorkerProcessContext> deserializedAction = (Action<WorkerProcessContext>) instr.readObject();
+            action = deserializedAction;
+        } catch (Exception e) {
+            throw UncheckedException.throwAsUncheckedException(e);
+        }
+        return action;
+    }
 
-        private PrintUnrecoverableErrorToFileHandler(WorkerDirectoryProvider workerDirectoryProvider) {
-            this.workerDirectory = workerDirectoryProvider.getWorkingDirectory();
+    private File getLastResortErrorLogFile(File workingDirectory) {
+        return new File(workingDirectory, "worker-error-" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date()) + ".txt");
+    }
+
+    private static class PrintUnrecoverableErrorToFileHandler implements Action<Throwable> {
+        private final File errorLog;
+
+        private PrintUnrecoverableErrorToFileHandler(File errorLog) {
+            this.errorLog = errorLog;
         }
 
         @Override
         public void execute(Throwable throwable) {
-            if (ps == null) {
-                String fileName = "worker-error-" + new SimpleDateFormat("yyyyMMddHHmmss").format(new Date()) + ".txt";
+            try {
+                final PrintStream ps = new PrintStream(errorLog);
                 try {
-                    ps = new PrintStream(new File(workerDirectory, fileName));
-                } catch (FileNotFoundException ignored) {
-                    // ignored
+                    ps.println("Encountered unrecoverable error:");
+                    throwable.printStackTrace(ps);
+                } finally {
+                    ps.close();
                 }
-            }
-            if (ps != null) {
-                ps.println("Encountered unrecoverable error:");
-                throwable.printStackTrace(ps);
+            } catch (FileNotFoundException e) {
+                // ignore this, we won't be able to get any logs
             }
         }
-
-        @Override
-        public void stop() {
-            if (ps != null) {
-                ps.close();
-            }
-        }
-
     }
 
-    private WorkerLogEventListener configureLogging(LoggingManagerInternal loggingManager, ObjectConnection connection) {
+    private void configureLogging(LoggingManagerInternal loggingManager, ObjectConnection connection, WorkerLogEventListener workerLogEventListener) {
         connection.useParameterSerializers(WorkerLoggingSerializer.create());
         WorkerLoggingProtocol workerLoggingProtocol = connection.addOutgoing(WorkerLoggingProtocol.class);
-        WorkerLogEventListener workerLogEventListener = new WorkerLogEventListener(workerLoggingProtocol);
+        workerLogEventListener.setWorkerLoggingProtocol(workerLoggingProtocol);
         loggingManager.addOutputEventListener(workerLogEventListener);
-        return workerLogEventListener;
     }
 
     private void configureWorkerJvmMemoryInfoEvents(WorkerServices services, ObjectConnection connection) {
@@ -231,7 +225,7 @@ public class SystemApplicationClassLoaderWorker implements Callable<Void> {
         }
 
         ListenerManager createListenerManager() {
-            return new DefaultListenerManager();
+            return new DefaultListenerManager(Global.class);
         }
 
         OsMemoryInfo createOsMemoryInfo() {
@@ -248,6 +242,45 @@ public class SystemApplicationClassLoaderWorker implements Callable<Void> {
 
         WorkerDirectoryProvider createWorkerDirectoryProvider(GradleUserHomeDirProvider gradleUserHomeDirProvider) {
             return new DefaultWorkerDirectoryProvider(gradleUserHomeDirProvider);
+        }
+    }
+
+    private static class ContextImpl implements WorkerProcessContext {
+        private final long workerId;
+        private final String displayName;
+        private final ObjectConnection serverConnection;
+        private final WorkerServices workerServices;
+
+        public ContextImpl(long workerId, String displayName, ObjectConnection serverConnection, WorkerServices workerServices) {
+            this.workerId = workerId;
+            this.displayName = displayName;
+            this.serverConnection = serverConnection;
+            this.workerServices = workerServices;
+        }
+
+        @Override
+        public Object getWorkerId() {
+            return workerId;
+        }
+
+        @Override
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        @Override
+        public ClassLoader getApplicationClassLoader() {
+            return ClassLoader.getSystemClassLoader();
+        }
+
+        @Override
+        public ObjectConnection getServerConnection() {
+            return serverConnection;
+        }
+
+        @Override
+        public ServiceRegistry getServiceRegistry() {
+            return workerServices;
         }
     }
 }

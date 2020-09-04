@@ -18,6 +18,7 @@ package org.gradle.api.publish.maven.internal.publisher;
 
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.internal.artifacts.DefaultModuleIdentifier;
+import org.gradle.api.publish.internal.PublicationArtifactInternal;
 import org.gradle.api.publish.maven.MavenArtifact;
 import org.gradle.internal.component.external.model.DefaultModuleComponentIdentifier;
 
@@ -34,7 +35,14 @@ public class MavenNormalizedPublication {
     private final MavenArtifact mainArtifact;
     private final Set<MavenArtifact> allArtifacts;
 
-    public MavenNormalizedPublication(String name, MavenProjectIdentity projectIdentity, String packaging, MavenArtifact pomArtifact, MavenArtifact mainArtifact, Set<MavenArtifact> allArtifacts) {
+    public MavenNormalizedPublication(
+        String name,
+        MavenProjectIdentity projectIdentity,
+        String packaging,
+        MavenArtifact pomArtifact,
+        MavenArtifact mainArtifact,
+        Set<MavenArtifact> allArtifacts
+    ) {
         this.name = name;
         this.coordinates = DefaultModuleComponentIdentifier.newId(DefaultModuleIdentifier.newId(projectIdentity.getGroupId().get(), projectIdentity.getArtifactId().get()), projectIdentity.getVersion().get());
         this.packaging = packaging;
@@ -69,6 +77,8 @@ public class MavenNormalizedPublication {
 
     /**
      * @deprecated Kept to not break third-party plugins
+     * Sadly this is still used by org.jfrog.buildinfo:build-info-extractor-gradle
+     * See https://github.com/jfrog/build-info/issues/249
      */
     @Deprecated
     public File getPomFile() {
@@ -80,6 +90,9 @@ public class MavenNormalizedPublication {
     }
 
     public MavenArtifact getMainArtifact() {
+        if (mainArtifact != null && !((PublicationArtifactInternal) mainArtifact).shouldBePublished()) {
+            throw new IllegalStateException("Artifact " + mainArtifact.getFile().getName() + " wasn't produced by this build.");
+        }
         return mainArtifact;
     }
 

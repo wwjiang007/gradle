@@ -24,11 +24,11 @@ import org.gradle.api.Incubating;
 import org.gradle.api.Project;
 import org.gradle.api.ProjectEvaluationListener;
 import org.gradle.api.UnknownDomainObjectException;
-import org.gradle.api.execution.SharedResourceContainer;
 import org.gradle.api.execution.TaskExecutionGraph;
 import org.gradle.api.initialization.IncludedBuild;
 import org.gradle.api.initialization.Settings;
 import org.gradle.api.plugins.PluginAware;
+import org.gradle.api.services.BuildServiceRegistry;
 import org.gradle.internal.HasInternalProtocol;
 
 import javax.annotation.Nullable;
@@ -191,6 +191,24 @@ public interface Gradle extends PluginAware {
     void buildStarted(Action<? super Gradle> action);
 
     /**
+     * Adds an action to be called before the build settings have been loaded and evaluated.
+     *
+     * @param closure The action to execute.
+     * @since 6.0
+     */
+    @Incubating
+    void beforeSettings(Closure<?> closure);
+
+    /**
+     * Adds an action to be called before the build settings have been loaded and evaluated.
+     *
+     * @param action The action to execute.
+     * @since 6.0
+     */
+    @Incubating
+    void beforeSettings(Action<? super Settings> action);
+
+    /**
      * Adds a closure to be called when the build settings have been loaded and evaluated.
      *
      * The settings object is fully configured and is ready to use to load the build projects. The
@@ -347,6 +365,14 @@ public interface Gradle extends PluginAware {
     Gradle getGradle();
 
     /**
+     * Returns the build services that are shared by all projects of this build.
+     *
+     * @since 6.1
+     */
+    @Incubating
+    BuildServiceRegistry getSharedServices();
+
+    /**
      * Returns the included builds for this build.
      *
      * @since 3.1
@@ -360,30 +386,4 @@ public interface Gradle extends PluginAware {
      * @since 3.1
      */
     IncludedBuild includedBuild(String name) throws UnknownDomainObjectException;
-
-    /**
-     * Returns the shared resources registered to this build.
-     *
-     * @return the collection of shared resources.
-     * @since 5.7
-     */
-    @Incubating
-    SharedResourceContainer getSharedResources();
-
-    /**
-     * Configures the shared resources for this build.
-     *
-     * An example of registering a shared resource.
-     * <pre class='autoTested'>
-     * gradle.sharedResources {
-     *     testCluster {
-     *         leases = 4
-     *     }
-     * }
-     * </pre>
-     * @param action The action to execute.
-     * @since 5.7
-     */
-    @Incubating
-    void sharedResources(Action<? super SharedResourceContainer> action);
 }

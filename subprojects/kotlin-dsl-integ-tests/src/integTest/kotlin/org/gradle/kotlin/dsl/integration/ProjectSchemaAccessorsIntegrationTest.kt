@@ -17,6 +17,7 @@
 package org.gradle.kotlin.dsl.integration
 
 import org.gradle.integtests.fixtures.RepoScriptBlockUtil.jcenterRepository
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.kotlin.dsl.fixtures.FoldersDsl
 import org.gradle.kotlin.dsl.fixtures.FoldersDslExpression
 import org.gradle.kotlin.dsl.fixtures.containsMultiLineString
@@ -29,7 +30,6 @@ import org.hamcrest.CoreMatchers.containsString
 import org.hamcrest.CoreMatchers.not
 import org.hamcrest.MatcherAssert.assertThat
 
-import org.junit.Ignore
 import org.junit.Test
 
 import java.io.File
@@ -39,9 +39,8 @@ import java.io.File
 class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can access sub-project specific task`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withDefaultSettings().appendText("""
             include(":sub")
@@ -95,9 +94,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `can access extension of internal type made public`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         lateinit var extensionSourceFile: File
 
@@ -154,9 +152,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can access extension of default package type`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withBuildSrc {
 
@@ -194,9 +191,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can access task of default package type`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withBuildSrc {
             "src/main/kotlin" {
@@ -231,9 +227,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can access extension of nested type`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withBuildSrc {
             "src/main/kotlin/my" {
@@ -288,9 +283,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `multiple generic extension targets`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withBuildSrc {
 
@@ -342,9 +336,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `conflicting extensions across build scripts with same body`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withFolders {
 
@@ -390,9 +383,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `conflicting extensions across build runs`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withFolders {
 
@@ -472,9 +464,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `can access NamedDomainObjectContainer extension via generated accessor`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withBuildSrc {
             withFile("src/main/kotlin/my/DocumentationPlugin.kt", """
@@ -534,15 +525,16 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `can access extensions registered by declared plugins via jit accessor`() {
 
         withBuildScript("""
             plugins { application }
 
-            application { mainClassName = "App" }
+            application { mainClass.set("App") }
 
             task("mainClassName") {
-                doLast { println("*" + application.mainClassName + "*") }
+                doLast { println("*" + application.mainClass.get() + "*") }
             }
         """)
 
@@ -612,9 +604,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can add artifacts using generated accessors for configurations`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withDefaultSettingsIn("buildSrc")
 
@@ -694,6 +685,7 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `accessors tasks applied in a mixed Groovy-Kotlin multi-project build`() {
 
         withDefaultSettings().appendText("""
@@ -712,24 +704,12 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
-    @Ignore("TODO: change this test not to be dependent on an old version of the build-scan plugin")
     fun `given extension with inaccessible type, its accessor is typed Any`() {
 
         withFile("init.gradle", """
-            initscript {
-                repositories {
-                    gradlePluginPortal()
-                }
-                dependencies {
-                    classpath "com.gradle:build-scan-plugin:1.16"
-                }
-            }
+            class TestExtension {}
             rootProject {
-                apply plugin: "base"
-                apply plugin: initscript.classLoader.loadClass("com.gradle.scan.plugin.BuildScanPlugin")
-                buildScan {
-                    publishAlways()
-                }
+                it.extensions.create("testExtension", TestExtension)
             }
         """)
 
@@ -737,19 +717,18 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
 
             inline fun <reified T> typeOf(t: T) = T::class.simpleName
 
-            buildScan {
-                println("Type of `buildScan` receiver is " + typeOf(this@buildScan))
+            testExtension {
+                println("Type of `testExtension` receiver is " + typeOf(this@testExtension))
             }
         """)
 
         val result = build("help", "-I", "init.gradle")
-        assertThat(result.output, containsString("Type of `buildScan` receiver is Any"))
+        assertThat(result.output, containsString("Type of `testExtension` receiver is Any"))
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `given extension with erased generic type parameters, its accessor is typed Any`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withDefaultSettingsIn("buildSrc")
 
@@ -802,9 +781,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can access nested extensions and conventions registered by declared plugins via jit accessors`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withDefaultSettingsIn("buildSrc")
 
@@ -840,43 +818,30 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
 
             class MyPlugin : Plugin<Project> {
                 override fun apply(project: Project): Unit = project.run {
+                    val rootExtension = extensions.create("rootExtension", MyExtension::class.java, "root")
 
-                    val instantiator = serviceOf<Instantiator>()
-
-                    val rootExtension = MyExtension("root", instantiator)
-                    val rootExtensionNestedExtension = MyExtension("nested-in-extension", instantiator)
-                    val rootExtensionNestedConvention = MyConvention("nested-in-extension", instantiator)
-
-                    extensions.add("rootExtension", rootExtension)
-
-                    rootExtension.extensions.add("nestedExtension", rootExtensionNestedExtension)
+                    val rootExtensionNestedExtension = rootExtension.extensions.create("nestedExtension", MyExtension::class.java, "nested-in-extension")
                     rootExtensionNestedExtension.extensions.add("deepExtension", listOf("foo", "bar"))
 
+                    val rootExtensionNestedConvention = objects.newInstance(MyConvention::class.java, "nested-in-extension")
                     rootExtensionNestedConvention.extensions.add("deepExtension", mapOf("foo" to "bar"))
 
-                    val rootConvention = MyConvention("root", instantiator)
-                    val rootConventionNestedExtension = MyExtension("nested-in-convention", instantiator)
-                    val rootConventionNestedConvention = MyConvention("nested-in-convention", instantiator)
+                    val rootConvention = objects.newInstance(MyConvention::class.java, "root")
+                    val rootConventionNestedConvention = objects.newInstance(MyConvention::class.java, "nested-in-convention")
 
                     convention.plugins.put("rootConvention", rootConvention)
 
-                    rootConvention.extensions.add("nestedExtension", rootConventionNestedExtension)
+                    val rootConventionNestedExtension = rootConvention.extensions.create("nestedExtension", MyExtension::class.java, "nested-in-convention")
                     rootConventionNestedExtension.extensions.add("deepExtension", listOf("bazar", "cathedral"))
 
                     rootConventionNestedConvention.extensions.add("deepExtension", mapOf("bazar" to "cathedral"))
                 }
             }
 
-            class MyExtension(val value: String = "value", instantiator: Instantiator) : ExtensionAware, HasConvention {
-                private val convention: DefaultConvention = DefaultConvention(instantiator)
-                override fun getExtensions(): ExtensionContainer = convention
-                override fun getConvention(): Convention = convention
+            abstract class MyExtension(val value: String) : ExtensionAware {
             }
 
-            class MyConvention(val value: String = "value", instantiator: Instantiator) : ExtensionAware, HasConvention {
-                private val convention: DefaultConvention = DefaultConvention(instantiator)
-                override fun getExtensions(): ExtensionContainer = convention
-                override fun getConvention(): Convention = convention
+            abstract class MyConvention @javax.inject.Inject constructor(val value: String) : ExtensionAware {
             }
         """)
 
@@ -904,9 +869,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `convention accessors honor HasPublicType`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withDefaultSettingsIn("buildSrc")
 
@@ -1085,7 +1049,7 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
 
             distributions {
                 main {
-                    baseName = "the-distro"
+                    distributionBaseName.set("the-distro")
                 }
             }
         """)
@@ -1094,9 +1058,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `accessors to extensions of the dependency handler`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withKotlinBuildSrc()
         withFile("buildSrc/src/main/kotlin/Mine.kt", """
@@ -1184,9 +1147,8 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `accessors to kotlin internal task types are typed with the first kotlin public parent type`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withDefaultSettings()
         withKotlinBuildSrc()
@@ -1197,7 +1159,7 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
 
             abstract class MyCustomTask : DefaultTask()
             internal open class MyCustomTaskImpl : MyCustomTask()
-            
+
             internal open class MyOtherInternalTask : DefaultTask()
         """)
         withFile("buildSrc/src/main/kotlin/my/custom.gradle.kts", """
@@ -1211,7 +1173,7 @@ class ProjectSchemaAccessorsIntegrationTest : AbstractPluginIntegrationTest() {
             plugins {
                 my.custom
             }
-            
+
             inline fun <reified T> typeOf(value: T) = typeOf<T>()
 
             println("tasks.custom: " + typeOf(tasks.custom))

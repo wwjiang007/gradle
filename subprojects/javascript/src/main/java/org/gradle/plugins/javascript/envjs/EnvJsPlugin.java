@@ -29,6 +29,7 @@ import org.gradle.api.internal.IConventionAware;
 import org.gradle.api.plugins.ExtensionAware;
 import org.gradle.api.plugins.ReportingBasePlugin;
 import org.gradle.internal.Factory;
+import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.plugins.javascript.base.JavaScriptExtension;
 import org.gradle.plugins.javascript.envjs.browser.BrowserEvaluate;
 import org.gradle.plugins.javascript.envjs.internal.EnvJsBrowserEvaluator;
@@ -52,6 +53,10 @@ public class EnvJsPlugin implements Plugin<Project> {
 
     @Override
     public void apply(final Project project) {
+        DeprecationLogger.deprecatePlugin("org.gradle.envjs")
+            .willBeRemovedInGradle7()
+            .withUpgradeGuideSection(5, "deprecated_plugins")
+            .nagUser();
         project.getPluginManager().apply(RhinoPlugin.class);
         project.getPluginManager().apply(ReportingBasePlugin.class);
 

@@ -23,7 +23,6 @@ import org.gradle.api.artifacts.query.ArtifactResolutionQuery;
 import org.gradle.api.artifacts.transform.TransformAction;
 import org.gradle.api.artifacts.transform.TransformParameters;
 import org.gradle.api.artifacts.transform.TransformSpec;
-import org.gradle.api.artifacts.transform.VariantTransform;
 import org.gradle.api.artifacts.type.ArtifactTypeContainer;
 import org.gradle.api.attributes.AttributesSchema;
 import org.gradle.api.plugins.ExtensionAware;
@@ -45,8 +44,9 @@ import java.util.Map;
  *
  * <p>Example shows a basic way of declaring dependencies.
  * <pre class='autoTested'>
- * apply plugin: 'java'
- * //so that we can use 'implementation', 'testImplementation' for dependencies
+ * plugins {
+ *     id 'java' // so that we can use 'implementation', 'testImplementation' for dependencies
+ * }
  *
  * dependencies {
  *   //for dependencies found in artifact repositories you can use
@@ -86,8 +86,10 @@ import java.util.Map;
  * <li>Avoiding transitive dependencies for certain dependency.</li>
  * </ul>
  *
- * <pre class='autoTested'>
- * apply plugin: 'java' //so that I can declare 'implementation' dependencies
+ * <pre class='autoTestedWithDeprecations'>
+ * plugins {
+ *     id 'java' // so that I can declare 'implementation' dependencies
+ * }
  *
  * dependencies {
  *   implementation('org.hibernate:hibernate:3.1') {
@@ -112,7 +114,9 @@ import java.util.Map;
  * </ul>
  *
  * <pre class='autoTested'>
- * apply plugin: 'java' //so that I can declare 'implementation' dependencies
+ * plugins {
+ *     id 'java' // so that I can declare 'implementation' dependencies
+ * }
  *
  * dependencies {
  *   //configuring dependency to specific configuration of the module
@@ -143,6 +147,8 @@ import java.util.Map;
  *
  * <code><i>configurationName</i> &lt;instance&gt;</code>
  *
+ * <p>Dependencies can also be declared with a {@link org.gradle.api.provider.Provider} that provides any of the other supported dependency notations.</p>
+ *
  * <h3>External dependencies</h3>
  *
  * <p>There are two notations supported for declaring a dependency on an external module.
@@ -161,8 +167,9 @@ import java.util.Map;
  * org.gradle.api.artifacts.ExternalModuleDependency}.</p>
  *
  * <pre class='autoTested'>
- * apply plugin: 'java'
- * //so that we can use 'implementation', 'testImplementation' for dependencies
+ * plugins {
+ *     id 'java' // so that we can use 'implementation', 'testImplementation' for dependencies
+ * }
  *
  * dependencies {
  *   //for dependencies found in artifact repositories you can use
@@ -178,14 +185,14 @@ import java.util.Map;
  * <h3>Project dependencies</h3>
  *
  * <p>To add a project dependency, you use the following notation:
- * <p><code><i>configurationName</i> project(':someProject')</code>
+ * <p><code><i>configurationName</i> project(':some-project')</code>
  *
- * <p>The notation <code>project(':projectA')</code> is similar to the syntax you use
+ * <p>The notation <code>project(':project-a')</code> is similar to the syntax you use
  * when configuring a projectA in a multi-module gradle project.
  *
  * <p>By default, when you declare dependency to projectA, you actually declare dependency to the 'default' configuration of the projectA.
  * If you need to depend on a specific configuration of projectA, use map notation for projects:
- * <p><code><i>configurationName</i> project(path: ':projectA', configuration: 'someOtherConfiguration')</code>
+ * <p><code><i>configurationName</i> project(path: ':project-a', configuration: 'someOtherConfiguration')</code>
  *
  * <p>Project dependencies are represented using a {@link org.gradle.api.artifacts.ProjectDependency}.
  *
@@ -195,8 +202,9 @@ import java.util.Map;
  * <code><i>configurationName</i> files('a file')</code>
  *
  * <pre class='autoTested'>
- * apply plugin: 'java'
- * //so that we can use 'implementation', 'testImplementation' for dependencies
+ * plugins {
+ *     id 'java' // so that we can use 'implementation', 'testImplementation' for dependencies
+ * }
  *
  * dependencies {
  *   //declaring arbitrary files as dependencies
@@ -225,8 +233,10 @@ import java.util.Map;
  *
  * <pre class='autoTested'>
  * //Our Gradle plugin is written in groovy
- * apply plugin: 'groovy'
- * //now we can use the 'implementation' configuration for declaring dependencies
+ * plugins {
+ *     id 'groovy'
+ * }
+ * // now we can use the 'implementation' configuration for declaring dependencies
  *
  * dependencies {
  *   //we will use the Groovy version that ships with Gradle:
@@ -252,6 +262,7 @@ import java.util.Map;
  *
  * The module notation is the same as the dependency notations described above, except that the classifier property is
  * not available. Client modules are represented using a {@link org.gradle.api.artifacts.ClientModule}.
+ *
  */
 public interface DependencyHandler extends ExtensionAware {
     /**
@@ -348,7 +359,6 @@ public interface DependencyHandler extends ExtensionAware {
      * @return the dependency constraint handler for this project
      * @since 4.5
      */
-    @Incubating
     DependencyConstraintHandler getConstraints();
 
     /**
@@ -359,7 +369,6 @@ public interface DependencyHandler extends ExtensionAware {
      * @param configureAction the action to use to configure module metadata
      * @since 4.5
      */
-    @Incubating
     void constraints(Action<? super DependencyConstraintHandler> configureAction);
 
     /**
@@ -428,14 +437,12 @@ public interface DependencyHandler extends ExtensionAware {
      * Returns the artifact type definitions for this handler.
      * @since 4.0
      */
-    @Incubating
     ArtifactTypeContainer getArtifactTypes();
 
     /**
      * Configures the artifact type definitions for this handler.
      * @since 4.0
      */
-    @Incubating
     void artifactTypes(Action<? super ArtifactTypeContainer> configureAction);
 
     /**
@@ -446,10 +453,11 @@ public interface DependencyHandler extends ExtensionAware {
      * @since 3.5
      */
     @Deprecated
-    void registerTransform(Action<? super VariantTransform> registrationAction);
+    @SuppressWarnings("deprecation")
+    void registerTransform(Action<? super org.gradle.api.artifacts.transform.VariantTransform> registrationAction);
 
     /**
-     * Registers an <a href="https://docs.gradle.org/current/userguide/dependency_management_attribute_based_matching.html#sec:abm_artifact_transforms">artifact transform</a>.
+     * Registers an <a href="https://docs.gradle.org/current/userguide/artifact_transforms.html">artifact transform</a>.
      *
      * <p>
      *     The registration action needs to specify the {@code from} and {@code to} attributes.
@@ -501,7 +509,6 @@ public interface DependencyHandler extends ExtensionAware {
      *
      * @since 5.0
      */
-    @Incubating
     Dependency platform(Object notation);
 
     /**
@@ -513,7 +520,6 @@ public interface DependencyHandler extends ExtensionAware {
      *
      * @since 5.0
      */
-    @Incubating
     Dependency platform(Object notation, Action<? super Dependency> configureAction);
 
     /**

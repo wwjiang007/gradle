@@ -34,7 +34,7 @@ import javax.inject.Inject
 
 def artifactType = Attribute.of('artifactType', String)
 
-class Counter implements Serializable {    
+class Counter implements Serializable {
     private int count = 0;
 
     public int increment() {
@@ -53,8 +53,6 @@ class Resolve extends Copy {
     @Internal
     final artifactType = Attribute.of('artifactType', String)
     private final ConfigurableFileCollection artifactFiles
-    @Internal
-    Configuration compileConfiguration
 
     @Inject
     Resolve(ObjectFactory objectFactory) {
@@ -69,7 +67,7 @@ class Resolve extends Copy {
     }
 
     void setArtifactTypeAttribute(String artifactTypeAttribute) {
-        artifacts = compileConfiguration.incoming.artifactView {
+        artifacts = project.configurations.compile.incoming.artifactView {
             attributes { it.attribute(artifactType, artifactTypeAttribute) }
         }.artifacts
         artifactFiles.setFrom(artifacts.artifactFiles)
@@ -98,7 +96,7 @@ class Resolve extends Copy {
                 CountRecorder() {
                     println "Creating CountRecorder"
                 }
-                
+
                 void transform(TransformOutputs outputs) {
                     def input = inputArtifact.get().asFile
                     def output = outputs.file(input.name + ".txt")
@@ -119,16 +117,16 @@ class Resolve extends Copy {
             repositories {
                 maven { url "${mavenRepo.uri}" }
             }
-            
+
             configurations {
                 compile
             }
-            
+
             dependencies {
                 compile 'test:test:1.3'
                 compile 'test:test2:2.3'
             }
-            
+
             dependencies {
                 registerTransform(CountRecorder) {
                     from.attribute(artifactType, 'jar')
@@ -155,7 +153,6 @@ class Resolve extends Copy {
             }
 
             tasks.withType(Resolve).configureEach {
-                compileConfiguration = configurations.compile
                 doLast {
                     buildScriptCounter.increment()
                 }
@@ -165,7 +162,7 @@ class Resolve extends Copy {
                 artifactTypeAttribute = 'firstCount'
                 into "\${buildDir}/libs1"
             }
-            
+
             task resolveSecond(type: Resolve) {
                 artifactTypeAttribute = 'secondCount'
                 into "\${buildDir}/libs2"
@@ -175,7 +172,7 @@ class Resolve extends Copy {
                 artifactTypeAttribute = 'thirdCount'
                 into "\${buildDir}/libs3"
             }
-            
+
             task resolve dependsOn 'resolveFirst', 'resolveSecond', 'resolveThird'
         """
 
@@ -183,19 +180,19 @@ class Resolve extends Copy {
         run 'resolve', '--max-workers=1'
 
         then:
-        outputContains("variants: [{artifactType=firstCount}, {artifactType=firstCount}]")
+        outputContains("variants: [{artifactType=firstCount, org.gradle.status=release}, {artifactType=firstCount, org.gradle.status=release}]")
         file("build/libs1").assertHasDescendants("test-1.3.jar.txt", "test2-2.3.jar.txt")
         file("build/libs1/test-1.3.jar.txt").readLines() == ["1", "2", "3", "4", "5"]
         file("build/libs1/test2-2.3.jar.txt").readLines() == ["1", "2", "3", "4", "5"]
 
         and:
-        outputContains("variants: [{artifactType=secondCount}, {artifactType=secondCount}]")
+        outputContains("variants: [{artifactType=secondCount, org.gradle.status=release}, {artifactType=secondCount, org.gradle.status=release}]")
         file("build/libs2").assertHasDescendants("test-1.3.jar.txt", "test2-2.3.jar.txt")
         file("build/libs2/test-1.3.jar.txt").readLines() == ["2", "3", "4", "5", "6"]
         file("build/libs2/test2-2.3.jar.txt").readLines() == ["2", "3", "4", "5", "6"]
 
         and:
-        outputContains("variants: [{artifactType=thirdCount}, {artifactType=thirdCount}]")
+        outputContains("variants: [{artifactType=thirdCount, org.gradle.status=release}, {artifactType=thirdCount, org.gradle.status=release}]")
         file("build/libs3").assertHasDescendants("test-1.3.jar.txt", "test2-2.3.jar.txt")
         file("build/libs3/test-1.3.jar.txt").readLines() == ["3", "4", "5", "6", "7"]
         file("build/libs3/test2-2.3.jar.txt").readLines() == ["3", "4", "5", "6", "7"]
@@ -208,20 +205,20 @@ class Resolve extends Copy {
 
     def "serialized mutable class is isolated during legacy artifact transformation"() {
         mavenRepo.module("test", "test", "1.3").publish()
-         mavenRepo.module("test", "test2", "2.3").publish()
+        mavenRepo.module("test", "test2", "2.3").publish()
 
         given:
         buildFile << """
 
             public class CountRecorder extends ArtifactTransform {
                 private final Counter counter;
-                
+
                 @Inject
                 public CountRecorder(Counter counter) {
                     this.counter = counter
                     println "Creating CountRecorder"
                 }
-                
+
                 List<File> transform(File input) {
                     assert outputDirectory.directory && outputDirectory.list().length == 0
                     def output = new File(outputDirectory, input.name + ".txt")
@@ -242,16 +239,16 @@ class Resolve extends Copy {
             repositories {
                 maven { url "${mavenRepo.uri}" }
             }
-            
+
             configurations {
                 compile
             }
-            
+
             dependencies {
                 compile 'test:test:1.3'
                 compile 'test:test2:2.3'
             }
-            
+
             dependencies {
                 registerTransform {
                     from.attribute(artifactType, 'jar')
@@ -272,15 +269,11 @@ class Resolve extends Copy {
                 }
             }
 
-            tasks.withType(Resolve).configureEach {
-                compileConfiguration = configurations.compile
-            }
-
             task resolveFirst(type: Resolve) {
                 artifactTypeAttribute = 'firstCount'
                 into "\${buildDir}/libs1"
             }
-            
+
             task increment {
                 doFirst {
                     // Just to show that incrementing the counter doesn't matter.
@@ -297,7 +290,7 @@ class Resolve extends Copy {
                 artifactTypeAttribute = 'thirdCount'
                 into "\${buildDir}/libs3"
             }
-            
+
             task resolve dependsOn 'resolveFirst', 'increment', 'resolveSecond', 'resolveThird'
         """
 
@@ -305,19 +298,19 @@ class Resolve extends Copy {
         run 'resolve'
 
         then:
-        outputContains("variants: [{artifactType=firstCount}, {artifactType=firstCount}]")
+        outputContains("variants: [{artifactType=firstCount, org.gradle.status=release}, {artifactType=firstCount, org.gradle.status=release}]")
         file("build/libs1").assertHasDescendants("test-1.3.jar.txt", "test2-2.3.jar.txt")
         file("build/libs1/test-1.3.jar.txt").readLines() == ["0", "1", "2", "3", "4"]
         file("build/libs1/test2-2.3.jar.txt").readLines() == ["0", "1", "2", "3", "4"]
 
         and:
-        outputContains("variants: [{artifactType=secondCount}, {artifactType=secondCount}]")
+        outputContains("variants: [{artifactType=secondCount, org.gradle.status=release}, {artifactType=secondCount, org.gradle.status=release}]")
         file("build/libs2").assertHasDescendants("test-1.3.jar.txt", "test2-2.3.jar.txt")
         file("build/libs2/test-1.3.jar.txt").readLines() == ["1", "2", "3", "4", "5"]
         file("build/libs2/test2-2.3.jar.txt").readLines() == ["1", "2", "3", "4", "5"]
 
         and:
-        outputContains("variants: [{artifactType=thirdCount}, {artifactType=thirdCount}]")
+        outputContains("variants: [{artifactType=thirdCount, org.gradle.status=release}, {artifactType=thirdCount, org.gradle.status=release}]")
         file("build/libs3").assertHasDescendants("test-1.3.jar.txt", "test2-2.3.jar.txt")
         file("build/libs3/test-1.3.jar.txt").readLines() == ["2", "3", "4", "5", "6"]
         file("build/libs3/test2-2.3.jar.txt").readLines() == ["2", "3", "4", "5", "6"]

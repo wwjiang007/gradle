@@ -21,6 +21,7 @@ import org.gradle.integtests.fixtures.BuildOperationsFixture
 import org.gradle.internal.jvm.Jvm
 import org.gradle.util.TestPrecondition
 import org.gradle.workers.fixtures.OptionsVerifier
+import spock.lang.Issue
 import spock.lang.Unroll
 
 import static org.gradle.api.internal.file.TestFiles.systemSpecificAbsolutePath
@@ -61,7 +62,7 @@ class WorkerExecutorLegacyApiIntegrationTest extends AbstractIntegrationSpec {
     }
 
     @Unroll
-    def "can control forking via forkMode with the legacy API using fork mode #isolationMode"() {
+    def "can control forking via forkMode with the legacy API using fork mode #forkMode"() {
         executer.requireIsolatedDaemons()
         executer.withWorkerDaemonsExpirationDisabled()
 
@@ -131,7 +132,7 @@ class WorkerExecutorLegacyApiIntegrationTest extends AbstractIntegrationSpec {
         then:
         failureHasCause("A failure occurred while executing RunnableWithDifferentConstructor")
         failureHasCause("Could not create an instance of type RunnableWithDifferentConstructor.")
-        failureHasCause("Too many parameters provided for constructor for class RunnableWithDifferentConstructor. Expected 2, received 4.")
+        failureHasCause("Too many parameters provided for constructor for type RunnableWithDifferentConstructor. Expected 2, received 4.")
 
         where:
         isolationMode << ISOLATION_MODES
@@ -223,6 +224,121 @@ class WorkerExecutorLegacyApiIntegrationTest extends AbstractIntegrationSpec {
         isolationMode << ISOLATION_MODES
     }
 
+    @Issue("https://github.com/gradle/gradle/issues/10411")
+    def "does not leak project state across multiple builds"() {
+        executer.withBuildJvmOpts('-Xms256m', '-Xmx512m').requireIsolatedDaemons().requireDaemon()
+
+        buildFile << """
+            ${legacyWorkerTypeAndTask}
+
+            ext.memoryHog = new byte[1024*1024*150] // ~150MB
+            
+            tasks.withType(WorkerTask) { task ->
+                isolationMode = IsolationMode.PROCESS
+                displayName = "Test Work"
+
+                text = "foo"
+                arrayOfThings = ["foo", "bar", "baz"]
+                listOfThings = ["foo", "bar", "baz"]
+                outputFile = file("${OUTPUT_FILE_NAME}")
+
+                // Force a new daemon to be used
+                workerConfiguration = {
+                    forkOptions { options ->
+                        options.with {
+                            systemProperty("foobar", task.name)
+                        }
+                    }
+                }
+            }
+            task startDaemon1(type: WorkerTask)
+            task startDaemon2(type: WorkerTask)
+            task startDaemon3(type: WorkerTask)
+        """
+
+        expect:
+        succeeds("startDaemon1")
+        succeeds("startDaemon2")
+        succeeds("startDaemon3")
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/10323")
+    def "can use a Properties object as a parameter"() {
+        buildFile << """
+            import org.gradle.api.DefaultTask
+            import org.gradle.api.tasks.TaskAction
+            import org.gradle.workers.IsolationMode
+            import org.gradle.workers.WorkerExecutor
+            
+            import javax.inject.Inject
+            
+            task myTask(type: MyTask) {
+                description 'My Task'
+                outputFile = file("\${buildDir}/workOutput")
+            }
+            
+            class MyTask extends DefaultTask {
+                private final WorkerExecutor workerExecutor
+            
+                @OutputFile
+                File outputFile
+                
+                @Inject
+                MyTask(WorkerExecutor workerExecutor) {
+                    this.workerExecutor = workerExecutor
+                }
+            
+                @TaskAction
+                def run() {
+                    Properties myProps = new Properties()
+                    myProps.setProperty('key1', 'value1')
+                    myProps.setProperty('key2', 'value2')
+                    myProps.setProperty('key3', 'value3')
+            
+                    workerExecutor.submit(MyRunner.class) { config ->
+                        config.isolationMode = IsolationMode.NONE
+            
+                        config.params(myProps, outputFile)
+                    }
+            
+                    workerExecutor.await()
+                }
+            
+                private static class MyRunner implements Runnable {
+                    Properties myProps
+                    File outputFile
+            
+                    @Inject
+                    MyRunner(Properties myProps, File outputFile) {
+                        this.myProps = myProps
+                        this.outputFile = outputFile
+                    }
+            
+                    @Override
+                    void run() {
+                        Properties myProps = this.myProps;
+                        def writer = outputFile.newWriter()
+                        try {
+                            myProps.store(writer, null)
+                        } finally {
+                            writer.close()
+                        }
+                    }
+                }
+            }
+        """
+
+        expect:
+        succeeds(":myTask")
+
+        and:
+        file("build/workOutput").text.readLines().containsAll([
+                "key1=value1",
+                "key2=value2",
+                "key3=value3"
+        ])
+    }
+
     String getLegacyWorkerTypeAndTask() {
         return """
             import javax.inject.Inject
@@ -252,14 +368,23 @@ class WorkerExecutorLegacyApiIntegrationTest extends AbstractIntegrationSpec {
             }
             
             class WorkerTask extends DefaultTask {
-                WorkerExecutor workerExecutor
+                private final WorkerExecutor workerExecutor
+
+                @Internal
                 String text
+                @Internal
                 String[] arrayOfThings
+                @Internal
                 ListProperty<String> listOfThings
+                @Internal
                 File outputFile
+                @Internal
                 IsolationMode isolationMode = IsolationMode.AUTO
+                @Internal
                 Class<?> runnableClass = TestRunnable.class
+                @Internal
                 String displayName
+                @Internal
                 Closure workerConfiguration
                 
                 @Inject

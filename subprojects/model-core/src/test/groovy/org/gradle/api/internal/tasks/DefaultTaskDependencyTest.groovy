@@ -18,6 +18,7 @@ package org.gradle.api.internal.tasks
 import org.gradle.api.Buildable
 import org.gradle.api.Task
 import org.gradle.api.internal.provider.ProviderInternal
+import org.gradle.api.internal.provider.ValueSupplier
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.internal.typeconversion.UnsupportedNotationException
@@ -153,7 +154,7 @@ class DefaultTaskDependencyTest extends Specification {
         def provider = Mock(ProviderInternal)
 
         given:
-        1 * provider.maybeVisitBuildDependencies(_) >> { TaskDependencyResolveContext context -> context.add(otherTask); return true }
+        1 * provider.producer >> ValueSupplier.ValueProducer.task(otherTask)
 
         when:
         dependency.add(provider)
@@ -166,7 +167,7 @@ class DefaultTaskDependencyTest extends Specification {
         def provider = Mock(ProviderInternal)
 
         given:
-        1 * provider.maybeVisitBuildDependencies(_) >> { return false }
+        1 * provider.producer >> ValueSupplier.ValueProducer.unknown()
         1 * provider.get() >> otherTask
 
         when:
@@ -264,43 +265,30 @@ The following types/formats are supported:
         dependency.getDependencies(task) == toSet(otherTask)
     }
 
-    def "can mutate dependency values by removing a Task instance from dependency"() {
+    def "can not mutate dependency values through remove methods"() {
         given:
         dependency.add(otherTask)
 
         when:
-        dependency.mutableValues.remove(otherTask)
+        dependency.mutableValues.removeAll([otherTask])
 
         then:
-        dependency.getDependencies(task) == toSet()
-    }
+        UnsupportedOperationException e1 = thrown()
+        e1.message == 'Removing a task dependency from a task instance is not supported.'
 
-    def "can mutate dependency values by removing a Task instance from dependency containing a Provider to the Task instance"() {
-        given:
-        otherTask.name >> "otherTask"
+        when:
+        dependency.mutableValues.retainAll([])
 
-        def provider = Mock(TestTaskProvider)
-        provider.type >> otherTask.class
-        provider.name >> otherTask.name
-        dependency.add(provider)
+        then:
+        UnsupportedOperationException e2 = thrown()
+        e2.message == 'Removing a task dependency from a task instance is not supported.'
 
         when:
         dependency.mutableValues.remove(otherTask)
 
         then:
-        dependency.getDependencies(task) == toSet()
-    }
-
-    def "can mutate dependency values by removing a Provider instance from dependency containing the Provider instance"() {
-        given:
-        def provider = Mock(TestTaskProvider)
-        dependency.add(provider)
-
-        when:
-        dependency.mutableValues.remove(provider)
-
-        then:
-        dependency.getDependencies(task) == toSet()
+        UnsupportedOperationException e3 = thrown()
+        e3.message == 'Removing a task dependency from a task instance is not supported.'
     }
 
     def "can nest iterables and maps and closures and callables"() {

@@ -15,7 +15,6 @@
  */
 package org.gradle.internal.buildevents;
 
-import org.gradle.BuildListener;
 import org.gradle.BuildResult;
 import org.gradle.StartParameter;
 import org.gradle.api.execution.TaskExecutionGraph;
@@ -25,8 +24,9 @@ import org.gradle.api.internal.SettingsInternal;
 import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.invocation.Gradle;
 import org.gradle.api.logging.Logger;
+import org.gradle.execution.taskgraph.TaskExecutionGraphInternal;
 import org.gradle.initialization.BuildRequestMetaData;
-import org.gradle.internal.InternalListener;
+import org.gradle.internal.InternalBuildListener;
 import org.gradle.internal.logging.format.TersePrettyDurationFormatter;
 import org.gradle.internal.logging.text.StyledTextOutputFactory;
 import org.gradle.internal.time.Clock;
@@ -34,7 +34,7 @@ import org.gradle.internal.time.Clock;
 /**
  * A {@link org.gradle.BuildListener} which logs the build progress.
  */
-public class BuildLogger implements BuildListener, TaskExecutionGraphListener, InternalListener {
+public class BuildLogger implements InternalBuildListener, TaskExecutionGraphListener {
     private final Logger logger;
     private final BuildExceptionReporter exceptionReporter;
     private final BuildResultLogger resultLogger;
@@ -47,6 +47,7 @@ public class BuildLogger implements BuildListener, TaskExecutionGraphListener, I
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void buildStarted(Gradle gradle) {
         StartParameter startParameter = gradle.getStartParameter();
         logger.info("Starting Build");
@@ -86,6 +87,7 @@ public class BuildLogger implements BuildListener, TaskExecutionGraphListener, I
     public void graphPopulated(TaskExecutionGraph graph) {
         if (logger.isInfoEnabled()) {
             logger.info("Tasks to be executed: {}", graph.getAllTasks());
+            logger.info("Tasks that were excluded: {}", ((TaskExecutionGraphInternal)graph).getFilteredTasks());
         }
     }
 

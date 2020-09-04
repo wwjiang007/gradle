@@ -16,18 +16,30 @@
 
 package org.gradle.performance.fixture
 
+import com.google.common.collect.ImmutableList
 import groovy.transform.CompileStatic
 import groovy.transform.EqualsAndHashCode
 import org.gradle.performance.results.BuildDisplayInfo
+import org.gradle.profiler.BuildMutator
+import org.gradle.profiler.InvocationSettings
+
+import java.util.function.Function
 
 @CompileStatic
 @EqualsAndHashCode
 class MavenBuildExperimentSpec extends BuildExperimentSpec {
-
     final MavenInvocationSpec invocation
 
-    MavenBuildExperimentSpec(String displayName, String projectName, File workingDirectory, MavenInvocationSpec mavenInvocation, Integer warmUpCount, Integer invocationCount, BuildExperimentListener listener, InvocationCustomizer invocationCustomizer) {
-        super(displayName, projectName, workingDirectory, warmUpCount, invocationCount, listener, invocationCustomizer)
+    MavenBuildExperimentSpec(String displayName,
+                             String projectName,
+                             File workingDirectory,
+                             MavenInvocationSpec mavenInvocation,
+                             Integer warmUpCount,
+                             Integer invocationCount,
+                             InvocationCustomizer invocationCustomizer,
+                             ImmutableList<Function<InvocationSettings, BuildMutator>> buildMutators
+    ) {
+        super(displayName, projectName, workingDirectory, warmUpCount, invocationCount, invocationCustomizer, buildMutators)
         this.invocation = mavenInvocation
     }
 
@@ -48,8 +60,8 @@ class MavenBuildExperimentSpec extends BuildExperimentSpec {
 
         Integer warmUpCount
         Integer invocationCount
-        BuildExperimentListener listener
         InvocationCustomizer invocationCustomizer
+        final List<Function<InvocationSettings, BuildMutator>> buildMutators = []
 
         MavenBuilder invocation(@DelegatesTo(MavenInvocationSpec.InvocationBuilder) Closure<?> conf) {
             invocation.with(conf)
@@ -75,13 +87,14 @@ class MavenBuildExperimentSpec extends BuildExperimentSpec {
             this.invocationCount = invocationCount
             this
         }
-        MavenBuilder listener(BuildExperimentListener listener) {
-            this.listener = listener
-            this
-        }
 
         MavenBuilder invocationCustomizer(InvocationCustomizer invocationCustomizer) {
             this.invocationCustomizer = invocationCustomizer
+            this
+        }
+
+        MavenBuilder addBuildMutator(Function<InvocationSettings, BuildMutator> buildMutator) {
+            this.buildMutators.add(buildMutator)
             this
         }
 
@@ -90,7 +103,16 @@ class MavenBuildExperimentSpec extends BuildExperimentSpec {
             assert displayName != null
             assert invocation != null
 
-            new MavenBuildExperimentSpec(displayName, projectName, workingDirectory, invocation.build(), warmUpCount, invocationCount, listener, invocationCustomizer)
+            new MavenBuildExperimentSpec(
+                displayName,
+                projectName,
+                workingDirectory,
+                invocation.build(),
+                warmUpCount,
+                invocationCount,
+                invocationCustomizer,
+                ImmutableList.copyOf(buildMutators)
+            )
         }
 
     }

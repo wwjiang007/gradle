@@ -21,6 +21,7 @@ import org.apache.maven.artifact.repository.metadata.Versioning;
 import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Reader;
 import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Writer;
 import org.gradle.api.UncheckedIOException;
+import org.gradle.api.internal.artifacts.repositories.resolver.ExternalResourceResolver;
 import org.gradle.api.internal.artifacts.repositories.transport.NetworkOperationBackOffAndRetry;
 import org.gradle.api.publish.maven.MavenArtifact;
 import org.gradle.internal.Factory;
@@ -76,7 +77,7 @@ abstract class AbstractMavenPublisher implements MavenPublisher {
         }
 
         if (publication.getMainArtifact() != null) {
-            artifactPublisher.publish(null, publication.getPackaging(), publication.getMainArtifact().getFile());
+            artifactPublisher.publish(null, publication.getMainArtifact().getExtension(), publication.getMainArtifact().getFile());
         }
         artifactPublisher.publish(null, "pom", publication.getPomArtifact().getFile());
         for (MavenArtifact artifact : publication.getAdditionalArtifacts()) {
@@ -220,11 +221,25 @@ abstract class AbstractMavenPublisher implements MavenPublisher {
         }
 
         private void publishChecksums(ExternalResourceName destination, File content) {
-            byte[] sha1 = createChecksumFile(content, "SHA1", 40);
-            putResource(destination.append(".sha1"), new ByteArrayReadableContent(sha1));
+            publishChecksum(destination, content, "sha1", 40);
+            publishChecksum(destination, content, "md5", 32);
+            if (!ExternalResourceResolver.disableExtraChecksums()) {
+                publishPossiblyUnsupportedChecksum(destination, content, "sha-256", 64);
+                publishPossiblyUnsupportedChecksum(destination, content, "sha-512", 128);
+            }
+        }
 
-            byte[] md5 = createChecksumFile(content, "MD5", 32);
-            putResource(destination.append(".md5"), new ByteArrayReadableContent(md5));
+        private void publishPossiblyUnsupportedChecksum(ExternalResourceName destination, File content, String algorithm, int length) {
+            try {
+                publishChecksum(destination, content, algorithm, length);
+            } catch (Exception ex) {
+                LOGGER.warn("Cannot upload checksum for " + content.getName() + ". Remote repository doesn't support " + algorithm + ". Error: " + ex.getMessage());
+            }
+        }
+
+        private void publishChecksum(ExternalResourceName destination, File content, String algorithm, int length) {
+            byte[] checksum = createChecksumFile(content, algorithm.toUpperCase(), length);
+            putResource(destination.append("." + algorithm.replaceAll("-", "")), new ByteArrayReadableContent(checksum));
         }
 
         private byte[] createChecksumFile(File src, String algorithm, int checksumLength) {
@@ -247,4 +262,5 @@ abstract class AbstractMavenPublisher implements MavenPublisher {
             });
         }
     }
+
 }

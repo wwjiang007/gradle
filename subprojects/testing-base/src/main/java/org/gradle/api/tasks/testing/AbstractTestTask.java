@@ -16,22 +16,15 @@
 
 package org.gradle.api.tasks.testing;
 
-import java.io.File;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.inject.Inject;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Lists;
 import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
-import org.gradle.api.Incubating;
+import org.gradle.api.file.DeleteSpec;
 import org.gradle.api.file.DirectoryProperty;
-import org.gradle.api.internal.CollectionCallbackActionDecorator;
+import org.gradle.api.file.FileSystemOperations;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.internal.tasks.testing.DefaultTestTaskReports;
 import org.gradle.api.internal.tasks.testing.FailFastTestListenerInternal;
@@ -72,6 +65,7 @@ import org.gradle.api.tasks.VerificationTask;
 import org.gradle.api.tasks.options.Option;
 import org.gradle.api.tasks.testing.logging.TestLogging;
 import org.gradle.api.tasks.testing.logging.TestLoggingContainer;
+import org.gradle.internal.Cast;
 import org.gradle.internal.concurrent.CompositeStoppable;
 import org.gradle.internal.event.ListenerBroadcast;
 import org.gradle.internal.event.ListenerManager;
@@ -79,12 +73,18 @@ import org.gradle.internal.logging.ConsoleRenderer;
 import org.gradle.internal.logging.progress.ProgressLogger;
 import org.gradle.internal.logging.progress.ProgressLoggerFactory;
 import org.gradle.internal.logging.text.StyledTextOutputFactory;
+import org.gradle.internal.nativeintegration.network.HostnameLookup;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.reflect.Instantiator;
-import org.gradle.internal.remote.internal.inet.InetAddressFactory;
 import org.gradle.listener.ClosureBackedMethodInvocationDispatch;
 import org.gradle.util.ClosureBackedAction;
 import org.gradle.util.ConfigureUtil;
+
+import javax.inject.Inject;
+import java.io.File;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Abstract class for all test task.
@@ -120,7 +120,7 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
         testListenerBroadcaster = listenerManager.createAnonymousBroadcaster(TestListener.class);
         binaryResultsDirectory = getProject().getObjects().directoryProperty();
 
-        reports = instantiator.newInstance(DefaultTestTaskReports.class, this, getCallbackActionDecorator());
+        reports = getProject().getObjects().newInstance(DefaultTestTaskReports.class, this);
         reports.getJunitXml().setEnabled(true);
         reports.getHtml().setEnabled(true);
 
@@ -138,7 +138,7 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
     }
 
     @Inject
-    protected InetAddressFactory getInetAddressFactory() {
+    protected HostnameLookup getHostnameLookup() {
         throw new UnsupportedOperationException();
     }
 
@@ -157,13 +157,8 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
         throw new UnsupportedOperationException();
     }
 
-    /**
-     * Required for decorating reports container callbacks for tracing user code application.
-     *
-     * @since 5.1
-     */
     @Inject
-    protected CollectionCallbackActionDecorator  getCallbackActionDecorator() {
+    protected FileSystemOperations getFileSystemOperations() {
         throw new UnsupportedOperationException();
     }
 
@@ -172,7 +167,6 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
      *
      * @since 4.4
      */
-    @Incubating
     protected abstract TestExecuter<? extends TestExecutionSpec> createTestExecuter();
 
     /**
@@ -180,7 +174,6 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
      *
      * @since 4.4
      */
-    @Incubating
     protected abstract TestExecutionSpec createTestExecutionSpec();
 
     @Internal
@@ -216,7 +209,7 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
      * @return the test result directory, containing the test results in binary format.
      */
     @ReplacedBy("binaryResultsDirectory")
-    @Incubating
+    @Deprecated
     public File getBinResultsDir() {
         return binaryResultsDirectory.getAsFile().getOrNull();
     }
@@ -226,7 +219,7 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
      *
      * @param binResultsDir The root folder
      */
-    @Incubating
+    @Deprecated
     public void setBinResultsDir(File binResultsDir) {
         this.binaryResultsDirectory.set(binResultsDir);
     }
@@ -237,7 +230,6 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
      * @since 4.4
      */
     @OutputDirectory
-    @Incubating
     public DirectoryProperty getBinaryResultsDirectory() {
         return binaryResultsDirectory;
     }
@@ -450,9 +442,15 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
 
         TestExecutionSpec executionSpec = createTestExecutionSpec();
 
-        File binaryResultsDir = getBinResultsDir();
-        getProject().delete(binaryResultsDir);
-        getProject().mkdir(binaryResultsDir);
+        final File binaryResultsDir = getBinResultsDir();
+        FileSystemOperations fs = getFileSystemOperations();
+        fs.delete(new Action<DeleteSpec>() {
+            @Override
+            public void execute(DeleteSpec spec) {
+                spec.delete(binaryResultsDir);
+            }
+        });
+        binaryResultsDir.mkdirs();
 
         Map<String, TestClassResult> results = new HashMap<String, TestClassResult>();
         TestOutputStore testOutputStore = new TestOutputStore(binaryResultsDir);
@@ -474,7 +472,7 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
         TestWorkerProgressListener testWorkerProgressListener = new TestWorkerProgressListener(getProgressLoggerFactory(), parentProgressLogger);
         getTestListenerInternalBroadcaster().add(testWorkerProgressListener);
 
-        TestExecuter testExecuter = createTestExecuter();
+        TestExecuter<TestExecutionSpec> testExecuter = Cast.uncheckedNonnullCast(createTestExecuter());
         TestListenerInternal resultProcessorDelegate = getTestListenerInternalBroadcaster().getSource();
         if (failFast) {
             resultProcessorDelegate = new FailFastTestListenerInternal(testExecuter, resultProcessorDelegate);
@@ -513,7 +511,6 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
      * @since 4.5
      */
     @Internal
-    @Incubating
     protected List<String> getNoMatchingTestErrorReasons() {
         List<String> reasons = Lists.newArrayList();
         if (!getFilter().getIncludePatterns().isEmpty()) {
@@ -538,7 +535,7 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
                 TestOutputAssociation outputAssociation = junitXml.isOutputPerTestCase()
                     ? TestOutputAssociation.WITH_TESTCASE
                     : TestOutputAssociation.WITH_SUITE;
-                Binary2JUnitXmlReportGenerator binary2JUnitXmlReportGenerator = new Binary2JUnitXmlReportGenerator(junitXml.getDestination(), testResultsProvider, outputAssociation, getBuildOperationExecutor(), getInetAddressFactory().getHostname());
+                Binary2JUnitXmlReportGenerator binary2JUnitXmlReportGenerator = new Binary2JUnitXmlReportGenerator(junitXml.getDestination(), testResultsProvider, outputAssociation, getBuildOperationExecutor(), getHostnameLookup().getHostname());
                 binary2JUnitXmlReportGenerator.generate();
             }
 
@@ -562,7 +559,6 @@ public abstract class AbstractTestTask extends ConventionTask implements Verific
      * For more information on supported patterns see {@link TestFilter}
      */
     @Option(option = "tests", description = "Sets test class or method name to be included, '*' is supported.")
-    @Incubating
     public AbstractTestTask setTestNameIncludePatterns(List<String> testNamePattern) {
         filter.setCommandLineIncludePatterns(testNamePattern);
         return this;

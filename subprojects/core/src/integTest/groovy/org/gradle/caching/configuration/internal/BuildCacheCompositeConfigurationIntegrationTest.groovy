@@ -19,6 +19,7 @@ package org.gradle.caching.configuration.internal
 import org.gradle.caching.internal.FinalizeBuildCacheConfigurationBuildOperationType
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.TestBuildCache
 import spock.lang.Issue
 import spock.lang.Unroll
@@ -36,6 +37,7 @@ class BuildCacheCompositeConfigurationIntegrationTest extends AbstractIntegratio
     }
 
     @Unroll
+    @ToBeFixedForConfigurationCache(because = "composite builds & GradleBuild")
     def "can configure with settings.gradle - enabled by #by"() {
         def enablingCode = by == EnabledBy.PROGRAMMATIC ? """\ngradle.startParameter.buildCacheEnabled = true\n""" : ""
         if (by == EnabledBy.INVOCATION_SWITCH) {
@@ -75,14 +77,14 @@ class BuildCacheCompositeConfigurationIntegrationTest extends AbstractIntegratio
                 dir = "../i3"
                 tasks = ["customTask"]
             }
-            
+
             customTask.dependsOn gradleBuild
         """
         file("i3/settings.gradle") << i3Cache.localCacheConfiguration() << enablingCode
         file("i3/build.gradle") << customTaskCode("i3")
 
         buildFile << """
-            task all { dependsOn gradle.includedBuilds*.task(':customTask'), tasks.customTask } 
+            task all { dependsOn gradle.includedBuilds*.task(':customTask'), tasks.customTask }
         """
 
         expect:
@@ -92,19 +94,18 @@ class BuildCacheCompositeConfigurationIntegrationTest extends AbstractIntegratio
         i1Cache.empty
         i1BuildSrcCache.empty
         i2Cache.empty
-        mainCache.listCacheFiles().size() == 4 // root, i1, i1BuildSrc, i2
+        buildSrcCache.empty
+        mainCache.listCacheFiles().size() == 5 // root, i1, i1BuildSrc, i2, buildSrc
 
-        buildSrcCache.listCacheFiles().size() == 1
         i3Cache.listCacheFiles().size() == 1
 
         and:
-        outputContains "Using local directory build cache for build ':buildSrc' (location = ${buildSrcCache.cacheDir}, removeUnusedEntriesAfter = 7 days)."
         outputContains "Using local directory build cache for build ':i2:i3' (location = ${i3Cache.cacheDir}, removeUnusedEntriesAfter = 7 days)."
         outputContains "Using local directory build cache for the root build (location = ${mainCache.cacheDir}, removeUnusedEntriesAfter = 7 days)."
 
         and:
         def finalizeOps = operations.all(FinalizeBuildCacheConfigurationBuildOperationType)
-        finalizeOps.size() == 3
+        finalizeOps.size() == 2
         def pathToCacheDirMap = finalizeOps.collectEntries {
             [
                 it.details.buildPath,
@@ -114,7 +115,6 @@ class BuildCacheCompositeConfigurationIntegrationTest extends AbstractIntegratio
 
         pathToCacheDirMap == [
             ":": mainCache.cacheDir,
-            ":buildSrc": buildSrcCache.cacheDir,
             ":i2:i3": i3Cache.cacheDir
         ]
 
@@ -123,6 +123,7 @@ class BuildCacheCompositeConfigurationIntegrationTest extends AbstractIntegratio
     }
 
     @Issue("https://github.com/gradle/gradle/issues/4216")
+    @ToBeFixedForConfigurationCache(because = "composite builds")
     def "build cache service is closed only after all included builds are finished"() {
         executer.beforeExecute { it.withBuildCacheEnabled() }
         def localCache = new TestBuildCache(file("local-cache"))
@@ -134,7 +135,7 @@ class BuildCacheCompositeConfigurationIntegrationTest extends AbstractIntegratio
                     gradle.startParameter.setTaskNames(['clean', 'build'])
                     allprojects {
                         apply plugin: 'java-library'
-                        
+
                         tasks.withType(Jar) {
                             doFirst {
                                 // this makes it more probable that tasks from the included build finish after the root build
@@ -152,7 +153,7 @@ class BuildCacheCompositeConfigurationIntegrationTest extends AbstractIntegratio
         settingsFile << localCache.localCacheConfiguration() << """
             includeBuild "included"
         """
-        buildFile << """             
+        buildFile << """
             apply plugin: 'java-library'
             // This dependency is needed to actually trigger the included build at all
             processResources.dependsOn gradle.includedBuild('included').task(':processResources')

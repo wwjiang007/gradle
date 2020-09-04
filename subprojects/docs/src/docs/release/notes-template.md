@@ -8,7 +8,20 @@ Include only their name, impactful features should be called out separately belo
  [Some person](https://github.com/some-person)
 -->
 
+## Upgrade Instructions
+
+Switch your build to use Gradle @version@ by updating your wrapper:
+
+`./gradlew wrapper --gradle-version=@version@`
+
+See the [Gradle 6.x upgrade guide](userguide/upgrading_version_6.html#changes_@baseVersion@) to learn about deprecations, breaking changes and other considerations when upgrading to Gradle @version@. 
+
+For Java, Groovy, Kotlin and Android compatibility, see the [full compatibility notes](userguide/compatibility.html).
+
+<!-- Do not add breaking changes or deprecations here! Add them to the upgrade guide instead. --> 
+
 <!-- 
+Add release features here!
 ## 1
 
 details of 1
@@ -19,16 +32,6 @@ details of 2
 
 ## n
 -->
-
-## Upgrade Instructions
-
-Switch your build to use Gradle @version@ by updating your wrapper:
-
-`./gradlew wrapper --gradle-version=@version@`
-
-See the [Gradle 5.x upgrade guide](userguide/upgrading_version_5.html#changes_@baseVersion@) to learn about deprecations, breaking changes and other considerations when upgrading to Gradle @version@.
-
-<!-- Do not add breaking changes or deprecations here! Add them to the upgrade guide instead. --> 
 
 ## Promoted features
 Promoted features are features that were incubating in previous versions of Gradle but are now supported and subject to backwards compatibility.

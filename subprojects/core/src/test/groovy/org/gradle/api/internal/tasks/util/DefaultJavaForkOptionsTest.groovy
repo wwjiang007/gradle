@@ -34,12 +34,12 @@ import java.nio.charset.Charset
 import static org.gradle.api.internal.file.TestFiles.systemSpecificAbsolutePath
 import static org.hamcrest.CoreMatchers.equalTo
 import static org.hamcrest.CoreMatchers.nullValue
-import static org.junit.Assert.assertThat
+import static org.hamcrest.MatcherAssert.assertThat
 
 @UsesNativeServices
 class DefaultJavaForkOptionsTest extends Specification {
     @Rule
-    public final TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
+    public final TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider(getClass())
     private final resolver = TestFiles.pathToFileResolver(tmpDir.testDirectory)
     private final fileCollectionFactory = TestFiles.fileCollectionFactory(tmpDir.testDirectory)
     private DefaultJavaForkOptions options
@@ -50,7 +50,6 @@ class DefaultJavaForkOptionsTest extends Specification {
 
     def "provides correct default values"() {
         expect:
-        options.executable != null
         options.jvmArgs.isEmpty()
         options.systemProperties.isEmpty()
         options.minHeapSize == null
@@ -355,7 +354,7 @@ class DefaultJavaForkOptionsTest extends Specification {
         1 * target.setSystemProperties([key: 12])
         1 * target.setMinHeapSize('64m')
         1 * target.setMaxHeapSize('1g')
-        1 * target.setBootstrapClasspath(options.bootstrapClasspath)
+        1 * target.bootstrapClasspath(_)
         1 * target.setEnableAssertions(false)
         1 * target.getDebugOptions() >> new DefaultJavaDebugOptions()
 

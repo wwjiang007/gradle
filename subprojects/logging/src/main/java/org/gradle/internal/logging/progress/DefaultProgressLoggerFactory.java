@@ -22,6 +22,7 @@ import org.gradle.internal.logging.events.ProgressStartEvent;
 import org.gradle.internal.operations.BuildOperationCategory;
 import org.gradle.internal.operations.BuildOperationDescriptor;
 import org.gradle.internal.operations.BuildOperationIdFactory;
+import org.gradle.internal.operations.BuildOperationMetadata;
 import org.gradle.internal.operations.BuildOperationRef;
 import org.gradle.internal.operations.CurrentBuildOperationRef;
 import org.gradle.internal.operations.OperationIdentifier;
@@ -44,14 +45,18 @@ public class DefaultProgressLoggerFactory implements ProgressLoggerFactory {
     }
 
     @Override
-    public ProgressLogger newOperation(Class loggerCategory) {
+    public ProgressLogger newOperation(Class<?> loggerCategory) {
         return newOperation(loggerCategory.getName());
     }
 
     @Override
-    public ProgressLogger newOperation(Class loggerCategory, BuildOperationDescriptor buildOperationDescriptor) {
+    public ProgressLogger newOperation(Class<?> loggerCategory, BuildOperationDescriptor buildOperationDescriptor) {
         String category = ProgressStartEvent.BUILD_OP_CATEGORY;
-        if (buildOperationDescriptor.getOperationType() == BuildOperationCategory.TASK) {
+        BuildOperationMetadata metadata = buildOperationDescriptor.getMetadata();
+        BuildOperationCategory buildOperationCategory = metadata == BuildOperationMetadata.NONE
+            ? BuildOperationCategory.UNCATEGORIZED
+            : (BuildOperationCategory) metadata;
+        if (buildOperationCategory == BuildOperationCategory.TASK) {
             // This is a legacy quirk.
             // Scans use this to determine that progress logging is indicating start/finish of tasks.
             // This can be removed in Gradle 5.0 (along with the concept of a “logging category” of an operation)
@@ -67,13 +72,13 @@ public class DefaultProgressLoggerFactory implements ProgressLoggerFactory {
             true,
             buildOperationDescriptor.getId(),
             buildOperationDescriptor.getParentId(),
-            buildOperationDescriptor.getOperationType()
+            buildOperationCategory
         );
         logger.totalProgress = buildOperationDescriptor.getTotalProgress();
 
         // Make some assumptions about the console output
-        if (buildOperationDescriptor.getOperationType().isTopLevelWorkItem()) {
-            logger.setLoggingHeader(buildOperationDescriptor.getProgressDisplayName());
+        if (buildOperationCategory.isTopLevelWorkItem()) {
+            logger.loggingHeader = buildOperationDescriptor.getProgressDisplayName();
         }
 
         return logger;
@@ -85,7 +90,7 @@ public class DefaultProgressLoggerFactory implements ProgressLoggerFactory {
     }
 
     @Override
-    public ProgressLogger newOperation(Class loggerClass, ProgressLogger parent) {
+    public ProgressLogger newOperation(Class<?> loggerClass, ProgressLogger parent) {
         return init(loggerClass.toString(), parent);
     }
 
@@ -166,29 +171,6 @@ public class DefaultProgressLoggerFactory implements ProgressLoggerFactory {
         public ProgressLogger setDescription(String description) {
             assertCanConfigure();
             this.description = description;
-            return this;
-        }
-
-        @Override
-        public String getShortDescription() {
-            return null;
-        }
-
-        @Override
-        public ProgressLogger setShortDescription(String shortDescription) {
-            assertCanConfigure();
-            return this;
-        }
-
-        @Override
-        public String getLoggingHeader() {
-            return loggingHeader;
-        }
-
-        @Override
-        public ProgressLogger setLoggingHeader(String loggingHeader) {
-            assertCanConfigure();
-            this.loggingHeader = loggingHeader;
             return this;
         }
 

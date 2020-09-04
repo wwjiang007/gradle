@@ -16,20 +16,21 @@
 
 package org.gradle.tooling.internal.provider.runner;
 
+import org.gradle.internal.build.event.BuildEventListenerFactory;
+import org.gradle.internal.build.event.OperationResultPostProcessorFactory;
 import org.gradle.internal.invocation.BuildActionRunner;
+import org.gradle.internal.operations.BuildOperationIdFactory;
 import org.gradle.internal.operations.BuildOperationListenerManager;
 import org.gradle.internal.service.ServiceRegistration;
-import org.gradle.internal.service.ServiceRegistry;
 import org.gradle.internal.service.scopes.AbstractPluginServiceRegistry;
 import org.gradle.launcher.exec.ChainingBuildActionRunner;
-import org.gradle.tooling.internal.provider.events.OperationResultPostProcessor;
 
 import java.util.Arrays;
+import java.util.List;
 
 public class ToolingBuilderServices extends AbstractPluginServiceRegistry {
     @Override
     public void registerGlobalServices(ServiceRegistration registration) {
-
         registration.addProvider(new Object() {
             BuildActionRunner createBuildActionRunner(final BuildOperationListenerManager buildOperationListenerManager) {
                 return new ChainingBuildActionRunner(
@@ -40,8 +41,8 @@ public class ToolingBuilderServices extends AbstractPluginServiceRegistry {
                         new ClientProvidedPhasedActionRunner()));
             }
 
-            ToolingApiSubscribableBuildActionRunnerRegistration createToolingApiSubscribableBuildActionRunnerRegistration(ServiceRegistry services) {
-                return new ToolingApiSubscribableBuildActionRunnerRegistration(new CompositeOperationResultPostProcessor(services.getAll(OperationResultPostProcessor.class)));
+            BuildEventListenerFactory createToolingApiSubscribableBuildActionRunnerRegistration(BuildOperationIdFactory buildOperationIdFactory, List<OperationResultPostProcessorFactory> postProcessorFactories) {
+                return new ToolingApiBuildEventListenerFactory(buildOperationIdFactory, postProcessorFactories);
             }
         });
     }

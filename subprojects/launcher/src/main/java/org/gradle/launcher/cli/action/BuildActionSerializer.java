@@ -17,11 +17,13 @@
 package org.gradle.launcher.cli.action;
 
 import org.gradle.TaskExecutionRequest;
+import org.gradle.api.artifacts.verification.DependencyVerificationMode;
 import org.gradle.api.internal.StartParameterInternal;
 import org.gradle.api.logging.LogLevel;
 import org.gradle.api.logging.configuration.ConsoleOutput;
 import org.gradle.api.logging.configuration.ShowStacktrace;
 import org.gradle.api.logging.configuration.WarningMode;
+import org.gradle.initialization.StartParameterBuildOptions.ConfigurationCacheProblemsOption;
 import org.gradle.internal.DefaultTaskExecutionRequest;
 import org.gradle.internal.invocation.BuildAction;
 import org.gradle.internal.serialize.BaseSerializerFactory;
@@ -55,9 +57,9 @@ public class BuildActionSerializer {
         private final Serializer<ConsoleOutput> consoleOutputSerializer;
         private final Serializer<WarningMode> warningModeSerializer;
         private final Serializer<File> nullableFileSerializer = new NullableFileSerializer();
-        private final Serializer<List<String>> stringListSerializer = new ListSerializer<String>(BaseSerializerFactory.STRING_SERIALIZER);
-        private final Serializer<List<File>> fileListSerializer = new ListSerializer<File>(BaseSerializerFactory.FILE_SERIALIZER);
-        private final Serializer<Set<String>> stringSetSerializer = new SetSerializer<String>(BaseSerializerFactory.STRING_SERIALIZER);
+        private final Serializer<List<String>> stringListSerializer = new ListSerializer<>(BaseSerializerFactory.STRING_SERIALIZER);
+        private final Serializer<List<File>> fileListSerializer = new ListSerializer<>(BaseSerializerFactory.FILE_SERIALIZER);
+        private final Serializer<Set<String>> stringSetSerializer = new SetSerializer<>(BaseSerializerFactory.STRING_SERIALIZER);
 
         ExecuteBuildActionSerializer() {
             BaseSerializerFactory serializerFactory = new BaseSerializerFactory();
@@ -94,8 +96,8 @@ public class BuildActionSerializer {
             nullableFileSerializer.write(encoder, startParameter.getGradleHomeDir());
             nullableFileSerializer.write(encoder, startParameter.getProjectCacheDir());
             fileListSerializer.write(encoder, startParameter.getIncludedBuilds());
-            encoder.writeBoolean(startParameter.isUseEmptySettings());
-            encoder.writeBoolean(startParameter.isSearchUpwards());
+            encoder.writeBoolean(startParameter.isUseEmptySettingsWithoutDeprecationWarning());
+            encoder.writeBoolean(startParameter.isSearchUpwardsWithoutDeprecationWarning());
 
             // Other stuff
             NO_NULL_STRING_MAP_SERIALIZER.write(encoder, startParameter.getProjectProperties());
@@ -113,14 +115,24 @@ public class BuildActionSerializer {
             encoder.writeBoolean(startParameter.isRefreshDependencies());
             encoder.writeBoolean(startParameter.isBuildCacheEnabled());
             encoder.writeBoolean(startParameter.isBuildCacheDebugLogging());
+            encoder.writeBoolean(startParameter.isWatchFileSystem());
+            encoder.writeBoolean(startParameter.isWatchFileSystemDebugLogging());
+            encoder.writeBoolean(startParameter.isWatchFileSystemUsingDeprecatedOption());
+            encoder.writeBoolean(startParameter.isVfsVerboseLogging());
+            encoder.writeBoolean(startParameter.isConfigurationCache());
+            encoder.writeString(startParameter.getConfigurationCacheProblems().name());
+            encoder.writeSmallInt(startParameter.getConfigurationCacheMaxProblems());
+            encoder.writeBoolean(startParameter.isConfigurationCacheRecreateCache());
+            encoder.writeBoolean(startParameter.isConfigurationCacheQuiet());
             encoder.writeBoolean(startParameter.isConfigureOnDemand());
             encoder.writeBoolean(startParameter.isContinuous());
             encoder.writeBoolean(startParameter.isBuildScan());
             encoder.writeBoolean(startParameter.isNoBuildScan());
             encoder.writeBoolean(startParameter.isWriteDependencyLocks());
-
-            // Deprecations (these should just be rendered on the client instead of being sent to the daemon to send them back again)
-            stringSetSerializer.write(encoder, startParameter.getDeprecations());
+            stringListSerializer.write(encoder, startParameter.getWriteDependencyVerifications());
+            encoder.writeString(startParameter.getDependencyVerificationMode().name());
+            encoder.writeBoolean(startParameter.isRefreshKeys());
+            encoder.writeBoolean(startParameter.isExportKeys());
         }
 
         private void writeTaskRequests(Encoder encoder, List<TaskExecutionRequest> taskRequests) throws Exception {
@@ -163,9 +175,9 @@ public class BuildActionSerializer {
             startParameter.setProjectCacheDir(nullableFileSerializer.read(decoder));
             startParameter.setIncludedBuilds(fileListSerializer.read(decoder));
             if (decoder.readBoolean()) {
-                startParameter.useEmptySettings();
+                startParameter.useEmptySettingsWithoutDeprecationWarning();
             }
-            startParameter.setSearchUpwards(decoder.readBoolean());
+            startParameter.setSearchUpwardsWithoutDeprecationWarning(decoder.readBoolean());
 
             // Other stuff
             startParameter.setProjectProperties(NO_NULL_STRING_MAP_SERIALIZER.read(decoder));
@@ -183,22 +195,34 @@ public class BuildActionSerializer {
             startParameter.setRefreshDependencies(decoder.readBoolean());
             startParameter.setBuildCacheEnabled(decoder.readBoolean());
             startParameter.setBuildCacheDebugLogging(decoder.readBoolean());
+            startParameter.setWatchFileSystem(decoder.readBoolean());
+            startParameter.setWatchFileSystemDebugLogging(decoder.readBoolean());
+            startParameter.setWatchFileSystemUsingDeprecatedOption(decoder.readBoolean());
+            startParameter.setVfsVerboseLogging(decoder.readBoolean());
+            startParameter.setConfigurationCache(decoder.readBoolean());
+            startParameter.setConfigurationCacheProblems(ConfigurationCacheProblemsOption.Value.valueOf(decoder.readString()));
+            startParameter.setConfigurationCacheMaxProblems(decoder.readSmallInt());
+            startParameter.setConfigurationCacheRecreateCache(decoder.readBoolean());
+            startParameter.setConfigurationCacheQuiet(decoder.readBoolean());
             startParameter.setConfigureOnDemand(decoder.readBoolean());
             startParameter.setContinuous(decoder.readBoolean());
             startParameter.setBuildScan(decoder.readBoolean());
             startParameter.setNoBuildScan(decoder.readBoolean());
             startParameter.setWriteDependencyLocks(decoder.readBoolean());
-
-            for (String warning : stringSetSerializer.read(decoder)) {
-                startParameter.addDeprecation(warning);
+            List<String> checksums = stringListSerializer.read(decoder);
+            if (!checksums.isEmpty()) {
+                startParameter.setWriteDependencyVerifications(checksums);
             }
+            startParameter.setDependencyVerificationMode(DependencyVerificationMode.valueOf(decoder.readString()));
+            startParameter.setRefreshKeys(decoder.readBoolean());
+            startParameter.setExportKeys(decoder.readBoolean());
 
             return new ExecuteBuildAction(startParameter);
         }
 
         private List<TaskExecutionRequest> readTaskRequests(Decoder decoder) throws Exception {
             int requestCount = decoder.readSmallInt();
-            List<TaskExecutionRequest> taskExecutionRequests = new ArrayList<TaskExecutionRequest>(requestCount);
+            List<TaskExecutionRequest> taskExecutionRequests = new ArrayList<>(requestCount);
             for (int i = 0; i < requestCount; i++) {
                 taskExecutionRequests.add(new DefaultTaskExecutionRequest(stringListSerializer.read(decoder)));
             }

@@ -16,6 +16,7 @@
 
 package org.gradle.api.internal.artifacts.dependencies
 
+import org.gradle.api.internal.FeaturePreviews
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.DefaultVersionComparator
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.DefaultVersionSelectorScheme
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.strategy.InverseVersionSelector
@@ -25,7 +26,7 @@ import spock.lang.Unroll
 
 class DefaultResolvedVersionConstraintTest extends Specification {
     private final VersionParser versionParser = new VersionParser()
-    private final DefaultVersionSelectorScheme versionSelectorScheme = new DefaultVersionSelectorScheme(new DefaultVersionComparator(), versionParser)
+    private final DefaultVersionSelectorScheme versionSelectorScheme = new DefaultVersionSelectorScheme(new DefaultVersionComparator(new FeaturePreviews()), versionParser)
 
     @Unroll
     def "computes the complement of strict version #strictVersion"() {
@@ -40,24 +41,16 @@ class DefaultResolvedVersionConstraintTest extends Specification {
         !e.rejectAll
 
         where:
-        strictVersion | complement
-        '1.0'         | '!(1.0)'
-        '[1.0, 2.0]'  | '!([1.0, 2.0])'
-        '[1.0, 2.0)'  | '!([1.0, 2.0))'
-        '(, 2.0)'     | '!((, 2.0))'
-        '(, 2.0]'     | '!((, 2.0])'
+        strictVersion    | complement
+        '1.0'            | '!(1.0)'
+        '[1.0, 2.0]'     | '!([1.0, 2.0])'
+        '[1.0, 2.0)'     | '!([1.0, 2.0))'
+        '(, 2.0)'        | '!((, 2.0))'
+        '(, 2.0]'        | '!((, 2.0])'
+        '[1.0,)'         | '!([1.0,))'
+        '1.+'            | '!(1.+)'
+        '1+'             | '!(1+)'
+        'latest.release' | '!(latest.release)'
     }
 
-    @Unroll
-    def "fails converting version #version to a strict dependency"() {
-        when:
-        new DefaultResolvedVersionConstraint('', '', version, [], versionSelectorScheme)
-
-        then:
-        IllegalArgumentException ex = thrown()
-        ex.message == "Version '$version' cannot be converted to a strict version constraint."
-
-        where:
-        version << ['[1.0,)', '1.+', '1+']
-    }
 }

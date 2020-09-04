@@ -42,7 +42,7 @@ import static org.gradle.util.TestUtil.objectFactory
 
 class IvyDescriptorFileGeneratorTest extends Specification {
     @Rule
-    TestNameTestDirectoryProvider testDirectoryProvider = new TestNameTestDirectoryProvider()
+    TestNameTestDirectoryProvider testDirectoryProvider = new TestNameTestDirectoryProvider(getClass())
 
     VersionMappingStrategyInternal versionMappingStrategy = Mock() {
         findStrategyForVariant(_) >> Mock(VariantVersionMappingStrategyInternal)
@@ -64,7 +64,7 @@ class IvyDescriptorFileGeneratorTest extends Specification {
         generator = new IvyDescriptorFileGenerator(projectIdentity, markerPresent, versionMappingStrategy)
 
         expect:
-        ivyFile.text.contains(MetaDataParser.GRADLE_METADATA_MARKER) == markerPresent
+        ivyFile.text.contains(MetaDataParser.GRADLE_6_METADATA_MARKER) == markerPresent
 
         where:
         markerPresent << [true, false]

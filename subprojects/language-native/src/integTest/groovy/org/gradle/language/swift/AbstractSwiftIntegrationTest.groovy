@@ -16,6 +16,7 @@
 
 package org.gradle.language.swift
 
+
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
 import org.gradle.nativeplatform.fixtures.ToolChainRequirement
 import org.gradle.nativeplatform.fixtures.app.SourceElement
@@ -26,6 +27,7 @@ import org.gradle.util.Matchers
 
 @RequiresInstalledToolChain(ToolChainRequirement.SWIFTC)
 abstract class AbstractSwiftIntegrationTest extends AbstractSwiftComponentIntegrationTest {
+
     def "skip assemble tasks when no source"() {
         given:
         makeSingleProject()

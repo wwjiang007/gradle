@@ -19,7 +19,6 @@ package org.gradle.api.internal.initialization;
 import org.gradle.api.internal.initialization.loadercache.ClassLoaderCache;
 import org.gradle.initialization.ClassLoaderScopeRegistryListener;
 import org.gradle.internal.classloader.CachingClassLoader;
-import org.gradle.internal.classpath.ClassPath;
 
 public class RootClassLoaderScope extends AbstractClassLoaderScope {
 
@@ -57,21 +56,6 @@ public class RootClassLoaderScope extends AbstractClassLoaderScope {
     }
 
     @Override
-    public ClassLoaderScope local(ClassPath classPath) {
-        throw new UnsupportedOperationException("root class loader scope is immutable");
-    }
-
-    @Override
-    public ClassLoaderScope export(ClassPath classPath) {
-        throw new UnsupportedOperationException("root class loader scope is immutable");
-    }
-
-    @Override
-    public ClassLoaderScope export(ClassLoader classLoader) {
-        throw new UnsupportedOperationException("root class loader scope is immutable");
-    }
-
-    @Override
     public ClassLoaderScope lock() {
         return this;
     }
@@ -82,7 +66,7 @@ public class RootClassLoaderScope extends AbstractClassLoaderScope {
     }
 
     @Override
-    public ClassLoaderScope deprecated() {
-        throw new UnsupportedOperationException("root class loader scope does not provide deprecated copy.");
+    public void onReuse() {
+        // Nothing to do
     }
 }

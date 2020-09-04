@@ -35,11 +35,13 @@ f.delete() // invalidates cache
 task work {
     inputs.file('in.txt')
     inputs.dir('in-dir')
-    outputs.file('out.txt')
-    outputs.dir('out-dir')
+    def outTxt = file('out.txt')
+    def outDir = file('out-dir')
+    outputs.file(outTxt)
+    outputs.dir(outDir)
     doLast {
-        file('out.txt').text = 'content'
-        def f2 = file('out-dir/file1.txt')
+        outTxt.text = 'content'
+        def f2 = new File(outDir, 'file1.txt')
         f2.parentFile.mkdirs()
         f2 << 'content'
     }
@@ -130,7 +132,7 @@ task work {
 
         expect:
         fails("work")
-        failure.assertHasDescription("A problem was found with the configuration of task ':work'.")
+        failure.assertHasDescription("A problem was found with the configuration of task ':work' (type 'DefaultTask').")
         failure.assertHasCause("File '$link' specified for property '\$1' does not exist.")
     }
 

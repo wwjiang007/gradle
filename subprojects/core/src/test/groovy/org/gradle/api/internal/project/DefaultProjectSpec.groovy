@@ -42,7 +42,7 @@ import spock.lang.Specification
 @UsesNativeServices
 class DefaultProjectSpec extends Specification {
     @Rule
-    TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
+    TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider(getClass())
 
     def "can create file collection configured with an Action"() {
         given:
@@ -96,10 +96,12 @@ class DefaultProjectSpec extends Specification {
 
     def "has useful toString and displayName and paths"() {
         def rootBuild = Stub(GradleInternal)
+        rootBuild.isRootBuild() >> true
         rootBuild.parent >> null
         rootBuild.identityPath >> Path.ROOT
 
         def nestedBuild = Stub(GradleInternal)
+        rootBuild.isRootBuild() >> false
         nestedBuild.parent >> rootBuild
         nestedBuild.identityPath >> Path.path(":nested")
 
@@ -159,7 +161,11 @@ class DefaultProjectSpec extends Specification {
         def objectFactory = Stub(ObjectFactory)
         objectFactory.fileCollection() >> TestFiles.fileCollectionFactory().configurableFiles()
 
-        return Spy(DefaultProject, constructorArgs: [name, parent, projectDir, new File("build file"), Stub(ScriptSource), build, serviceRegistryFactory, Stub(ClassLoaderScope), Stub(ClassLoaderScope)]) {
+        def container = Mock(ProjectState)
+        _ * container.projectPath >> (parent == null ? Path.ROOT : parent.projectPath.child(name))
+        _ * container.identityPath >> (parent == null ? build.identityPath : build.identityPath.append(parent.projectPath).child(name))
+
+        return Spy(DefaultProject, constructorArgs: [name, parent, projectDir, new File("build file"), Stub(ScriptSource), build, container, serviceRegistryFactory, Stub(ClassLoaderScope), Stub(ClassLoaderScope)]) {
             getFileOperations() >> fileOperations
             getObjects() >> objectFactory
         }

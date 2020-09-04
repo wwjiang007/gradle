@@ -17,6 +17,7 @@ package org.gradle.internal.file.impl
 
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
+import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
 import org.junit.Rule
 import spock.lang.Specification
@@ -30,8 +31,12 @@ import static org.junit.Assume.assumeTrue
 
 class DefaultDeleterTest extends Specification {
     @Rule
-    TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
-    DefaultDeleter deleter = new DefaultDeleter({ System.currentTimeMillis() }, { Files.isSymbolicLink(it.toPath()) }, false)
+    TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider(getClass())
+    DefaultDeleter deleter = new DefaultDeleter(
+        { System.currentTimeMillis() },
+        { File file -> Files.isSymbolicLink(file.toPath()) },
+        false
+    )
 
     def "deletes directory"() {
         given:
@@ -39,7 +44,7 @@ class DefaultDeleterTest extends Specification {
         dir.file("someFile").createFile()
 
         when:
-        boolean didWork = delete(dir)
+        boolean didWork = deleter.deleteRecursively(dir)
 
         then:
         dir.assertDoesNotExist()
@@ -53,10 +58,81 @@ class DefaultDeleterTest extends Specification {
         file.createFile()
 
         when:
-        boolean didWork = delete(file)
+        boolean didWork = deleter.deleteRecursively(file)
 
         then:
         file.assertDoesNotExist()
+        didWork
+    }
+
+    def "cleans non-empty directory"() {
+        given:
+        TestFile dir = tmpDir.getTestDirectory()
+        dir.file("someFile").createFile()
+
+        when:
+        boolean didWork = deleter.ensureEmptyDirectory(dir)
+
+        then:
+        dir.assertIsEmptyDir()
+        didWork
+    }
+
+    @Requires(TestPrecondition.SYMLINKS)
+    def "cleans symlinked target directory"() {
+        def linked = tmpDir.createDir("linked")
+        def content = linked.createFile("content.txt")
+        def target = tmpDir.file("target").tap { Files.createSymbolicLink(it.toPath(), linked.toPath()) }
+
+        when:
+        deleter.ensureEmptyDirectory(target, true)
+
+        then:
+        target.assertIsEmptyDir()
+        linked.assertIsEmptyDir()
+        Files.readSymbolicLink(target.toPath()) == linked.toPath()
+        content.assertDoesNotExist()
+    }
+
+    @Requires(TestPrecondition.SYMLINKS)
+    def "recreates target directory when symlink is found, leaving linked content untouched"() {
+        def linked = tmpDir.createDir("linked")
+        def content = linked.createFile("content.txt")
+        def target = tmpDir.file("target").tap { Files.createSymbolicLink(it.toPath(), linked.toPath()) }
+
+        when:
+        deleter.ensureEmptyDirectory(target, false)
+
+        then:
+        target.assertIsEmptyDir()
+        !Files.isSymbolicLink(target.toPath())
+        linked.assertHasDescendants(content.getName())
+        content.assertIsFile()
+    }
+
+    def "creates directory in place of file"() {
+        given:
+        TestFile dir = tmpDir.getTestDirectory()
+        def file = dir.file("someFile").createFile()
+
+        when:
+        boolean didWork = deleter.ensureEmptyDirectory(file)
+
+        then:
+        file.assertIsDir()
+        didWork
+    }
+
+    def "creates directory if nothing existed before"() {
+        given:
+        TestFile dir = tmpDir.getTestDirectory()
+        def file = dir.file("someFile")
+
+        when:
+        boolean didWork = deleter.ensureEmptyDirectory(file)
+
+        then:
+        file.assertIsDir()
         didWork
     }
 
@@ -66,7 +142,18 @@ class DefaultDeleterTest extends Specification {
         dir.assertDoesNotExist()
 
         when:
-        boolean didWork = delete(dir)
+        boolean didWork = deleter.deleteRecursively(dir)
+
+        then:
+        !didWork
+    }
+
+    def "didWork is false when nothing has been cleaned"() {
+        given:
+        TestFile emptyDir = tmpDir.getTestDirectory()
+
+        when:
+        boolean didWork = deleter.ensureEmptyDirectory(emptyDir)
 
         then:
         !didWork
@@ -89,7 +176,7 @@ class DefaultDeleterTest extends Specification {
         target = isSymlink ? tmpDir.file("link").tap { Files.createSymbolicLink(delegate.toPath(), target.toPath()) } : target
 
         when:
-        delete(target)
+        deleter.deleteRecursively(target)
 
         then:
         def ex = thrown IOException
@@ -118,7 +205,7 @@ class DefaultDeleterTest extends Specification {
         }
 
         when:
-        delete(targetDir)
+        deleter.deleteRecursively(targetDir)
 
         then:
         targetDir.assertIsDir()
@@ -151,7 +238,7 @@ class DefaultDeleterTest extends Specification {
         }
 
         when:
-        delete(targetDir)
+        deleter.deleteRecursively(targetDir)
 
         then:
         targetDir.assertIsDir()
@@ -184,7 +271,7 @@ class DefaultDeleterTest extends Specification {
         }
 
         when:
-        delete(targetDir)
+        deleter.deleteRecursively(targetDir)
 
         then:
         targetDir.assertIsDir()
@@ -220,7 +307,7 @@ class DefaultDeleterTest extends Specification {
         }
 
         when:
-        delete(targetDir)
+        deleter.deleteRecursively(targetDir)
 
         then: 'nothing gets deleted'
         targetDir.assertIsDir()
@@ -254,7 +341,11 @@ class DefaultDeleterTest extends Specification {
         static long newTime = startTime + 2000
 
         static DefaultDeleter deleterWithDeletionAction(Function<File, DeletionAction> deletionAction) {
-            new DefaultDeleter({ startTime }, { Files.isSymbolicLink(it.toPath()) }, false) {
+            new DefaultDeleter(
+                { startTime },
+                { File file -> Files.isSymbolicLink(file.toPath()) },
+                false
+            ) {
                 @Override
                 protected boolean deleteFile(File file) {
                     switch (deletionAction.apply(file)) {
@@ -287,9 +378,5 @@ class DefaultDeleterTest extends Specification {
 
     private static enum DeletionAction {
         FAILURE, CONTINUE
-    }
-
-    private boolean delete(File target) {
-        return deleter.deleteRecursively(target, false)
     }
 }

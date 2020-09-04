@@ -21,14 +21,14 @@ import org.gradle.internal.jvm.Jvm
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.performance.results.DataReporter
 import org.gradle.performance.results.GradleVsMavenBuildPerformanceResults
-import org.gradle.performance.results.MeasuredOperationList
+import org.gradle.performance.results.ResultsStore
 import org.gradle.performance.util.Git
 import org.gradle.test.fixtures.file.TestDirectoryProvider
 import org.gradle.test.fixtures.maven.M2Installation
 import org.gradle.util.GradleVersion
 
 @CompileStatic
-class GradleVsMavenPerformanceTestRunner extends AbstractGradleBuildPerformanceTestRunner<GradleVsMavenBuildPerformanceResults> {
+class GradleVsMavenPerformanceTestRunner extends CrossBuildGradleProfilerPerformanceTestRunner<GradleVsMavenBuildPerformanceResults> {
 
     final M2Installation m2
 
@@ -40,17 +40,24 @@ class GradleVsMavenPerformanceTestRunner extends AbstractGradleBuildPerformanceT
     List<Object> jvmOpts = []
     List<Object> mvnArgs = []
 
+    InvocationCustomizer invocationCustomizer
+
     int warmUpRuns = 4
     int runs = 12
 
-    GradleVsMavenPerformanceTestRunner(TestDirectoryProvider testDirectoryProvider, GradleVsMavenBuildExperimentRunner experimentRunner, DataReporter<GradleVsMavenBuildPerformanceResults> dataReporter, IntegrationTestBuildContext buildContext) {
-        super(experimentRunner, dataReporter, buildContext)
+    GradleVsMavenPerformanceTestRunner(TestDirectoryProvider testDirectoryProvider,
+                                       GradleVsMavenBuildExperimentRunner experimentRunner,
+                                       ResultsStore resultsStore,
+                                       DataReporter<GradleVsMavenBuildPerformanceResults> dataReporter,
+                                       IntegrationTestBuildContext buildContext) {
+        super(experimentRunner, resultsStore, dataReporter, buildContext)
         m2 = new M2Installation(testDirectoryProvider)
     }
 
     @Override
     protected void defaultSpec(BuildExperimentSpec.Builder builder) {
         super.defaultSpec(builder)
+        builder.setInvocationCustomizer(invocationCustomizer)
         if (builder instanceof GradleBuildExperimentSpec.GradleBuilder) {
             ((GradleInvocationSpec.InvocationBuilder) builder.invocation).distribution(gradleDistribution)
         }
@@ -63,14 +70,14 @@ class GradleVsMavenPerformanceTestRunner extends AbstractGradleBuildPerformanceT
             warmUpCount = warmUpRuns
             invocationCount = runs
             projectName(testProject).displayName("Gradle $commonBaseDisplayName").invocation {
-                tasksToRun(gradleTasks).cleanTasks(gradleCleanTasks).useDaemon().gradleOpts(jvmOpts.collect {it.toString()})
+                tasksToRun(gradleTasks).cleanTasks(gradleCleanTasks).gradleOpts(jvmOpts.collect { it.toString() })
             }
         }
         mavenBuildSpec {
             warmUpCount = warmUpRuns
             invocationCount = runs
             projectName(testProject).displayName("Maven $commonBaseDisplayName").invocation {
-                tasksToRun(equivalentMavenTasks).cleanTasks(equivalentMavenCleanTasks).mavenOpts(jvmOpts.collect {it.toString()}).args(mvnArgs.collect {it.toString()})
+                tasksToRun(equivalentMavenTasks).cleanTasks(equivalentMavenCleanTasks).mavenOpts(jvmOpts.collect { it.toString() }).args(mvnArgs.collect { it.toString() })
             }
         }
         super.run()
@@ -126,10 +133,5 @@ class GradleVsMavenPerformanceTestRunner extends AbstractGradleBuildPerformanceT
             startTime: clock.getCurrentTime(),
             channel: determineChannel()
         )
-    }
-
-    @Override
-    MeasuredOperationList operations(GradleVsMavenBuildPerformanceResults result, BuildExperimentSpec spec) {
-        result.buildResult(spec.displayInfo)
     }
 }

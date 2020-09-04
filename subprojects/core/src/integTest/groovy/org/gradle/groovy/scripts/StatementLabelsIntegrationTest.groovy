@@ -86,6 +86,6 @@ class Foo {
         """
 
         expect:
-        succeeds("tasks")
+        succeeds("help")
     }
 }

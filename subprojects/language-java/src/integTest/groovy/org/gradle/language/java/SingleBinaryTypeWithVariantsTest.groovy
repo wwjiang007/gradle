@@ -17,11 +17,14 @@
 package org.gradle.language.java
 
 import org.gradle.api.JavaVersion
+import org.gradle.integtests.fixtures.UnsupportedWithConfigurationCache
 import org.junit.Assume
 import spock.lang.Unroll
 
 import static org.gradle.language.java.JavaIntegrationTesting.applyJavaPlugin
+import static org.gradle.language.java.JavaIntegrationTesting.expectJavaLangPluginDeprecationWarnings
 
+@UnsupportedWithConfigurationCache(because = "software model")
 class SingleBinaryTypeWithVariantsTest extends VariantAwareDependencyResolutionSpec {
 
     @Unroll("matching {jdk #jdk1, flavors #flavors1, builtTypes #buildTypes1} with {jdk #jdk2, flavors #flavors2, buildTypes #buildTypes2} #outcome")
@@ -29,7 +32,7 @@ class SingleBinaryTypeWithVariantsTest extends VariantAwareDependencyResolutionS
         assertAllTargetVersionsAreSupported(jdk1)
 
         given:
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, executer)
         addCustomLibraryType(buildFile)
 
         def firstFlavorsDSL = flavors1 ? 'flavors ' + flavors1.collect { "'$it'" }.join(',') : ''
@@ -92,6 +95,7 @@ model {
         expect:
         Set consumedErrors = []
         forEachFlavorAndBuildTypeBinary(buildTypesToTest, flavorsToTest, jdk1) { String taskName ->
+            expectJavaLangPluginDeprecationWarnings(executer)
             checkResolution(errors, consumedErrors, taskName)
         }
 
@@ -147,7 +151,7 @@ model {
         assertAllTargetVersionsAreSupported(jdk1)
 
         given:
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, null)
         addCustomLibraryType(buildFile)
 
         def firstFlavorsDSL = flavors1 ? 'flavors ' + flavors1.collect { "'$it'" }.join(',') : ''
@@ -195,6 +199,7 @@ model {
         expect:
         Set consumedErrors = []
         forEachFlavorAndBuildTypeBinary(buildTypesToTest, flavorsToTest, jdk1) { String taskName ->
+            expectJavaLangPluginDeprecationWarnings(executer)
             checkResolution(errors, consumedErrors, taskName)
         }
 
@@ -227,7 +232,7 @@ model {
         assertAllTargetVersionsAreSupported(jdk1)
 
         given:
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, null)
         addCustomLibraryType(buildFile)
 
         def flavorsDSL = flavors2 ? 'flavors ' + flavors2.collect { "'$it'" }.join(',') : ''
@@ -275,6 +280,7 @@ model {
         expect:
         Set consumedErrors = []
         forEachJavaBinary(jdk1) { String taskName ->
+            expectJavaLangPluginDeprecationWarnings(executer)
             checkResolution(errors, consumedErrors, taskName)
         }
 
@@ -309,7 +315,7 @@ model {
         assertAllTargetVersionsAreSupported(jdk1)
 
         given:
-        applyJavaPlugin(buildFile)
+        applyJavaPlugin(buildFile, null)
         addCustomLibraryType(buildFile)
 
         def flavorsDSL = flavors ? 'flavors ' + flavors.collect { "'$it'" }.join(',') : ''
@@ -361,6 +367,7 @@ model {
         expect:
         Set consumedErrors = []
         forEachFlavor(flavorsToTest, jdk1) { String taskName ->
+            expectJavaLangPluginDeprecationWarnings(executer)
             checkResolution(errors, consumedErrors, taskName)
         }
 

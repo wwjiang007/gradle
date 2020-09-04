@@ -92,7 +92,8 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
         expect:
         cacheDir.listFiles() as List == []
         buildFile << """
-            tasks.withType(JavaCompile).configureEach { it.outputs.upToDateWhen { project.findProperty("upToDateWhenFalse") == null } }
+            def upToDate = providers.gradleProperty('upToDateWhenFalse')
+            tasks.withType(JavaCompile).configureEach { it.outputs.upToDateWhen { !upToDate.present } }
         """
 
         when:
@@ -147,7 +148,9 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
     def "outputs are correctly loaded from cache"() {
         buildFile << """
             apply plugin: "application"
-            mainClassName = "Hello"
+            application {
+                mainClass = "Hello"
+            }
         """
         withBuildCache().run "run"
         withBuildCache().run "clean"
@@ -207,7 +210,7 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
         executer.inDirectory(remoteProjectDir)
         remoteProjectDir.file("settings.gradle") << """
             buildCache {
-                local(DirectoryBuildCache) {
+                local {
                     directory = '${cacheDir.absoluteFile.toURI()}'
                 }
             }
@@ -235,7 +238,7 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
         executer.inDirectory(remoteProjectDir)
         remoteProjectDir.file("settings.gradle") << """
             buildCache {
-                local(DirectoryBuildCache) {
+                local {
                     directory = '${cacheDir.absoluteFile.toURI()}'
                 }
             }
@@ -280,7 +283,9 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
         given:
         buildFile << """
             apply plugin: "application"
-            mainClassName = "Hello"
+            application {
+                mainClass = "Hello"
+            }
         """
 
         when:
@@ -303,7 +308,7 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
     }
 
     def "outputs loaded from the cache are snapshotted as outputs"() {
-        buildFile << """ 
+        buildFile << """
             apply plugin: 'base'
 
             task createOutput {
@@ -316,7 +321,7 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
                 doLast {
                     if (!outputFile.exists() || outputFile.text != inputFile.text) {
                         outputFile.parentFile.mkdirs()
-                        outputFile.text = file('input.txt').text
+                        outputFile.text = inputFile.text
                     }
                 }
             }
@@ -413,12 +418,19 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
 
         then:
         noneSkipped()
-        output.contains("Appending implementation to build cache key:")
-        output.contains("Appending additional implementation to build cache key:")
-        output.contains("Appending input value fingerprint for 'options.fork'")
-        output.contains("Appending input file fingerprints for 'classpath'")
-        output.contains("Appending output property name to build cache key: destinationDir")
-        output.contains("Build cache key for task ':compileJava' is ")
+        outputContains("Appending implementation to build cache key:")
+        outputContains("Appending additional implementation to build cache key:")
+        outputContains("Appending input value fingerprint for 'options.fork'")
+        outputContains("Appending input file fingerprints for 'classpath'")
+        def sourcesDebugLogging = "Appending input file fingerprints for 'stableSources' to build cache key: "
+        outputContains(sourcesDebugLogging)
+        outputContains("Build cache key for task ':compileJava' is ")
+        outputContains("Appending output property name to build cache key: destinationDir")
+
+        def stableInputsFingerprintLog = result.getOutputLineThatContains(sourcesDebugLogging)
+        stableInputsFingerprintLog.contains("RELATIVE_PATH{${testDirectory.absolutePath}")
+        stableInputsFingerprintLog.contains("java=IGNORED / DIR")
+        stableInputsFingerprintLog.contains("Hello.java='Hello.java' / ")
     }
 
     def "only the build cache key is reported at the info level"() {
@@ -461,17 +473,17 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec impleme
     def "order of resources on classpath does not affect how we calculate the cache key"() {
         buildFile << """
             apply plugin: 'base'
-            
+
             @CacheableTask
             class CustomTask extends DefaultTask {
                 @OutputFile File outputFile = new File(temporaryDir, "output.txt")
                 @Classpath FileCollection classpath = project.fileTree("resources")
-                
+
                 @TaskAction void generate() {
                     outputFile.text = "done"
-                } 
+                }
             }
-            
+
             task cacheable(type: CustomTask)
         """
 

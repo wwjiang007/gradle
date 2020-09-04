@@ -45,10 +45,15 @@ class BuildCacheEntryPackingIntegrationTest extends DaemonIntegrationSpec implem
         def outputFile = file("dir", fileName)
 
         buildFile << """
-            println "> Default charset: \${java.nio.charset.Charset.defaultCharset()}"
-            println "> Storing file in cache: $fileName"
+            task printCharsetProperties {
+                doLast {
+                    println "> Default charset: \${java.nio.charset.Charset.defaultCharset()}"
+                    println "> Storing file in cache: $fileName"
+                }
+            }
 
             task createFile {
+                dependsOn printCharsetProperties
                 outputs.dir("dir")
                 outputs.cacheIf { true }
                 doLast {
@@ -81,10 +86,15 @@ class BuildCacheEntryPackingIntegrationTest extends DaemonIntegrationSpec implem
         def outputFile = file("output.txt")
 
         buildFile << """
-            println "> Default charset: \${java.nio.charset.Charset.defaultCharset()}"
-            println "> Storing with property name: $NON_ASCII_NAME"
+            task printCharsetProperties {
+                doLast {
+                    println "> Default charset: \${java.nio.charset.Charset.defaultCharset()}"
+                    println "> Storing with property name: $NON_ASCII_NAME"
+                }
+            }
 
             task createFile {
+                dependsOn printCharsetProperties
                 outputs.file("output.txt")
                     .withPropertyName("$NON_ASCII_NAME")
                 outputs.cacheIf { true }

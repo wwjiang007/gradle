@@ -15,8 +15,10 @@
  */
 
 package org.gradle.nativeplatform.platform
+
 import net.rubygrapefruit.platform.Native
 import net.rubygrapefruit.platform.SystemInfo
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.fixtures.AbstractInstalledToolChainIntegrationSpec
 import org.gradle.nativeplatform.fixtures.RequiresInstalledToolChain
@@ -27,15 +29,12 @@ import org.gradle.nativeplatform.fixtures.binaryinfo.FileArchOnlyBinaryInfo
 import org.gradle.nativeplatform.fixtures.binaryinfo.OtoolBinaryInfo
 import org.gradle.nativeplatform.fixtures.binaryinfo.ReadelfBinaryInfo
 import org.gradle.test.fixtures.file.TestFile
-import org.gradle.util.Requires
-import org.gradle.util.TestPrecondition
 import spock.lang.Issue
 import spock.lang.Unroll
 
 import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.SUPPORTS_32
 import static org.gradle.nativeplatform.fixtures.ToolChainRequirement.SUPPORTS_32_AND_64
 
-@Requires(TestPrecondition.NOT_UNKNOWN_OS)
 class BinaryNativePlatformIntegrationTest extends AbstractInstalledToolChainIntegrationSpec {
     def testApp = new PlatformDetectingTestApp()
     def os = OperatingSystem.current()
@@ -64,6 +63,7 @@ model {
         return [name: "x86-64", altName: "amd64"]
     }
 
+    @ToBeFixedForConfigurationCache
     def "build binary for a default target platform"() {
         given:
         def arch = currentArch()
@@ -79,6 +79,7 @@ model {
     }
 
     @RequiresInstalledToolChain(SUPPORTS_32)
+    @ToBeFixedForConfigurationCache
     def "configure component for a single target platform"() {
         when:
         buildFile << """
@@ -110,6 +111,7 @@ model {
         executable("build/exe/main/main").exec().out == "i386 ${os.familyName}" * 2
     }
 
+    @ToBeFixedForConfigurationCache
     def "defaults to current platform when platforms are defined but not targeted"() {
         def arch = currentArch()
         when:
@@ -137,6 +139,7 @@ model {
     }
 
     @RequiresInstalledToolChain(SUPPORTS_32)
+    @ToBeFixedForConfigurationCache
     def "library with matching platform is enforced by dependency resolution"() {
         given:
         testApp.executable.writeSources(file("src/exe"))
@@ -179,6 +182,7 @@ model {
         executable("build/exe/exe/exe").exec().out == "i386 ${os.familyName}" * 2
     }
 
+    @ToBeFixedForConfigurationCache
     def "library with no platform defined is correctly chosen by dependency resolution"() {
         def arch = currentArch()
 
@@ -209,6 +213,7 @@ model {
     }
 
     @RequiresInstalledToolChain(SUPPORTS_32_AND_64)
+    @ToBeFixedForConfigurationCache
     def "build binary for multiple target architectures"() {
         when:
         buildFile << """
@@ -257,6 +262,7 @@ model {
     }
 
     @RequiresInstalledToolChain(SUPPORTS_32)
+    @ToBeFixedForConfigurationCache
     def "can configure binary for multiple target operating systems"() {
         String currentOs
         if (os.windows) {
@@ -314,6 +320,7 @@ model {
     }
 
     @Unroll
+    @ToBeFixedForConfigurationCache
     def "fails with reasonable error message when trying to build for an #type"() {
         when:
         buildFile << """
@@ -400,6 +407,7 @@ model {
     }
 
     @Issue("GRADLE-3499")
+    @ToBeFixedForConfigurationCache(because = ":components")
     def "can create a binary which name contains dots"() {
         when:
         buildFile << '''
@@ -424,7 +432,7 @@ model {
             return DumpbinBinaryInfo.findVisualStudio() ? new DumpbinBinaryInfo(file) : new FileArchOnlyBinaryInfo(file)
         }
         if (ReadelfBinaryInfo.canUseReadelf()) {
-            return new ReadelfBinaryInfo(file)
+            return new ReadelfBinaryInfo(file, toolchainUnderTest.runtimeEnv)
         } else {
             return new FileArchOnlyBinaryInfo(file)
         }

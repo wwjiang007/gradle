@@ -16,11 +16,13 @@
 
 package org.gradle.integtests.resolve.ivy
 
-import org.gradle.integtests.fixtures.GradleMetadataResolveRunner
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.test.fixtures.ivy.IvyModule
 import org.gradle.test.fixtures.maven.MavenModule
 
 class ComponentSelectionRulesErrorHandlingIntegTest extends AbstractComponentSelectionRulesIntegrationTest {
+
+    @ToBeFixedForConfigurationCache(because = "broken file collection")
     def "produces sensible error when bad code is supplied in component selection rule"() {
         buildFile << """
             dependencies {
@@ -90,6 +92,7 @@ class ComponentSelectionRulesErrorHandlingIntegTest extends AbstractComponentSel
         "ComponentSelection vs, String s ->" | "Rule may not have an input parameter of type: java.lang.String."
     }
 
+    @ToBeFixedForConfigurationCache(because = "broken file collection")
     def "produces sensible error when closure rule throws an exception"() {
         buildFile << """
             dependencies {
@@ -179,6 +182,7 @@ class ComponentSelectionRulesErrorHandlingIntegTest extends AbstractComponentSel
 - Method select(java.lang.String) is not a valid rule method: First parameter of a rule method must be of type org.gradle.api.artifacts.ComponentSelection""")
     }
 
+    @ToBeFixedForConfigurationCache(because = "broken file collection")
     def "produces sensible error when rule source throws an exception"() {
         buildFile << """
             dependencies {
@@ -221,6 +225,7 @@ class ComponentSelectionRulesErrorHandlingIntegTest extends AbstractComponentSel
         failure.assertHasCause("java.lang.Exception: thrown from rule")
     }
 
+    @ToBeFixedForConfigurationCache
     def "reports missing module when component selection rule requires meta-data"() {
         buildFile << """
 configurations {
@@ -247,9 +252,6 @@ dependencies {
                 expectVersionListing()
                 '2.1' {
                     expectGetMetadataMissing()
-                    if (!GradleMetadataResolveRunner.isExperimentalResolveBehaviorEnabled()) {
-                        expectHeadArtifactMissing()
-                    }
                 }
             }
         }
@@ -259,7 +261,7 @@ dependencies {
         failure.assertHasCause("""Could not find any matches for org.utils:api:+ as no versions of org.utils:api are available.
 Searched in the following locations:
   - ${versionListingURI('org.utils', 'api')}
-${triedMetadata('org.utils', 'api', '2.1', !GradleMetadataResolveRunner.isExperimentalResolveBehaviorEnabled(), false)}
+${triedMetadata('org.utils', 'api', '2.1', false)}
 Required by:
 """)
 
@@ -275,6 +277,7 @@ Required by:
         succeeds ":checkDeps"
     }
 
+    @ToBeFixedForConfigurationCache
     def "reports broken module when component selection rule requires meta-data"() {
         buildFile << """
 configurations {
@@ -296,17 +299,11 @@ dependencies {
             'org.utils:api' {
                 expectVersionListing()
                 '2.1' {
-                    if (!GradleMetadataResolveRunner.isExperimentalResolveBehaviorEnabled()) {
-                        withModule(IvyModule) {
-                            ivy.expectGetBroken()
-                        }
-                        withModule(MavenModule) {
-                            pom.expectGetBroken()
-                        }
-                    } else {
-                        withModule {
-                            moduleMetadata.expectGetBroken()
-                        }
+                    withModule(IvyModule) {
+                        ivy.expectGetBroken()
+                    }
+                    withModule(MavenModule) {
+                        pom.expectGetBroken()
                     }
                 }
             }
@@ -316,7 +313,7 @@ dependencies {
         fails ":checkDeps"
         failure.assertHasCause("Could not resolve org.utils:api:+.")
         failure.assertHasCause("Could not resolve org.utils:api:2.1.")
-        failure.assertHasCause("Could not GET '${metadataURI('org.utils', 'api', '2.1')}'. Received status code 500 from server: broken")
+        failure.assertHasCause("Could not GET '${legacyMetadataURI('org.utils', 'api', '2.1')}'. Received status code 500 from server: broken")
 
         when:
         resetExpectations()
@@ -331,12 +328,7 @@ dependencies {
 
         then:
         fails ":checkDeps"
-        if (GradleMetadataResolveRunner.isGradleMetadataEnabled()) {
-            // why is the error message different?!
-            failure.assertHasCause("Could not download api-2.1.jar (org.utils:api:2.1)")
-        } else {
-            failure.assertHasCause("Could not download api.jar (org.utils:api:2.1)")
-        }
+        failure.assertHasCause("Could not download api-2.1.jar (org.utils:api:2.1)")
         failure.assertHasCause("Could not GET '${artifactURI('org.utils', 'api', '2.1')}'. Received status code 500 from server: broken")
 
         when:

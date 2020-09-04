@@ -22,19 +22,16 @@ import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Task
 import org.gradle.api.tasks.Delete
 import org.gradle.api.tasks.TaskCollection
-
-import org.gradle.test.fixtures.file.LeaksFileHandles
-
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.kotlin.dsl.fixtures.containsMultiLineString
 import org.gradle.kotlin.dsl.support.normaliseLineSeparators
-
+import org.gradle.test.fixtures.file.LeaksFileHandles
 import org.hamcrest.CoreMatchers.allOf
 import org.hamcrest.CoreMatchers.containsString
 import org.hamcrest.CoreMatchers.not
-import org.junit.Assert.assertThat
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.Assert.assertTrue
 import org.junit.Test
-
 import java.io.File
 import java.util.jar.JarFile
 
@@ -42,6 +39,7 @@ import java.util.jar.JarFile
 class GradleApiExtensionsIntegrationTest : AbstractPluginIntegrationTest() {
 
     @Test
+    @ToBeFixedForConfigurationCache
     fun `Kotlin chooses withType extension specialized to container type`() {
 
         withBuildScript("""
@@ -87,6 +85,7 @@ class GradleApiExtensionsIntegrationTest : AbstractPluginIntegrationTest() {
     }
 
     @Test
+    @ToBeFixedForConfigurationCache(because = "source dependency VCS mappings are defined")
     fun `can use Gradle API generated extensions in scripts`() {
 
         withFile("init.gradle.kts", """
@@ -96,9 +95,6 @@ class GradleApiExtensionsIntegrationTest : AbstractPluginIntegrationTest() {
         """)
 
         withDefaultSettings().appendText("""
-            buildCache {
-                local(DirectoryBuildCache::class)
-            }
             sourceControl {
                 vcsMappings {
                     withModule("some:thing") {
@@ -139,9 +135,8 @@ class GradleApiExtensionsIntegrationTest : AbstractPluginIntegrationTest() {
 
     @Test
     @LeaksFileHandles("Kotlin Compiler Daemon working directory")
+    @ToBeFixedForConfigurationCache(because = "Kotlin Gradle Plugin")
     fun `can use Gradle API generated extensions in buildSrc`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
 
         withKotlinBuildSrc()
 
@@ -227,7 +222,6 @@ class GradleApiExtensionsIntegrationTest : AbstractPluginIntegrationTest() {
                 `create`(`name`, `type`.java, *`constructionArguments`)
             """,
             """
-            @org.gradle.api.Incubating
             inline fun <T : org.gradle.api.Named> org.gradle.api.model.ObjectFactory.`named`(`type`: kotlin.reflect.KClass<T>, `name`: String): T =
                 `named`(`type`.java, `name`)
             """)

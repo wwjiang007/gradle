@@ -18,8 +18,11 @@ package org.gradle.api.internal.project;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.component.BuildIdentifier;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
+import org.gradle.initialization.DefaultProjectDescriptor;
 import org.gradle.internal.Factory;
 import org.gradle.internal.build.BuildState;
+import org.gradle.internal.service.scopes.Scopes;
+import org.gradle.internal.service.scopes.ServiceScope;
 import org.gradle.util.Path;
 
 import javax.annotation.concurrent.ThreadSafe;
@@ -29,6 +32,7 @@ import java.util.Collection;
  * A registry of all of the projects present in a build tree.
  */
 @ThreadSafe
+@ServiceScope(Scopes.BuildTree.class)
 public interface ProjectStateRegistry {
     /**
      * Returns all projects in the build tree.
@@ -36,24 +40,19 @@ public interface ProjectStateRegistry {
     Collection<? extends ProjectState> getAllProjects();
 
     /**
-     * Locates the state object that owns the given public project model.
+     * Locates the state object that owns the given public project model. Can use {@link ProjectInternal#getMutationState()} instead.
      */
-    ProjectState stateFor(Project project);
+    ProjectState stateFor(Project project) throws IllegalArgumentException;
 
     /**
      * Locates the state object that owns the project with the given identifier.
      */
-    ProjectState stateFor(ProjectComponentIdentifier identifier);
+    ProjectState stateFor(ProjectComponentIdentifier identifier) throws IllegalArgumentException;
 
     /**
      * Locates the state object for the given project.
      */
-    ProjectState stateFor(BuildIdentifier buildIdentifier, Path projectPath);
-
-    /**
-     * Registers a project.
-     */
-    void register(BuildState owner, ProjectInternal project);
+    ProjectState stateFor(BuildIdentifier buildIdentifier, Path projectPath) throws IllegalArgumentException;
 
     /**
      * Registers the projects of a build.
@@ -61,30 +60,21 @@ public interface ProjectStateRegistry {
     void registerProjects(BuildState build);
 
     /**
-     * Allows a section of code to be run with state locking disabled.  This should be used to allow
-     * deprecated practices that we eventually want to retire.
+     * Registers a single project.
      */
-    void withLenientState(Runnable runnable);
+    void registerProject(BuildState owner, DefaultProjectDescriptor projectDescriptor);
 
     /**
-     * Creates the object with state locking disabled.  This should be used to allow
-     * deprecated practices that we eventually want to retire.
+     * Allows a section of code to run against the mutable state of all projects. No other thread will be able to access the state of any project while the given action is running.
+     *
+     * <p>Any attempt to lock a project by some other thread will fail while the given action is running. This includes calls to {@link ProjectState#withMutableState(Runnable)}.
      */
-    <T> T withLenientState(Factory<T> factory);
+    void withMutableStateOfAllProjects(Runnable runnable);
 
     /**
-     * Returns a {@link SafeExclusiveLock}.
+     * Allows a section of code to run against the mutable state of all projects. No other thread will be able to access the state of any project while the given action is running.
+     *
+     * <p>Any attempt to lock a project by some other thread will fail while the given action is running. This includes calls to {@link ProjectState#withMutableState(Runnable)}.
      */
-    SafeExclusiveLock newExclusiveOperationLock();
-
-    /**
-     * Represents a lock that can be used to perform safe concurrent execution in light of the possibility that a project
-     * lock might be released during execution.  Specifically, it avoids blocking on the lock while holding the project lock.
-     */
-    interface SafeExclusiveLock {
-        /**
-         * Safely waits for the lock before executing the given action.
-         */
-        void withLock(Runnable runnable);
-    }
+    <T> T withMutableStateOfAllProjects(Factory<T> factory);
 }

@@ -28,6 +28,7 @@ import org.gradle.initialization.NotifyProjectsEvaluatedBuildOperationType
 import org.gradle.initialization.NotifyProjectsLoadedBuildOperationType
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.BuildOperationsFixture
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.internal.logging.events.StyledTextOutputEvent
 import org.gradle.internal.operations.BuildOperationType
 import org.gradle.internal.operations.trace.BuildOperationRecord
@@ -95,6 +96,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         }
     }
 
+    @ToBeFixedForConfigurationCache(because = "build listener")
     def 'projectsLoaded listeners are attributed to the correct registrant'() {
         given:
         def addGradleListeners = { String source ->
@@ -173,6 +175,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         verifyHasChildren(parent, settingsPluginAppId, 'settings plugin', expectedGradleOps)
     }
 
+    @ToBeFixedForConfigurationCache(because = "build listener")
     def 'projectsEvaluated listeners are attributed to the correct registrant'() {
         given:
         def addGradleListeners = { String source ->
@@ -409,6 +412,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         applyScript(subBuildFile, scriptFile)
 
         when:
+        executer.expectDeprecationWarnings(2)
         run()
 
         then:
@@ -498,6 +502,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         verifyHasChildren(rootAfterEvaluated, rootOtherScriptAppId, 'other script', expectedProjectOps)
     }
 
+    @ToBeFixedForConfigurationCache(because = "build listener")
     def 'taskGraph whenReady action listeners are attributed to the correct registrant'() {
         given:
         def addGradleListeners = { String source ->
@@ -517,7 +522,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
             } as Action)
             gradle.taskGraph.whenReady {
                 println "gradle.taskGraph.whenReady(Closure) from $source"
-            }            
+            }
         """
         }
         def expectedGradleOps = [
@@ -558,6 +563,9 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
                 void buildStarted(Gradle gradle) {
                     println 'gradle.addListener(ComboListener) from $source'
                 }
+                void beforeSettings(Settings settings) {
+                    println 'gradle.addListener(ComboListener) from $source'
+                }
                 void settingsEvaluated(Settings settings) {
                     println 'gradle.addListener(ComboListener) from $source'
                 }
@@ -590,6 +598,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         initFile << addGradleListeners('init')
 
         when:
+        executer.expectDeprecationWarning()
         run()
 
         then:
@@ -618,13 +627,14 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         verifyHasChildren(whenReadyEvaluated, initScriptAppId, 'init', expectedGradleOps)
     }
 
+    @ToBeFixedForConfigurationCache(because = "composite builds")
     def 'no extra executions for composite builds'() {
         // This test does two things:
         // - shake out internal listener registration that isn't using InternalListener.
         //   There are a lost of listeners registered through the methods that we've decorated in the composite build code
         // - sanity check application ids for the multi-build case
         given:
-        file('buildSrc/build.gradle') << """            
+        file('buildSrc/build.gradle') << """
         """
         includeBuild()
         file('included/build.gradle') << """
@@ -693,6 +703,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         verifyHasChildren(subAfterEvaluated, initOtherScriptAppId, 'script file allprojects', [expectedOp('Project.afterEvaluate', 'project.afterEvaluate(Closure)')])
     }
 
+    @ToBeFixedForConfigurationCache(because = "build listener")
     def 'decorated listener can be removed'() {
         given:
         initFile << """
@@ -713,6 +724,7 @@ class ExecuteUserLifecycleListenerBuildOperationIntegrationTest extends Abstract
         verifyExpectedNumberOfExecuteListenerChildren(projectsLoaded, 0)
     }
 
+    @ToBeFixedForConfigurationCache(because = "GradleBuild")
     def 'application ids are unique across gradleBuild builds'() {
         given:
         initFile << ""

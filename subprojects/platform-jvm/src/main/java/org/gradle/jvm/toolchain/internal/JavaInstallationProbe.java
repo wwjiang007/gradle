@@ -40,6 +40,8 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.EnumMap;
 
 public class JavaInstallationProbe {
@@ -48,7 +50,7 @@ public class JavaInstallationProbe {
     private final LoadingCache<File, EnumMap<SysProp, String>> cache = CacheBuilder.newBuilder().build(new CacheLoader<File, EnumMap<SysProp, String>>() {
         @Override
         public EnumMap<SysProp, String> load(File javaHome) throws Exception {
-            if(Jvm.current().getJavaHome().equals(javaHome)) {
+            if (Jvm.current().getJavaHome().equals(javaHome)) {
                 return getCurrentJvmMetadata();
             }
             return getMetadataInternal(javaHome);
@@ -58,6 +60,7 @@ public class JavaInstallationProbe {
     private final ExecActionFactory factory;
 
     private enum SysProp {
+        JAVA_HOME("java.home"),
         VERSION("java.version"),
         VENDOR("java.vendor"),
         ARCH("os.arch"),
@@ -71,7 +74,6 @@ public class JavaInstallationProbe {
         SysProp(String sysProp) {
             this.sysProp = sysProp;
         }
-
     }
 
     public static class ProbeResult {
@@ -93,6 +95,26 @@ public class JavaInstallationProbe {
             this.error = error;
         }
 
+        public Path getJavaHome() {
+            assertOk();
+            return Paths.get(metadata.get(SysProp.JAVA_HOME));
+        }
+
+        public String getImplementationJavaVersion() {
+            assertOk();
+            return metadata.get(SysProp.VERSION);
+        }
+
+        public JavaVersion getJavaVersion() {
+            assertOk();
+            return JavaVersion.toVersion(metadata.get(SysProp.VERSION));
+        }
+
+        public String getImplementationName() {
+            assertOk();
+            return computeJdkName(installType, metadata);
+        }
+
         public InstallType getInstallType() {
             return installType;
         }
@@ -101,14 +123,18 @@ public class JavaInstallationProbe {
             return error;
         }
 
+        @Deprecated
         public void configure(LocalJavaInstallation install) {
+            assertOk();
+            install.setJavaVersion(getJavaVersion());
+            String jdkName = computeJdkName(installType, metadata);
+            install.setDisplayName(jdkName + " " + getJavaVersion().getMajorVersion());
+        }
+
+        private void assertOk() {
             if (error != null) {
                 throw new IllegalStateException("Unable to configure Java installation, probing failed with the following message: " + error);
             }
-            JavaVersion javaVersion = JavaVersion.toVersion(metadata.get(SysProp.VERSION));
-            install.setJavaVersion(javaVersion);
-            String jdkName = computeJdkName(installType, metadata);
-            install.setDisplayName(jdkName + " " + javaVersion.getMajorVersion());
         }
     }
 
@@ -123,8 +149,8 @@ public class JavaInstallationProbe {
         this.factory = factory;
     }
 
-    public void current(LocalJavaInstallation currentJava) {
-        ProbeResult.success(InstallType.IS_JDK, current()).configure(currentJava);
+    public ProbeResult current() {
+        return ProbeResult.success(InstallType.IS_JDK, currentMetadata());
     }
 
     public ProbeResult checkJdk(File jdkPath) {
@@ -182,6 +208,7 @@ public class JavaInstallationProbe {
             return error(ex.getMessage());
         } finally {
             try {
+                // TODO This should use Deleter
                 FileUtils.deleteDirectory(workingDir);
             } catch (IOException e) {
                 throw new GradleException("Unable to delete temp directory", e);
@@ -333,7 +360,7 @@ public class JavaInstallationProbe {
         return result;
     }
 
-    private static EnumMap<SysProp, String> current() {
+    private static EnumMap<SysProp, String> currentMetadata() {
         EnumMap<SysProp, String> result = new EnumMap<SysProp, String>(SysProp.class);
         for (SysProp type : SysProp.values()) {
             result.put(type, System.getProperty(type.sysProp, UNKNOWN));

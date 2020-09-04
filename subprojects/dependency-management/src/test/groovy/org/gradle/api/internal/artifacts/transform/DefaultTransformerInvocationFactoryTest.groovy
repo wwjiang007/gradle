@@ -17,17 +17,16 @@
 package org.gradle.api.internal.artifacts.transform
 
 import com.google.common.collect.ImmutableList
-import org.gradle.api.artifacts.component.BuildIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.artifacts.transform.TransformAction
 import org.gradle.api.file.FileSystemLocation
 import org.gradle.api.internal.artifacts.DefaultBuildIdentifier
 import org.gradle.api.internal.artifacts.DefaultProjectComponentIdentifier
-import org.gradle.api.internal.artifacts.dsl.dependencies.ProjectFinder
 import org.gradle.api.internal.attributes.ImmutableAttributes
-import org.gradle.api.internal.cache.StringInterner
-import org.gradle.api.internal.changedetection.state.DefaultWellKnownFileLocations
 import org.gradle.api.internal.file.TestFiles
 import org.gradle.api.internal.project.ProjectInternal
+import org.gradle.api.internal.project.ProjectState
+import org.gradle.api.internal.project.ProjectStateRegistry
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.FileNormalizer
@@ -46,7 +45,6 @@ import org.gradle.internal.hash.HashCode
 import org.gradle.internal.operations.BuildOperationExecutor
 import org.gradle.internal.operations.CallableBuildOperation
 import org.gradle.internal.service.ServiceRegistry
-import org.gradle.internal.snapshot.impl.DefaultFileSystemMirror
 import org.gradle.internal.snapshot.impl.DefaultValueSnapshotter
 import org.gradle.test.fixtures.AbstractProjectBuilderSpec
 import org.gradle.util.Path
@@ -66,10 +64,9 @@ class DefaultTransformerInvocationFactoryTest extends AbstractProjectBuilderSpec
     def valueSnapshotter = new DefaultValueSnapshotter(classloaderHasher, null)
 
     def executionHistoryStore = new TestExecutionHistoryStore()
-    def fileSystemMirror = new DefaultFileSystemMirror(new DefaultWellKnownFileLocations([]))
-    def workExecutorTestFixture = new WorkExecutorTestFixture(fileSystemMirror, classloaderHasher, valueSnapshotter)
-    def fileSystemSnapshotter = TestFiles.fileSystemSnapshotter(fileSystemMirror, new StringInterner())
-    def fileCollectionSnapshotter = new DefaultFileCollectionSnapshotter(fileSystemSnapshotter, TestFiles.fileSystem())
+    def fileSystemAccess = TestFiles.fileSystemAccess()
+    def workExecutorTestFixture = new WorkExecutorTestFixture(fileSystemAccess, classloaderHasher, valueSnapshotter)
+    def fileCollectionSnapshotter = new DefaultFileCollectionSnapshotter(fileSystemAccess, TestFiles.genericFileTreeSnapshotter(), TestFiles.fileSystem())
 
     def transformationWorkspaceProvider = new TestTransformationWorkspaceProvider(immutableTransformsStoreDirectory, executionHistoryStore)
 
@@ -87,8 +84,10 @@ class DefaultTransformerInvocationFactoryTest extends AbstractProjectBuilderSpec
         getServices() >> projectServiceRegistry
     }
 
-    def projectFinder = Stub(ProjectFinder) {
-        findProject(_ as BuildIdentifier, _ as String) >> childProject
+    def projectStateRegistry = Stub(ProjectStateRegistry) {
+        stateFor(_ as ProjectComponentIdentifier) >> Stub(ProjectState) {
+            getMutableModel()>> childProject
+        }
     }
 
     def dependencies = Stub(ArtifactTransformDependencies) {
@@ -104,12 +103,12 @@ class DefaultTransformerInvocationFactoryTest extends AbstractProjectBuilderSpec
 
     def invoker = new DefaultTransformerInvocationFactory(
         workExecutorTestFixture.workExecutor,
-        fileSystemSnapshotter,
+        fileSystemAccess,
         artifactTransformListener,
         transformationWorkspaceProvider,
         fileCollectionFactory,
         fileCollectionSnapshotter,
-        projectFinder,
+        projectStateRegistry,
         buildOperationExecutor
     )
 
@@ -293,8 +292,7 @@ class DefaultTransformerInvocationFactoryTest extends AbstractProjectBuilderSpec
         outputFile?.isFile()
 
         when:
-        outputFile.text = "changed"
-        fileSystemMirror.beforeBuildFinished()
+        fileSystemAccess.write([outputFile.absolutePath], { -> outputFile.text = "changed" })
 
         invoke(transformer, inputArtifact, dependencies, TransformationSubject.initial(inputArtifact), fingerprinterRegistry)
         then:
@@ -347,8 +345,7 @@ class DefaultTransformerInvocationFactoryTest extends AbstractProjectBuilderSpec
         workspaces.size() == 1
 
         when:
-        fileSystemMirror.beforeBuildFinished()
-        inputArtifact1.text = "changed"
+        fileSystemAccess.write([inputArtifact1.absolutePath], { -> inputArtifact1.text = "changed"})
         invoke(transformer, inputArtifact2, dependencies, dependency(transformationType, inputArtifact2), fingerprinterRegistry)
 
         then:
@@ -377,8 +374,7 @@ class DefaultTransformerInvocationFactoryTest extends AbstractProjectBuilderSpec
         workspaces.size() == 1
 
         when:
-        fileSystemMirror.beforeBuildFinished()
-        inputArtifact.text = "changed"
+        fileSystemAccess.write([inputArtifact.absolutePath], { -> inputArtifact.text = "changed"})
         invoke(transformer, inputArtifact, dependencies, subject, fingerprinterRegistry)
 
         then:
@@ -404,8 +400,7 @@ class DefaultTransformerInvocationFactoryTest extends AbstractProjectBuilderSpec
         workspaces.size() == 1
 
         when:
-        fileSystemMirror.beforeBuildFinished()
-        inputArtifact.text = "changed"
+        fileSystemAccess.write([inputArtifact.absolutePath], { -> inputArtifact.text = "changed"})
         invoke(transformer, inputArtifact, dependencies, subject, fingerprinterRegistry)
 
         then:

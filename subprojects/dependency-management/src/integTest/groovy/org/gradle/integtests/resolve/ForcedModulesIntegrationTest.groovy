@@ -16,6 +16,7 @@
 package org.gradle.integtests.resolve
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.resolve.ResolveTestFixture
 import spock.lang.Issue
 import spock.lang.Unroll
@@ -82,6 +83,7 @@ task checkDeps {
         run("checkDeps")
     }
 
+    @ToBeFixedForConfigurationCache
     void "can force already resolved version of a module and avoid conflict"() {
         mavenRepo.module("org", "foo", '1.3.3').publish()
         mavenRepo.module("org", "foo", '1.4.4').publish()
@@ -238,6 +240,7 @@ project(':tool') {
         run("tool:checkDeps")
     }
 
+    @ToBeFixedForConfigurationCache
     void "strict conflict strategy can be used with forced modules"() {
         mavenRepo.module("org", "foo", '1.3.3').publish()
         mavenRepo.module("org", "foo", '1.4.4').publish()
@@ -279,6 +282,9 @@ project(':tool') {
 """
 
         expect:
+        executer.expectDocumentedDeprecationWarning("Using force on a dependency has been deprecated. " +
+            "This is scheduled to be removed in Gradle 7.0. Consider using strict version constraints instead (version { strictly ... } }). " +
+            "Consult the upgrading guide for further information: https://docs.gradle.org/current/userguide/upgrading_version_5.html#forced_dependencies")
         run("tool:dependencies")
     }
 
@@ -303,6 +309,7 @@ task checkDeps {
 """
 
         expect:
+        executer.expectDeprecationWarning()
         executer.withTasks("checkDeps").run()
     }
 
@@ -376,12 +383,12 @@ task checkDeps {
             configurations {
                 conf
             }
-        
+
             def d1 = project.dependencies.create("org:foo:1.1")
             def d2 = project.dependencies.create("org:foo:1.0")
             def d3 = project.dependencies.create("org:foo:1.0")
             ${forced}.force = true
-            
+
             dependencies {
                 conf d1
                 conf d2
@@ -394,6 +401,7 @@ task checkDeps {
 
 
         when:
+        executer.expectDeprecationWarning()
         run 'checkDeps'
 
         then:
@@ -444,6 +452,7 @@ task checkDeps {
 """
 
         expect:
+        executer.expectDeprecationWarning()
         run 'checkDeps'
     }
 

@@ -17,33 +17,29 @@
 package org.gradle.buildinit.plugins.internal;
 
 import org.gradle.api.Action;
-import org.gradle.api.internal.file.FileResolver;
+import org.gradle.api.file.FileTree;
 import org.gradle.buildinit.plugins.internal.modifiers.Language;
-import org.gradle.internal.Factory;
 
 import javax.annotation.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
 public class TemplateFactory {
-    private final FileResolver fileResolver;
     private final TemplateOperationFactory templateOperationFactory;
     private final InitSettings initSettings;
     private final Language language;
 
-    public TemplateFactory(InitSettings initSettings, Language language, FileResolver fileResolver, TemplateOperationFactory templateOperationFactory) {
+    public TemplateFactory(InitSettings initSettings, Language language, TemplateOperationFactory templateOperationFactory) {
         this.initSettings = initSettings;
         this.language = language;
-        this.fileResolver = fileResolver;
         this.templateOperationFactory = templateOperationFactory;
     }
 
     public TemplateOperation whenNoSourcesAvailable(TemplateOperation... operations) {
-        return new ConditionalTemplateOperation(new Factory<Boolean>() {
-            @Override
-            public Boolean create() {
-                return fileResolver.resolveFilesAsTree("src/main/" + language.getName()).isEmpty() || fileResolver.resolveFilesAsTree("src/test/" + language.getName()).isEmpty();
-            }
+        return new ConditionalTemplateOperation(() -> {
+            FileTree mainFiles = initSettings.getTarget().dir(initSettings.getSubprojectName() + "/src/main/" + language.getName()).getAsFileTree();
+            FileTree testFiles = initSettings.getTarget().dir(initSettings.getSubprojectName() + "/src/test/" + language.getName()).getAsFileTree();
+            return mainFiles.isEmpty() || testFiles.isEmpty();
         }, operations);
     }
 
@@ -75,7 +71,7 @@ public class TemplateFactory {
 
         TemplateOperationFactory.TemplateOperationBuilder operationBuilder = templateOperationFactory.newTemplateOperation()
             .withTemplate(sourceTemplate)
-            .withTarget("src/" + details.sourceSet + "/" + details.language.getName() + "/" + targetFileName)
+            .withTarget(initSettings.getTarget().file(initSettings.getSubprojectName() + "/src/" + details.sourceSet + "/" + details.language.getName() + "/" + targetFileName).getAsFile())
             .withBinding("packageDecl", packageDecl)
             .withBinding("className", className);
         for (Map.Entry<String, String> entry : details.bindings.entrySet()) {

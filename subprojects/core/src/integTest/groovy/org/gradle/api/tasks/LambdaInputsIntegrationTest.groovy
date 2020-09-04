@@ -19,8 +19,6 @@ package org.gradle.api.tasks
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
 import org.gradle.integtests.fixtures.DirectoryBuildCacheFixture
 import org.gradle.test.fixtures.file.TestFile
-import org.gradle.util.Requires
-import org.gradle.util.TestPrecondition
 import spock.lang.Issue
 
 class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements DirectoryBuildCacheFixture {
@@ -74,7 +72,6 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
     }
 
     @Issue("https://github.com/gradle/gradle/issues/5510")
-    @Requires(TestPrecondition.JDK8_OR_LATER)
     def "task with nested property defined by Java lambda is never up-to-date"() {
         setupTaskClassWithActionProperty()
         def originalClassName = "LambdaActionOriginal"
@@ -83,7 +80,9 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
         file("buildSrc/src/main/java/${changedClassName}.java") << classWithLambda(changedClassName, lambdaWritingFile("ACTION", "changed"))
         buildFile << """
             task myTask(type: TaskWithActionProperty) {
-                action = project.hasProperty("changed") ? ${changedClassName}.ACTION : ${originalClassName}.ACTION
+                action = providers.gradleProperty("changed").forUseAtConfigurationTime().isPresent()
+                    ? ${changedClassName}.ACTION
+                    : ${originalClassName}.ACTION
             }
         """
 
@@ -109,7 +108,6 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
     }
 
     @Issue("https://github.com/gradle/gradle/issues/5510")
-    @Requires(TestPrecondition.JDK8_OR_LATER)
     def "caching is disabled for task with nested property defined by Java lambda"() {
         setupTaskClassWithActionProperty()
         file("buildSrc/src/main/java/LambdaAction.java") << classWithLambda("LambdaAction", lambdaWritingFile("ACTION", "original"))
@@ -144,32 +142,32 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
             import org.gradle.api.tasks.Nested;
             import org.gradle.api.tasks.OutputFile;
             import org.gradle.api.tasks.TaskAction;
-            
+
             import java.io.File;
-            
+
             @NonNullApi
             public class TaskWithActionProperty extends DefaultTask {
                 private File outputFile = new File(getTemporaryDir(), "output.txt");
                 private Action<File> action;
-            
+
                 @OutputFile
                 public File getOutputFile() {
                     return outputFile;
                 }
-            
+
                 public void setOutputFile(File outputFile) {
                     this.outputFile = outputFile;
                 }
-            
+
                 @Nested
                 public Action<File> getAction() {
                     return action;
                 }
-            
+
                 public void setAction(Action<File> action) {
                     this.action = action;
                 }
-            
+
                 @TaskAction
                 public void doStuff() {
                     getAction().execute(outputFile);
@@ -179,20 +177,23 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
     }
 
     @Issue("https://github.com/gradle/gradle/issues/5510")
-    @Requires(TestPrecondition.JDK8_OR_LATER)
     def "task with Java lambda actions is never up-to-date"() {
         file("buildSrc/src/main/java/LambdaActionOriginal.java") << classWithLambda("LambdaActionOriginal", lambdaPrintingString("ACTION", "From Lambda: original"))
         file("buildSrc/src/main/java/LambdaActionChanged.java") << classWithLambda("LambdaActionChanged", lambdaPrintingString("ACTION", "From Lambda: changed"))
 
         setupCustomTask()
-        
+
         def script = """
             task myTask(type: CustomTask)
         """
 
         buildFile << script <<
-        """            
-            myTask.doLast(project.hasProperty("changed") ? LambdaActionChanged.ACTION : LambdaActionOriginal.ACTION)
+            """
+            myTask.doLast(
+                providers.gradleProperty("changed").forUseAtConfigurationTime().isPresent()
+                    ? LambdaActionChanged.ACTION
+                    : LambdaActionOriginal.ACTION
+            )
         """
         def outOfDateMessage = { String enclosingClass ->
             "Additional action for task ':myTask': was implemented by the Java lambda '${enclosingClass}\$\$Lambda\$<non-deterministic>'. Using Java lambdas is not supported, use an (anonymous) inner class instead."
@@ -217,14 +218,13 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
     }
 
     @Issue("https://github.com/gradle/gradle/issues/5510")
-    @Requires(TestPrecondition.JDK8_OR_LATER)
     def "caching is disabled for task with Java lambda action"() {
         file("buildSrc/src/main/java/LambdaAction.java") << classWithLambda("LambdaAction", lambdaPrintingString("ACTION", "From Lambda: original"))
 
         setupCustomTask()
 
         buildFile <<
-        """      
+            """
             task myTask(type: CustomTask) {
                 outputs.cacheIf { true }
             }
@@ -263,24 +263,24 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
             import org.gradle.api.tasks.Nested;
             import org.gradle.api.tasks.OutputFile;
             import org.gradle.api.tasks.TaskAction;
-            
+
             import java.io.File;
             import java.io.IOException;
             import java.nio.file.Files;
-            
+
             @NonNullApi
             public class CustomTask extends DefaultTask {
                 private File outputFile = new File(getTemporaryDir(), "output.txt");
-            
+
                 @OutputFile
                 public File getOutputFile() {
                     return outputFile;
                 }
-            
+
                 public void setOutputFile(File outputFile) {
                     this.outputFile = outputFile;
                 }
-            
+
                 @TaskAction
                 public void doStuff() {
                     try {
@@ -297,11 +297,11 @@ class LambdaInputsIntegrationTest extends AbstractIntegrationSpec implements Dir
         """
             import org.gradle.api.Action;
             import org.gradle.api.Task;
-            
+
             import java.io.File;
             import java.io.IOException;
             import java.nio.file.Files;
-            
+
             public class ${className} {
 ${classBody}
             }

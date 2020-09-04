@@ -31,12 +31,11 @@ import org.gradle.api.internal.attributes.AttributesSchemaInternal;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.internal.component.external.model.DefaultModuleComponentSelector;
 import org.gradle.internal.component.external.model.ImmutableCapabilities;
-import org.gradle.internal.component.model.ExcludeMetadata;
-import org.gradle.internal.component.model.IvyArtifactName;
 import org.gradle.internal.component.model.LocalComponentDependencyMetadata;
 import org.gradle.internal.component.model.LocalOriginDependencyMetadata;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 
 public class RootLocalComponentMetadata extends DefaultLocalComponentMetadata {
@@ -48,9 +47,9 @@ public class RootLocalComponentMetadata extends DefaultLocalComponentMetadata {
     }
 
     @Override
-    public BuildableLocalConfigurationMetadata addConfiguration(String name, String description, Set<String> extendsFrom, ImmutableSet<String> hierarchy, boolean visible, boolean transitive, ImmutableAttributes attributes, boolean canBeConsumed, boolean canBeResolved, ImmutableCapabilities capabilities) {
+    public BuildableLocalConfigurationMetadata addConfiguration(String name, String description, Set<String> extendsFrom, ImmutableSet<String> hierarchy, boolean visible, boolean transitive, ImmutableAttributes attributes, boolean canBeConsumed, List<String> consumptionAlternatives, boolean canBeResolved, ImmutableCapabilities capabilities) {
         assert hierarchy.contains(name);
-        DefaultLocalConfigurationMetadata conf = new RootLocalConfigurationMetadata(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, canBeResolved, capabilities);
+        DefaultLocalConfigurationMetadata conf = new RootLocalConfigurationMetadata(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, consumptionAlternatives, canBeResolved, capabilities);
         addToConfigurations(name, conf);
         return conf;
     }
@@ -67,9 +66,10 @@ public class RootLocalComponentMetadata extends DefaultLocalComponentMetadata {
                                        ImmutableSet<String> hierarchy,
                                        ImmutableAttributes attributes,
                                        boolean canBeConsumed,
+                                       List<String> consumptionAlternatives,
                                        boolean canBeResolved,
                                        ImmutableCapabilities capabilities) {
-            super(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, canBeResolved, capabilities);
+            super(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, consumptionAlternatives, canBeResolved, capabilities);
         }
 
         @Override
@@ -89,7 +89,7 @@ public class RootLocalComponentMetadata extends DefaultLocalComponentMetadata {
                         : DefaultMutableVersionConstraint.withVersion(lockedVersion);
                     ModuleComponentSelector selector = DefaultModuleComponentSelector.newSelector(DefaultModuleIdentifier.newId(lockedDependency.getGroup(), lockedDependency.getModule()), versionConstraint);
                     result.add(new LocalComponentDependencyMetadata(getComponentId(), selector, getName(), getAttributes(),  ImmutableAttributes.EMPTY, null,
-                            Collections.<IvyArtifactName>emptyList(),  Collections.<ExcludeMetadata>emptyList(), false, false, false, true, true, getLockReason(strict, lockedVersion)));
+                            Collections.emptyList(),  Collections.emptyList(), false, false, false, true, false, true, getLockReason(strict, lockedVersion)));
                 }
             }
         }
@@ -98,7 +98,7 @@ public class RootLocalComponentMetadata extends DefaultLocalComponentMetadata {
             if (strict) {
                 return "dependency was locked to version '" + lockedVersion + "'";
             }
-            return "dependency was locked to version '" + lockedVersion + "' (update mode)";
+            return "dependency was locked to version '" + lockedVersion + "' (update/lenient mode)";
         }
 
         @Override

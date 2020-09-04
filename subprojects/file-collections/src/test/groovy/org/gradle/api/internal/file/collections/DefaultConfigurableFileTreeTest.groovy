@@ -17,19 +17,19 @@
 package org.gradle.api.internal.file.collections
 
 import org.gradle.api.InvalidUserDataException
-import org.gradle.api.Task
 import org.gradle.api.file.FileTree
-import org.gradle.api.internal.file.FileLookup
+import org.gradle.api.internal.file.FileCollectionStructureVisitor
 import org.gradle.api.internal.file.FileResolver
 import org.gradle.api.internal.file.TestFiles
+import org.gradle.api.internal.tasks.DefaultTaskDependency
+import org.gradle.api.internal.tasks.DefaultTaskDependencyFactory
+import org.gradle.api.internal.tasks.TaskDependencyFactory
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext
-import org.gradle.api.internal.tasks.TaskResolver
 import org.gradle.api.tasks.TaskDependency
 import org.gradle.api.tasks.util.AbstractTestForPatternSet
 import org.gradle.api.tasks.util.PatternFilterable
 import org.gradle.api.tasks.util.PatternSet
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
-import org.gradle.testfixtures.internal.NativeServicesTestFixture
 import org.junit.Rule
 
 import static org.gradle.api.file.FileVisitorUtil.assertCanStopVisiting
@@ -39,11 +39,11 @@ import static org.gradle.api.internal.file.TestFiles.resolver
 import static org.gradle.api.tasks.AntBuilderAwareUtil.assertSetContainsForAllTypes
 
 class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
-    TaskResolver taskResolverStub = Mock(TaskResolver)
+    TaskDependencyFactory taskDependencyFactory = DefaultTaskDependencyFactory.withNoAssociatedProject()
     DefaultConfigurableFileTree fileSet
-    @Rule public TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider()
+    @Rule
+    public TestNameTestDirectoryProvider tmpDir = new TestNameTestDirectoryProvider(getClass())
     File testDir = tmpDir.testDirectory
-    def fileLookup = Mock(FileLookup)
     FileResolver fileResolverStub = resolver(testDir)
 
     PatternFilterable getPatternSet() {
@@ -51,8 +51,8 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
     }
 
     void setup() {
-        NativeServicesTestFixture.initialize()
-        fileSet = new DefaultConfigurableFileTree(testDir, fileResolverStub, taskResolverStub, directoryFileTreeFactory())
+        fileSet = new DefaultConfigurableFileTree(fileResolverStub, TestFiles.patternSetFactory, taskDependencyFactory, directoryFileTreeFactory())
+        fileSet.from(testDir)
     }
 
     def testFileSetConstructionWithBaseDir() {
@@ -60,17 +60,8 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         testDir == fileSet.dir
     }
 
-    def testFileSetConstructionFromMap() {
-        fileSet = new DefaultConfigurableFileTree(fileResolverStub, taskResolverStub, dir: testDir, includes: ['include'], builtBy: ['a'], directoryFileTreeFactory())
-
-        expect:
-        testDir == fileSet.dir
-        ['include'] as Set == fileSet.includes
-        ['a'] as Set == fileSet.builtBy
-    }
-
     def testFileSetConstructionWithNoBaseDirSpecified() {
-        DefaultConfigurableFileTree fileSet = new DefaultConfigurableFileTree([:], fileResolverStub, taskResolverStub, directoryFileTreeFactory())
+        DefaultConfigurableFileTree fileSet = new DefaultConfigurableFileTree(fileResolverStub, TestFiles.patternSetFactory, taskDependencyFactory, directoryFileTreeFactory())
 
         when:
         fileSet.contains(new File('unknown'))
@@ -78,24 +69,16 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         thrown(InvalidUserDataException)
     }
 
-    def testFileSetConstructionWithBaseDirAsString() {
-        DefaultConfigurableFileTree fileSet = new DefaultConfigurableFileTree(fileResolverStub, taskResolverStub, dir: 'dirname', directoryFileTreeFactory())
-
-        expect:
-        tmpDir.file("dirname") == fileSet.dir
-    }
-
-    def testResolveAddsADirectoryFileTree() {
-        def resolveContext = Mock(FileCollectionResolveContext)
+    def testCanVisitStructure() {
+        def visitor = Mock(FileCollectionStructureVisitor)
 
         when:
-        fileSet.visitContents(resolveContext)
+        fileSet.visitStructure(visitor)
+
         then:
-        1 * resolveContext.add({ it != null }) >> { args ->
-            def fileTree = args[0]
-            assert fileTree instanceof DirectoryFileTree
-            assert fileTree.dir == testDir
-        }
+        1 * visitor.startVisit(_, fileSet) >> true
+        1 * visitor.startVisit(_, { it instanceof FileTreeAdapter }) >> true
+        1 * visitor.visitFileTree(testDir, _, _)
         0 * _
     }
 
@@ -106,14 +89,14 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         when:
         fileSet.visitDependencies(resolveContext)
         then:
-        1 * resolveContext.add({ it instanceof TaskDependency})
+        1 * resolveContext.add({ it instanceof TaskDependency })
         0 * _
     }
 
     def testCanScanForFiles() {
         File included1 = new File(testDir, 'subDir/included1')
         File included2 = new File(testDir, 'subDir2/included2')
-        [included1, included2].each {File file ->
+        [included1, included2].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -125,7 +108,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
     def testCanVisitFiles() {
         File included1 = new File(testDir, 'subDir/included1')
         File included2 = new File(testDir, 'subDir2/included2')
-        [included1, included2].each {File file ->
+        [included1, included2].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -137,7 +120,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
     def testCanStopVisitingFiles() {
         File included1 = new File(testDir, 'subDir/included1')
         File included2 = new File(testDir, 'subDir/otherDir/included2')
-        [included1, included2].each {File file ->
+        [included1, included2].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -149,7 +132,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
     def testContainsFiles() {
         File included1 = new File(testDir, 'subDir/included1')
         File included2 = new File(testDir, 'subDir2/included2')
-        [included1, included2].each {File file ->
+        [included1, included2].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -168,7 +151,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
     def testCanAddToAntTask() {
         File included1 = new File(testDir, 'subDir/included1')
         File included2 = new File(testDir, 'subDir2/included2')
-        [included1, included2].each {File file ->
+        [included1, included2].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -191,7 +174,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         File included2 = new File(testDir, 'subDir2/included2')
         File excluded1 = new File(testDir, 'subDir/notincluded')
         File ignored1 = new File(testDir, 'ignored')
-        [included1, included2, excluded1, ignored1].each {File file ->
+        [included1, included2, excluded1, ignored1].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -213,7 +196,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         File included2 = new File(testDir, 'subDir2/included2')
         File excluded1 = new File(testDir, 'subDir/notincluded')
         File ignored1 = new File(testDir, 'ignored')
-        [included1, included2, excluded1, ignored1].each {File file ->
+        [included1, included2, excluded1, ignored1].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -237,7 +220,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         File included2 = new File(testDir, 'subDir2/included2')
         File excluded1 = new File(testDir, 'subDir/notincluded')
         File ignored1 = new File(testDir, 'ignored')
-        [included1, included2, excluded1, ignored1].each {File file ->
+        [included1, included2, excluded1, ignored1].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -260,7 +243,7 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         File excluded1 = new File(testDir, 'subDir/notincluded')
         File excluded2 = new File(testDir, 'subDir/excluded')
         File ignored1 = new File(testDir, 'ignored')
-        [included1, included2, excluded1, excluded2, ignored1].each {File file ->
+        [included1, included2, excluded1, excluded2, ignored1].each { File file ->
             file.parentFile.mkdirs()
             file.text = 'some text'
         }
@@ -287,11 +270,11 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
     }
 
     def canGetAndSetTaskDependencies() {
-        def fileResolverStub = Stub(FileResolver.class) {
-            getPatternSetFactory() >> TestFiles.getPatternSetFactory()
-        }
-        fileSet = new DefaultConfigurableFileTree(testDir, fileResolverStub, taskResolverStub, directoryFileTreeFactory())
-        def task = Stub(Task)
+        def context = Mock(TaskDependencyResolveContext)
+        def dep = new DefaultTaskDependency()
+        def taskDependencyFactory = Stub(TaskDependencyFactory)
+        _ * taskDependencyFactory.configurableDependency() >> dep
+        fileSet = new DefaultConfigurableFileTree(fileResolverStub, TestFiles.patternSetFactory, taskDependencyFactory, directoryFileTreeFactory())
 
         expect:
         fileSet.getBuiltBy().empty
@@ -302,18 +285,18 @@ class DefaultConfigurableFileTreeTest extends AbstractTestForPatternSet {
         fileSet.from("f")
         then:
         fileSet.getBuiltBy() == ["a", "b"] as Set
+        dep.mutableValues == ["a", "b"] as Set
 
         when:
         fileSet.setBuiltBy(["c"])
         then:
         fileSet.getBuiltBy() == ["c"] as Set
+        dep.mutableValues == ["c"] as Set
 
         when:
-        def dependencies = fileSet.getBuildDependencies().getDependencies(null)
-        then:
-        1 * taskResolverStub.resolveTask('c') >> task
-        0 * _
+        fileSet.visitDependencies(context)
 
-        dependencies == [task] as Set
+        then:
+        1 * context.add(dep)
     }
 }

@@ -19,18 +19,17 @@ import groovy.lang.Closure;
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.Action;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.file.FileTreeElement;
 import org.gradle.api.file.SourceDirectorySet;
 import org.gradle.api.internal.jvm.ClassDirectoryBinaryNamingScheme;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.plugins.JavaPlugin;
-import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetOutput;
 import org.gradle.util.GUtil;
 
 import javax.annotation.Nullable;
 
+import static org.gradle.api.internal.lambdas.SerializableLambdas.spec;
 import static org.gradle.util.ConfigureUtil.configure;
 
 public abstract class DefaultSourceSet implements SourceSet {
@@ -64,12 +63,12 @@ public abstract class DefaultSourceSet implements SourceSet {
 
         String resourcesDisplayName = displayName + " resources";
         resources = objectFactory.sourceDirectorySet("resources", resourcesDisplayName);
-        resources.getFilter().exclude(new Spec<FileTreeElement>() {
-            @Override
-            public boolean isSatisfiedBy(FileTreeElement element) {
-                return javaSource.contains(element.getFile());
-            }
-        });
+
+        // Explicitly capture only a FileCollection in the lambda below for compatibility with configuration-cache.
+        FileCollection javaSourceFiles = javaSource;
+        resources.getFilter().exclude(
+            spec(element -> javaSourceFiles.contains(element.getFile()))
+        );
 
         String allSourceDisplayName = displayName + " source";
         allSource = objectFactory.sourceDirectorySet("allsource", allSourceDisplayName);
@@ -113,8 +112,23 @@ public abstract class DefaultSourceSet implements SourceSet {
     }
 
     @Override
+    public String getJavadocTaskName() {
+        return getTaskName(null, JavaPlugin.JAVADOC_TASK_NAME);
+    }
+
+    @Override
     public String getJarTaskName() {
         return getTaskName(null, "jar");
+    }
+
+    @Override
+    public String getJavadocJarTaskName() {
+        return getTaskName(null, "javadocJar");
+    }
+
+    @Override
+    public String getSourcesJarTaskName() {
+        return getTaskName(null, "sourcesJar");
     }
 
     @Override
@@ -143,6 +157,11 @@ public abstract class DefaultSourceSet implements SourceSet {
     @Override
     public String getCompileOnlyConfigurationName() {
         return configurationNameOf(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME);
+    }
+
+    @Override
+    public String getCompileOnlyApiConfigurationName() {
+        return configurationNameOf(JavaPlugin.COMPILE_ONLY_API_CONFIGURATION_NAME);
     }
 
     @Override
@@ -183,6 +202,16 @@ public abstract class DefaultSourceSet implements SourceSet {
     @Override
     public String getRuntimeElementsConfigurationName() {
         return configurationNameOf(JavaPlugin.RUNTIME_ELEMENTS_CONFIGURATION_NAME);
+    }
+
+    @Override
+    public String getJavadocElementsConfigurationName() {
+        return configurationNameOf(JavaPlugin.JAVADOC_ELEMENTS_CONFIGURATION_NAME);
+    }
+
+    @Override
+    public String getSourcesElementsConfigurationName() {
+        return configurationNameOf(JavaPlugin.SOURCES_ELEMENTS_CONFIGURATION_NAME);
     }
 
     @Override

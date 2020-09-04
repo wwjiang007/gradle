@@ -144,7 +144,7 @@ class IsolatableSerializerRegistryTest extends Specification {
     }
 
     def "can serialize/deserialize generated Managed values"() {
-        def instantiator = instantiatorFactory.injectAndDecorate(services)
+        def instantiator = instantiatorFactory.decorate(services)
         def managedValue1 = instantiator.newInstance(TestManagedTypes.ManagedThing)
         def managedValue2 = instantiator.newInstance(TestManagedTypes.ManagedThing)
 
@@ -265,6 +265,21 @@ class IsolatableSerializerRegistryTest extends Specification {
 
         then:
         newIsolatables[0].isolate() == map
+    }
+
+    def "can serialize/deserialize isolated Properties"() {
+        Properties properties = new Properties()
+        properties.setProperty("foo", "bar")
+        properties.setProperty("baz", "buzz")
+
+        when:
+        serialize(isolatableFactory.isolate(properties))
+
+        and:
+        Isolatable<?>[] newIsolatables = deserialize()
+
+        then:
+        newIsolatables[0].isolate() == properties
     }
 
     def "can serialize/deserialize isolated Array"() {

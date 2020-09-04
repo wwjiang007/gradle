@@ -45,7 +45,6 @@ import org.gradle.api.internal.artifacts.DefaultExcludeRule
 import org.gradle.api.internal.artifacts.DefaultResolverResults
 import org.gradle.api.internal.artifacts.ResolverResults
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency
-import org.gradle.api.internal.artifacts.dsl.dependencies.ProjectFinder
 import org.gradle.api.internal.artifacts.ivyservice.DefaultLenientConfiguration
 import org.gradle.api.internal.artifacts.ivyservice.moduleconverter.RootComponentMetadataBuilder
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.ArtifactVisitor
@@ -54,9 +53,8 @@ import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.Selec
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.artifact.VisitedArtifactSet
 import org.gradle.api.internal.artifacts.ivyservice.resolveengine.projectresult.ResolvedLocalComponentsResult
 import org.gradle.api.internal.artifacts.publish.DefaultPublishArtifact
-import org.gradle.api.internal.artifacts.transform.DomainObjectProjectStateHandler
 import org.gradle.api.internal.file.TestFiles
-import org.gradle.api.internal.project.ProjectState
+import org.gradle.api.internal.initialization.RootScriptDomainObjectContext
 import org.gradle.api.internal.project.ProjectStateRegistry
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext
 import org.gradle.api.specs.Spec
@@ -81,7 +79,7 @@ import static org.gradle.api.artifacts.Configuration.State.RESOLVED
 import static org.gradle.api.artifacts.Configuration.State.RESOLVED_WITH_FAILURES
 import static org.gradle.api.artifacts.Configuration.State.UNRESOLVED
 import static org.hamcrest.CoreMatchers.equalTo
-import static org.junit.Assert.assertThat
+import static org.hamcrest.MatcherAssert.assertThat
 
 class DefaultConfigurationSpec extends Specification {
     Instantiator instantiator = TestUtil.instantiatorFactory().decorateLenient()
@@ -92,29 +90,22 @@ class DefaultConfigurationSpec extends Specification {
     def metaDataProvider = Mock(DependencyMetaDataProvider)
     def resolutionStrategy = Mock(ResolutionStrategyInternal)
     def projectAccessListener = Mock(ProjectAccessListener)
-    def projectFinder = Mock(ProjectFinder)
     def immutableAttributesFactory = AttributeTestUtil.attributesFactory()
     def rootComponentMetadataBuilder = Mock(RootComponentMetadataBuilder)
     def projectStateRegistry = Mock(ProjectStateRegistry)
-    def projectState = Mock(ProjectState)
-    def safeLock = Mock(ProjectStateRegistry.SafeExclusiveLock)
     def domainObjectCollectioncallbackActionDecorator = Mock(CollectionCallbackActionDecorator)
     def userCodeApplicationContext = Mock(UserCodeApplicationContext)
 
     def setup() {
         _ * listenerManager.createAnonymousBroadcaster(DependencyResolutionListener) >> { new AnonymousListenerBroadcast<DependencyResolutionListener>(DependencyResolutionListener) }
         _ * resolver.getRepositories() >> []
-        _ * projectStateRegistry.stateFor(_) >> projectState
-        _ * projectStateRegistry.newExclusiveOperationLock() >> safeLock
-        _ * safeLock.withLock(_) >> { args -> args[0].run() }
-        _ * projectState.withMutableState(_) >> { args -> args[0].create() }
         _ * domainObjectCollectioncallbackActionDecorator.decorate(_) >> { args -> args[0] }
-        _ * userCodeApplicationContext.decorateWithCurrent(_) >> { args -> args[0] }
+        _ * userCodeApplicationContext.reapplyCurrentLater(_) >> { args -> args[0] }
     }
 
     void defaultValues() {
         when:
-        def configuration = conf("name", "project")
+        def configuration = conf("name", ":project")
 
         then:
         configuration.name == "name"
@@ -132,7 +123,7 @@ class DefaultConfigurationSpec extends Specification {
 
     def hasUsefulDisplayName() {
         when:
-        def configuration = conf("name", "project", "build")
+        def configuration = conf("name", ":project", ":build")
 
         then:
         configuration.displayName == "configuration ':build:project:name'"
@@ -481,6 +472,7 @@ class DefaultConfigurationSpec extends Specification {
                     _ * artifact.file >> it
                     visitor.visitArtifact(null, null, artifact)
                 }
+                visitor.endVisitCollection(null)
             }
         }
 
@@ -1103,24 +1095,20 @@ class DefaultConfigurationSpec extends Specification {
 
     def "resolving configuration puts it into the right state and broadcasts events"() {
         def listenerBroadcaster = Mock(AnonymousListenerBroadcast)
-
-        when:
-        def config = conf("conf")
-
-        then:
-        1 * listenerManager.createAnonymousBroadcaster(_) >> listenerBroadcaster
-
         def listener = Mock(DependencyResolutionListener)
+        def config
 
         when:
+        config = conf("conf")
         def result = Mock(ResolutionResult)
         resolves(config, result, Mock(ResolvedConfiguration))
         config.incoming.getResolutionResult().root
 
         then:
+        1 * listenerManager.createAnonymousBroadcaster(_) >> listenerBroadcaster
         _ * listenerBroadcaster.getSource() >> listener
-        1 * listener.beforeResolve(config.incoming)
-        1 * listener.afterResolve(config.incoming)
+        1 * listener.beforeResolve(_) >> { ResolvableDependencies dependencies -> assert dependencies == config.incoming }
+        1 * listener.afterResolve(_) >> { ResolvableDependencies dependencies -> assert dependencies == config.incoming }
         config.resolvedState == ConfigurationInternal.InternalState.ARTIFACTS_RESOLVED
         config.state == RESOLVED
     }
@@ -1356,13 +1344,13 @@ class DefaultConfigurationSpec extends Specification {
         conf.dependencies.add(Mock(Dependency))
         then:
         def exDependency = thrown(InvalidUserDataException);
-        exDependency.message == "Cannot change dependencies of configuration ':conf' after it has been resolved."
+        exDependency.message == "Cannot change dependencies of dependency configuration ':conf' after it has been resolved."
 
         when:
         conf.artifacts.add(Mock(PublishArtifact))
         then:
         def exArtifact = thrown(InvalidUserDataException);
-        exArtifact.message == "Cannot change artifacts of configuration ':conf' after it has been resolved."
+        exArtifact.message == "Cannot change artifacts of dependency configuration ':conf' after it has been resolved."
     }
 
     def "defaultDependencies action does not trigger when config has dependencies"() {
@@ -1557,7 +1545,7 @@ class DefaultConfigurationSpec extends Specification {
 
         then:
         IllegalArgumentException t = thrown()
-        t.message == "Cannot change attributes of configuration ':conf' after it has been resolved"
+        t.message == "Cannot change attributes of dependency configuration ':conf' after it has been resolved"
     }
 
     def "wrapper attribute container behaves similar to the delegatee"() {
@@ -1751,37 +1739,17 @@ All Artifacts:
     }
 
     private DefaultConfiguration conf(String confName = "conf", String projectPath = ":", String buildPath = ":") {
-        def domainObjectContext = new DomainObjectContext() {
-            @Override
-            Path identityPath(String name) {
-                getBuildPath().append(getProjectPath()).child(name)
-            }
-
-            @Override
-            Path projectPath(String name) {
-                getProjectPath().child(name)
-            }
-
-            @Override
-            Path getProjectPath() {
-                Path.ROOT.append(Path.path(projectPath))
-            }
-
-            @Override
-            Path getBuildPath() {
-                Path.ROOT.append(Path.path(buildPath))
-            }
-
-            @Override
-            boolean isScript() {
-                return false
-            }
-        }
+        def domainObjectContext = Stub(DomainObjectContext)
+        def build = Path.path(buildPath)
+        _ * domainObjectContext.identityPath(_) >> { String p -> build.append(Path.path(projectPath)).child(p) }
+        _ * domainObjectContext.projectPath(_) >> { String p -> Path.path(projectPath).child(p) }
+        _ * domainObjectContext.buildPath >> Path.path(buildPath)
+        _ * domainObjectContext.model >> RootScriptDomainObjectContext.INSTANCE
 
         def publishArtifactNotationParser = NotationParserBuilder.toType(ConfigurablePublishArtifact).toComposite()
         new DefaultConfiguration(domainObjectContext, confName, configurationsProvider, resolver, listenerManager, metaDataProvider,
-            Factories.constant(resolutionStrategy), projectAccessListener, projectFinder, TestFiles.fileCollectionFactory(),
-            new TestBuildOperationExecutor(), instantiator, publishArtifactNotationParser, Stub(NotationParser), immutableAttributesFactory, rootComponentMetadataBuilder, Stub(DocumentationRegistry), userCodeApplicationContext, new DomainObjectProjectStateHandler(projectStateRegistry, domainObjectContext, projectFinder), TestUtil.domainObjectCollectionFactory())
+            Factories.constant(resolutionStrategy), projectAccessListener, TestFiles.fileCollectionFactory(),
+            new TestBuildOperationExecutor(), instantiator, publishArtifactNotationParser, Stub(NotationParser), immutableAttributesFactory, rootComponentMetadataBuilder, Stub(DocumentationRegistry), userCodeApplicationContext, domainObjectContext, projectStateRegistry, TestUtil.domainObjectCollectionFactory())
     }
 
     private DefaultPublishArtifact artifact(String name) {

@@ -28,7 +28,7 @@ import org.gradle.cache.internal.SingleDepthFilesFinder;
 import org.gradle.internal.Try;
 import org.gradle.internal.execution.history.ExecutionHistoryStore;
 import org.gradle.internal.file.FileAccessTimeJournal;
-import org.gradle.internal.resource.local.SingleDepthFileAccessTracker;
+import org.gradle.internal.file.impl.SingleDepthFileAccessTracker;
 
 import javax.annotation.concurrent.NotThreadSafe;
 import java.io.Closeable;
@@ -55,7 +55,7 @@ public class ImmutableTransformationWorkspaceProvider implements TransformationW
             .withCleanup(createCleanupAction(filesOutputDirectory, fileAccessTimeJournal))
             .withCrossVersionCache(CacheBuilder.LockTarget.DefaultTarget)
             .withDisplayName("Artifact transforms cache")
-            .withLockOptions(mode(FileLockManager.LockMode.None)) // Lock on demand
+            .withLockOptions(mode(FileLockManager.LockMode.OnDemand)) // Lock on demand
             .open();
         fileAccessTracker = new SingleDepthFileAccessTracker(fileAccessTimeJournal, filesOutputDirectory, FILE_TREE_DEPTH_TO_TRACK_AND_CLEANUP);
     }

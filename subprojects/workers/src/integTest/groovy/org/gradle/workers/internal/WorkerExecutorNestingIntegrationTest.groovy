@@ -16,8 +16,10 @@
 
 package org.gradle.workers.internal
 
+import org.gradle.api.tasks.Internal
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
 import org.gradle.internal.work.DefaultConditionalExecutionQueue
+import org.gradle.workers.WorkerExecutor
 import org.gradle.workers.fixtures.WorkerExecutorFixture
 import spock.lang.Unroll
 
@@ -26,7 +28,7 @@ import static org.gradle.workers.fixtures.WorkerExecutorFixture.ISOLATION_MODES
 @IntegrationTestTimeout(120)
 class WorkerExecutorNestingIntegrationTest extends AbstractWorkerExecutorIntegrationTest {
     def nestingParameterType = fixture.workParameterClass("NestingParameter", "org.gradle.test").withFields([
-        "greeting": "String",
+        "greeting": "Property<String>",
         "childSubmissions": "int"
     ])
 
@@ -115,7 +117,7 @@ class WorkerExecutorNestingIntegrationTest extends AbstractWorkerExecutorIntegra
 
         and:
         failure.assertHasCause("Could not create an instance of type FirstLevelExecution.")
-        failure.assertHasCause("Unable to determine constructor argument #1: missing parameter of interface org.gradle.workers.WorkerExecutor, or no service of type interface org.gradle.workers.WorkerExecutor")
+        failure.assertHasCause("Unable to determine constructor argument #1: missing parameter of type WorkerExecutor, or no service of type WorkerExecutor")
 
         where:
         nestedIsolationMode << ISOLATION_MODES
@@ -137,7 +139,7 @@ class WorkerExecutorNestingIntegrationTest extends AbstractWorkerExecutorIntegra
 
         and:
         failure.assertHasCause("Could not create an instance of type FirstLevelExecution.")
-        failure.assertHasCause("Unable to determine constructor argument #1: missing parameter of interface org.gradle.workers.WorkerExecutor, or no service of type interface org.gradle.workers.WorkerExecutor")
+        failure.assertHasCause("Unable to determine constructor argument #1: missing parameter of type WorkerExecutor, or no service of type WorkerExecutor")
 
         where:
         nestedIsolationMode << ISOLATION_MODES
@@ -193,9 +195,9 @@ class WorkerExecutorNestingIntegrationTest extends AbstractWorkerExecutorIntegra
 
     WorkerExecutorFixture.WorkActionClass getFirstLevelExecution(String nestedIsolationMode) {
         def workerClass = fixture.workActionClass("FirstLevelExecution", "org.gradle.test", nestingParameterType)
-        workerClass.imports += ["org.gradle.workers.WorkerExecutor"]
+        workerClass.imports += [WorkerExecutor.name, Internal.name]
         workerClass.extraFields = """
-            WorkerExecutor executor
+            @Internal WorkerExecutor executor
             
             ${fixture.workerMethodTranslation}
         """
@@ -205,7 +207,7 @@ class WorkerExecutorNestingIntegrationTest extends AbstractWorkerExecutorIntegra
             def theGreeting = parameters.greeting
             parameters.childSubmissions.times {
                 executor."\${getWorkerMethod($nestedIsolationMode)}"().submit(SecondLevelExecution) {
-                    greeting = theGreeting
+                    greeting.set(theGreeting)
                 }
             }
         """
@@ -215,7 +217,7 @@ class WorkerExecutorNestingIntegrationTest extends AbstractWorkerExecutorIntegra
     WorkerExecutorFixture.WorkActionClass getSecondLevelExecution() {
         def workerClass = fixture.workActionClass("SecondLevelExecution", "org.gradle.test", nestingParameterType)
         workerClass.action = """
-            System.out.println(parameters.greeting)
+            System.out.println(parameters.greeting.get())
         """
         return workerClass
     }
@@ -226,9 +228,14 @@ class WorkerExecutorNestingIntegrationTest extends AbstractWorkerExecutorIntegra
         return """
             class NestingWorkerTask extends DefaultTask {
 
-                WorkerExecutor executor
+                @Internal
+                final WorkerExecutor executor
+
+                @Internal
                 boolean waitForChildren = false
+                @Internal
                 int submissions = 1
+                @Internal
                 int childSubmissions = 1
 
                 @Inject

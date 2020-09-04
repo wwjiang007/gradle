@@ -30,7 +30,7 @@ import spock.lang.Subject
 
 class ModuleMetadataStoreTest extends Specification {
 
-    @Rule TestNameTestDirectoryProvider temporaryFolder
+    @Rule TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider(getClass())
     def pathKeyFileStore = Mock(PathKeyFileStore)
     def repository = "repositoryId"
     def fileStoreEntry = Mock(LocallyAvailableResource)
@@ -59,7 +59,7 @@ class ModuleMetadataStoreTest extends Specification {
     def "putModuleDescriptor uses PathKeyFileStore to write file"() {
         setup:
         File descriptorFile = temporaryFolder.createFile("fileStoreEntry")
-        def descriptor = mavenMetadataFactory.create(moduleComponentIdentifier).asImmutable()
+        def descriptor = mavenMetadataFactory.create(moduleComponentIdentifier, []).asImmutable()
 
         when:
         store.putModuleDescriptor(new ModuleComponentAtRepositoryKey(repository, moduleComponentIdentifier), descriptor)

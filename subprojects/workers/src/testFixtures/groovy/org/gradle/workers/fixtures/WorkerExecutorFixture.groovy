@@ -31,7 +31,7 @@ class WorkerExecutorFixture {
     def outputFileDir
     def outputFileDirPath
     def list = [ 1, 2, 3 ]
-    private final TestNameTestDirectoryProvider temporaryFolder
+    private final TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider(getClass())
     final WorkParameterClass testParameterType
     final WorkActionClass workActionThatCreatesFiles
     final WorkActionClass workActionThatFails
@@ -55,6 +55,9 @@ class WorkerExecutorFixture {
     }
 
     def prepareTaskTypeUsingWorker() {
+        withParameterClassInBuildSrc()
+        withFileHelperClassInBuildSrc()
+
         buildFile << """
             import org.gradle.workers.*
             $taskTypeUsingWorker
@@ -62,23 +65,31 @@ class WorkerExecutorFixture {
     }
 
     String getTaskTypeUsingWorker() {
-        withParameterClassInBuildSrc()
-        withFileHelperClassInBuildSrc()
-
         return """
             import javax.inject.Inject
             import org.gradle.other.Foo
 
             class WorkerTask extends DefaultTask {
+                @Internal
                 def list = $list
+                @Internal
                 def outputFileDirPath = "${outputFileDirPath}/\${name}"
+                @Internal
                 def additionalForkOptions = {}
+                @Internal
                 def workActionClass = TestWorkAction.class
+                @Internal
                 def additionalClasspath = project.layout.files()
+                @Internal
                 def foo = new Foo()
+                @Internal
                 def displayName = null
+                @Internal
                 def isolationMode = IsolationMode.AUTO
+                @Internal
                 def forkMode = null
+                @Internal
+                def additionalParameters = {}
 
                 @Inject
                 WorkerExecutor getWorkerExecutor() {
@@ -99,13 +110,14 @@ class WorkerExecutorFixture {
                         if (this.forkMode != null) {
                             forkMode = this.forkMode
                         }
-                    }).submit(workActionClass) {
+                    }).submit(workActionClass) { parameters ->
                         files = list.collect { it as String }
                         outputDir = new File(outputFileDirPath)
                         bar = foo
+                        additionalParameters.call(parameters)
                     }
                 }
-                
+
                 ${workerMethodTranslation}
             }
         """
@@ -162,7 +174,7 @@ class WorkerExecutorFixture {
             } finally {
                 getParameters().getOutputDir().mkdirs();
                 new File(getParameters().getOutputDir(), "finished").createNewFile();
-            } 
+            }
         """
         return workerClass
     }
@@ -234,14 +246,14 @@ class WorkerExecutorFixture {
     String getFileHelperClass() {
         return """
             package org.gradle.test;
-            
+
             import java.io.File;
             import java.io.PrintWriter;
             import java.io.BufferedWriter;
             import java.io.FileWriter;
-            
+
             public class FileHelper {
-                static void write(String id, File outputFile) {
+                public static void write(String id, File outputFile) {
                     PrintWriter out = null;
                     try {
                         outputFile.getParentFile().mkdirs();
@@ -380,8 +392,12 @@ class WorkerExecutorFixture {
             fields.each { name, type ->
                 fieldDeclarations += """
                     ${type} get${name.capitalize()}();
-                    void set${name.capitalize()}(${type} ${name.uncapitalize()});
                 """
+                if (!(type.startsWith("Property<") || type == "ConfigurableFileCollection")) {
+                    fieldDeclarations += """
+                        void set${name.capitalize()}(${type} ${name.uncapitalize()});
+                    """
+                }
             }
             return fieldDeclarations
         }
@@ -426,10 +442,10 @@ class WorkerExecutorFixture {
                     ${extraFields}
 
                     @javax.inject.Inject
-                    public ${name.capitalize()}(${constructorArgs}) { 
+                    public ${name.capitalize()}(${constructorArgs}) {
                         ${constructorAction}
                     }
-                    
+
                     public void execute() {
                         ${action}
                     }

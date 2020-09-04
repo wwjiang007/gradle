@@ -20,6 +20,7 @@ import com.google.common.base.Predicate
 import com.google.common.collect.Sets
 import groovy.json.JsonSlurper
 import org.gradle.internal.operations.trace.BuildOperationTrace
+import org.gradle.launcher.exec.RunBuildBuildOperationType
 import org.gradle.test.fixtures.file.TestFile
 
 class BuildOperationNotificationFixture {
@@ -121,10 +122,14 @@ class BuildOperationNotificationFixture {
                 synchronized void started(${BuildOperationStartedNotification.name} startedNotification) {
             
                     def details = ${BuildOperationTrace.name}.toSerializableModel(startedNotification.notificationOperationDetails)
+                    def detailsType = startedNotification.notificationOperationDetails.getClass()
+                    if (detailsType.interfaces.length > 0) {
+                        detailsType = detailsType.interfaces[0]
+                    }
 
                     ops.put(startedNotification.notificationOperationId, new BuildOpsEntry(id: startedNotification.notificationOperationId?.id,
                             parentId: startedNotification.notificationOperationParentId?.id,
-                            detailsType: startedNotification.notificationOperationDetails.getClass().getInterfaces()[0].getName(),
+                            detailsType: detailsType.name,
                             details: details, 
                             started: startedNotification.notificationOperationStartedTimestamp))
                 }
@@ -141,6 +146,9 @@ class BuildOperationNotificationFixture {
                     op.resultType = finishedNotification.getNotificationOperationResult().getClass().getInterfaces()[0].getName()
                     op.result = result
                     op.finished = finishedNotification.getNotificationOperationFinishedTimestamp()
+                    if (finishedNotification.notificationOperationDetails instanceof ${RunBuildBuildOperationType.Details.name}) {
+                        store(file('${jsonFile().toURI()}'))
+                    }
                 }
             
                 synchronized void store(File target){
@@ -162,10 +170,7 @@ class BuildOperationNotificationFixture {
                 }
             }
 
-            def registrar = services.get($BuildOperationNotificationListenerRegistrar.name)            
-            gradle.buildFinished {
-                listener.store(file('${jsonFile().toURI()}'))
-            }
+            def registrar = services.get($BuildOperationNotificationListenerRegistrar.name)
         """
     }
 

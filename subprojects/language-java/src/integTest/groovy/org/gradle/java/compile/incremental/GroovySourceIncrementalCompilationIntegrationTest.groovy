@@ -18,6 +18,7 @@ package org.gradle.java.compile.incremental
 
 import org.gradle.integtests.fixtures.CompiledLanguage
 import org.gradle.integtests.fixtures.DirectoryBuildCacheFixture
+import spock.lang.Issue
 import spock.lang.Unroll
 
 class GroovySourceIncrementalCompilationIntegrationTest extends AbstractSourceIncrementalCompilationIntegrationTest implements DirectoryBuildCacheFixture {
@@ -163,7 +164,7 @@ class A2{}
         run 'compileGroovy', '--info'
 
         then:
-        outputContains('changes to non-Groovy files are not supported by incremental compilation')
+        outputContains("Full recompilation is required because non-Groovy file 'B.java' has been added.")
         !file('build/tmp/compileGroovy/source-classes-mapping.txt').text.contains('MyClass')
     }
 
@@ -181,5 +182,66 @@ class A2{}
         skipped(':compileGroovy')
         !file('build/tmp/compileGroovy/source-classes-mapping.txt').text.contains('A.groovy')
         file('build/tmp/compileGroovy/source-classes-mapping.txt').text.contains('B.groovy')
+    }
+
+    def "does recompile when a resource changes"() {
+        // TODO wolfs:
+        //  Currently, a change to any non-Groovy file causes a full recompile.
+        //  Later, changes to Java files should be handled incrementally.
+        //  Changes to the registration file for global transforms needs to cause a full recompile.
+        //  Other resources can probably be used by AST transformations, so they probably should cause a full recompile as well.
+        given:
+        buildFile << """
+            ${language.compileTaskName}.source 'src/main/resources'
+        """
+        source("class A {}")
+        source("class B {}")
+        def resource = file("src/main/resources/foo.txt")
+        resource.text = 'foo'
+
+        outputs.snapshot { succeeds language.compileTaskName }
+
+        when:
+        resource.text = 'bar'
+
+        then:
+        succeeds language.compileTaskName
+        outputs.recompiledClasses("A", "B")
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/10340")
+    def "recompiles class when constant from inner class is changed"() {
+        given:
+        file("src/main/${languageName}/MyAnnotation.${languageName}") << """
+            public @interface MyAnnotation { int value(); }
+        """
+        file("src/main/${languageName}/TopLevel.${languageName}") << """
+            public class TopLevel {
+               static class Inner {
+                  public static final int CONST = 9999;
+               }
+            }
+        """
+        file("src/main/${languageName}/MyClass.${languageName}") << """
+            public class MyClass {
+                @MyAnnotation(TopLevel.Inner.CONST)
+                private void foo() { }
+            }
+        """
+
+        outputs.snapshot { run language.compileTaskName }
+
+        when:
+        file("src/main/${languageName}/TopLevel.${languageName}").text = """
+            public class TopLevel {
+               static class Inner {
+                  public static final int CONST = 1223;
+               }
+            }
+        """
+
+        then:
+        succeeds language.compileTaskName
+        outputs.recompiledClasses('MyClass', 'MyAnnotation', 'TopLevel$Inner', 'TopLevel')
     }
 }

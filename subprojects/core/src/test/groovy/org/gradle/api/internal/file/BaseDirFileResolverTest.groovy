@@ -17,8 +17,6 @@ package org.gradle.api.internal.file
 
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.PathValidation
-import org.gradle.api.file.FileCollection
-import org.gradle.api.internal.file.collections.DefaultConfigurableFileCollection
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.PreconditionVerifier
 import org.junit.Before
@@ -28,10 +26,8 @@ import org.junit.Test
 import java.util.concurrent.Callable
 
 import static org.hamcrest.CoreMatchers.equalTo
-import static org.hamcrest.CoreMatchers.instanceOf
-import static org.hamcrest.CoreMatchers.sameInstance
 import static org.junit.Assert.assertEquals
-import static org.junit.Assert.assertThat
+import static org.hamcrest.MatcherAssert.assertThat
 import static org.junit.Assert.fail
 
 class BaseDirFileResolverTest {
@@ -42,12 +38,12 @@ class BaseDirFileResolverTest {
     File testDir
 
     BaseDirFileResolver baseDirConverter
-    @Rule public TestNameTestDirectoryProvider rootDir = new TestNameTestDirectoryProvider()
+    @Rule public TestNameTestDirectoryProvider rootDir = new TestNameTestDirectoryProvider(getClass())
     @Rule public PreconditionVerifier preconditions = new PreconditionVerifier()
 
     @Before public void setUp() {
         baseDir = rootDir.testDirectory
-        baseDirConverter = new BaseDirFileResolver(baseDir, TestFiles.getPatternSetFactory())
+        baseDirConverter = new BaseDirFileResolver(baseDir)
         testFile = new File(baseDir, 'testfile')
         testDir = new File(baseDir, 'testdir')
     }
@@ -222,18 +218,6 @@ class BaseDirFileResolverTest {
         Callable callable = {'relative'} as Callable
         Closure closure = {callable}
         assertEquals(new File(baseDir, 'relative'), baseDirConverter.resolve(closure))
-    }
-
-    @Test public void testFiles() {
-        FileCollection collection = baseDirConverter.resolveFiles('a', 'b')
-        assertThat(collection, instanceOf(DefaultConfigurableFileCollection))
-        assertThat(collection.from as List, equalTo(['a', 'b']))
-    }
-
-    @Test public void testFilesReturnsSourceFileCollection() {
-        FileCollection source = baseDirConverter.resolveFiles('a')
-        FileCollection collection = baseDirConverter.resolveFiles(source)
-        assertThat(collection, sameInstance(source))
     }
 
     @Test public void testResolveAbsolutePathToUri() {

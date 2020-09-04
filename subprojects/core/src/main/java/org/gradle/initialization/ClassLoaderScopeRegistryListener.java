@@ -16,7 +16,13 @@
 
 package org.gradle.initialization;
 
+import org.gradle.api.internal.initialization.loadercache.ClassLoaderId;
 import org.gradle.internal.classpath.ClassPath;
+import org.gradle.internal.hash.HashCode;
+import org.gradle.internal.service.scopes.EventScope;
+import org.gradle.internal.service.scopes.Scopes;
+
+import javax.annotation.Nullable;
 
 
 /**
@@ -28,15 +34,14 @@ import org.gradle.internal.classpath.ClassPath;
  * @see ClassLoaderScopeRegistry
  * @see org.gradle.api.internal.initialization.ClassLoaderScope
  */
+@EventScope(Scopes.Build.class)
 public interface ClassLoaderScopeRegistryListener {
 
     void rootScopeCreated(ClassLoaderScopeId rootScopeId);
 
     void childScopeCreated(ClassLoaderScopeId parentId, ClassLoaderScopeId childId);
 
-    void localClasspathAdded(ClassLoaderScopeId scopeId, ClassPath localClassPath);
-
-    void exportClasspathAdded(ClassLoaderScopeId scopeId, ClassPath exportClassPath);
+    void classloaderCreated(ClassLoaderScopeId scopeId, ClassLoaderId classLoaderId, ClassLoader classLoader, ClassPath classPath, @Nullable HashCode implementationHash);
 
     ClassLoaderScopeRegistryListener NULL = new ClassLoaderScopeRegistryListener() {
         @Override
@@ -48,11 +53,7 @@ public interface ClassLoaderScopeRegistryListener {
         }
 
         @Override
-        public void localClasspathAdded(ClassLoaderScopeId scopeId, ClassPath localClassPath) {
-        }
-
-        @Override
-        public void exportClasspathAdded(ClassLoaderScopeId scopeId, ClassPath exportClassPath) {
+        public void classloaderCreated(ClassLoaderScopeId scopeId, ClassLoaderId classLoaderId, ClassLoader classLoader, ClassPath classPath, @Nullable HashCode implementationHash) {
         }
     };
 }

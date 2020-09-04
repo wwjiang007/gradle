@@ -20,9 +20,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
-import org.gradle.api.Incubating;
 import org.gradle.api.UncheckedIOException;
 import org.gradle.api.internal.file.FileLookup;
+import org.gradle.api.internal.file.FileOperations;
 import org.gradle.api.internal.file.FileResolver;
 import org.gradle.api.internal.plugins.StartScriptGenerator;
 import org.gradle.api.tasks.Input;
@@ -170,7 +170,7 @@ public class Wrapper extends DefaultTask {
      */
     @OutputFile
     public File getScriptFile() {
-        return getProject().file(scriptFile);
+        return getServices().get(FileOperations.class).file(scriptFile);
     }
 
     /**
@@ -203,7 +203,7 @@ public class Wrapper extends DefaultTask {
      */
     @OutputFile
     public File getJarFile() {
-        return getProject().file(jarFile);
+        return getServices().get(FileOperations.class).file(jarFile);
     }
 
     /**
@@ -352,7 +352,6 @@ public class Wrapper extends DefaultTask {
      *
      * @since 4.5
      */
-    @Incubating
     @Nullable
     @Optional
     @Input
@@ -371,7 +370,6 @@ public class Wrapper extends DefaultTask {
      *
      * @since 4.5
      */
-    @Incubating
     @Option(option = "gradle-distribution-sha256-sum", description = "The SHA-256 hash sum of the gradle distribution.")
     public void setDistributionSha256Sum(@Nullable String distributionSha256Sum) {
         this.distributionSha256Sum = distributionSha256Sum;

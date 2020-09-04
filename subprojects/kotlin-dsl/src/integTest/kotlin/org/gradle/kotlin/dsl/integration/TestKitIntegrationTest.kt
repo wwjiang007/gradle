@@ -16,7 +16,9 @@
 
 package org.gradle.kotlin.dsl.integration
 
+import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.kotlin.dsl.fixtures.AbstractKotlinIntegrationTest
+import org.gradle.kotlin.dsl.fixtures.normalisedPath
 
 import org.gradle.test.fixtures.file.LeaksFileHandles
 
@@ -27,9 +29,9 @@ class TestKitIntegrationTest : AbstractKotlinIntegrationTest() {
 
     @Test
     @LeaksFileHandles("Kotlin Compiler Daemon working directory")
+    @ToBeFixedForConfigurationCache
     fun `withPluginClasspath works`() {
-
-        requireGradleDistributionOnEmbeddedExecuter()
+        assumeNonEmbeddedGradleExecuter()
 
         withDefaultSettings()
 
@@ -51,7 +53,7 @@ class TestKitIntegrationTest : AbstractKotlinIntegrationTest() {
 
             dependencies {
                 implementation(kotlin("stdlib-jdk8"))
-                testImplementation("junit:junit:4.12")
+                testImplementation("junit:junit:4.13")
                 testImplementation("org.hamcrest:hamcrest-core:1.3")
             }
 
@@ -84,7 +86,7 @@ class TestKitIntegrationTest : AbstractKotlinIntegrationTest() {
             import org.gradle.testkit.runner.*
             import org.hamcrest.CoreMatchers.*
             import org.junit.*
-            import org.junit.Assert.assertThat
+            import org.hamcrest.MatcherAssert.assertThat
             import org.junit.rules.TemporaryFolder
 
             class TestPluginTest {
@@ -114,6 +116,7 @@ class TestKitIntegrationTest : AbstractKotlinIntegrationTest() {
                         .withProjectDir(temporaryFolder.root)
                         .withPluginClasspath()
                         .withArguments(*arguments)
+                        .withTestKitDir(java.io.File("${executer.gradleUserHomeDir.normalisedPath}"))
                         .build()
 
                 private

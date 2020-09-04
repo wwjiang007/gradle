@@ -16,18 +16,23 @@
 
 package org.gradle.internal.snapshot;
 
+import org.gradle.internal.file.FileMetadata;
 import org.gradle.internal.file.FileType;
 import org.gradle.internal.hash.HashCode;
 
+import java.util.Optional;
+
 /**
- * A snapshot of a regular file.
+ * A complete snapshot of a regular file.
+ *
+ * The snapshot includes the content hash of the file.
  */
-public class RegularFileSnapshot extends AbstractFileSystemLocationSnapshot {
+public class RegularFileSnapshot extends AbstractCompleteFileSystemLocationSnapshot {
     private final HashCode contentHash;
     private final FileMetadata metadata;
 
     public RegularFileSnapshot(String absolutePath, String name, HashCode contentHash, FileMetadata metadata) {
-        super(absolutePath, name);
+        super(absolutePath, name, metadata.getAccessType());
         this.contentHash = contentHash;
         this.metadata = metadata;
     }
@@ -42,12 +47,13 @@ public class RegularFileSnapshot extends AbstractFileSystemLocationSnapshot {
         return contentHash;
     }
 
+    // Used by the Maven caching client. Do not remove
     public FileMetadata getMetadata() {
         return metadata;
     }
 
     @Override
-    public boolean isContentAndMetadataUpToDate(FileSystemLocationSnapshot other) {
+    public boolean isContentAndMetadataUpToDate(CompleteFileSystemLocationSnapshot other) {
         if (!(other instanceof RegularFileSnapshot)) {
             return false;
         }
@@ -58,5 +64,11 @@ public class RegularFileSnapshot extends AbstractFileSystemLocationSnapshot {
     @Override
     public void accept(FileSystemSnapshotVisitor visitor) {
         visitor.visitFile(this);
+    }
+
+    @Override
+    public Optional<FileSystemNode> invalidate(VfsRelativePath relativePath, CaseSensitivity caseSensitivity, SnapshotHierarchy.NodeDiffListener diffListener) {
+        diffListener.nodeRemoved(this);
+        return Optional.empty();
     }
 }

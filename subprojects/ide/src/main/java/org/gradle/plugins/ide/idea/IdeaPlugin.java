@@ -24,7 +24,6 @@ import com.google.common.collect.Sets;
 import org.gradle.api.Action;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.Project;
-import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.component.BuildIdentifier;
@@ -45,7 +44,6 @@ import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.xml.XmlTransformer;
-import org.gradle.language.scala.plugins.ScalaLanguagePlugin;
 import org.gradle.plugins.ide.api.XmlFileContentMerger;
 import org.gradle.plugins.ide.idea.internal.IdeaModuleMetadata;
 import org.gradle.plugins.ide.idea.internal.IdeaScalaConfigurer;
@@ -434,7 +432,6 @@ public class IdeaPlugin extends IdePlugin {
 
         Collection<Configuration> provided = scopes.get(GeneratedIdeaScope.PROVIDED.name()).get(IdeaDependenciesProvider.SCOPE_PLUS);
         provided.add(configurations.getByName(JavaPlugin.COMPILE_CLASSPATH_CONFIGURATION_NAME));
-        provided.add(configurations.getByName(JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME));
 
         Collection<Configuration> runtime = scopes.get(GeneratedIdeaScope.RUNTIME.name()).get(IdeaDependenciesProvider.SCOPE_PLUS);
         runtime.add(configurations.getByName(JavaPlugin.RUNTIME_CLASSPATH_CONFIGURATION_NAME));
@@ -442,7 +439,6 @@ public class IdeaPlugin extends IdePlugin {
         Collection<Configuration> test = scopes.get(GeneratedIdeaScope.TEST.name()).get(IdeaDependenciesProvider.SCOPE_PLUS);
         test.add(configurations.getByName(JavaPlugin.TEST_COMPILE_CLASSPATH_CONFIGURATION_NAME));
         test.add(configurations.getByName(JavaPlugin.TEST_RUNTIME_CLASSPATH_CONFIGURATION_NAME));
-        test.add(configurations.getByName(JavaPlugin.TEST_ANNOTATION_PROCESSOR_CONFIGURATION_NAME));
 
         ideaModel.getModule().setScopes(scopes);
     }
@@ -481,6 +477,8 @@ public class IdeaPlugin extends IdePlugin {
         return !moduleLanguageLevel.equals(ideaProject.getLanguageLevel());
     }
 
+
+    @SuppressWarnings("deprecation")
     private void configureForScalaPlugin() {
         project.getPlugins().withType(ScalaBasePlugin.class, new Action<ScalaBasePlugin>() {
             @Override
@@ -488,9 +486,9 @@ public class IdeaPlugin extends IdePlugin {
                 ideaModuleDependsOnRoot();
             }
         });
-        project.getPlugins().withType(ScalaLanguagePlugin.class, new Action<ScalaLanguagePlugin>() {
+        project.getPlugins().withType(org.gradle.language.scala.plugins.ScalaLanguagePlugin.class, new Action<org.gradle.language.scala.plugins.ScalaLanguagePlugin>() {
             @Override
-            public void execute(ScalaLanguagePlugin scalaLanguagePlugin) {
+            public void execute(org.gradle.language.scala.plugins.ScalaLanguagePlugin scalaLanguagePlugin) {
                 ideaModuleDependsOnRoot();
             }
 
@@ -507,17 +505,11 @@ public class IdeaPlugin extends IdePlugin {
 
     private void linkCompositeBuildDependencies(final ProjectInternal project) {
         if (isRoot()) {
-            getLifecycleTask().configure(new Action<Task>() {
-                @Override
-                public void execute(Task task) {
-                    task.dependsOn(new TaskDependencyContainer() {
-                        @Override
-                        public void visitDependencies(TaskDependencyResolveContext context) {
-                            visitAllImlArtifactsInComposite(project, ideaModel.getProject(), context);
-                        }
-                    });
-                }
-            });
+            getLifecycleTask().configure(
+                task -> task.dependsOn(
+                    (TaskDependencyContainer) context -> visitAllImlArtifactsInComposite(project, ideaModel.getProject(), context)
+                )
+            );
         }
     }
 

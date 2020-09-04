@@ -127,7 +127,7 @@ public class TestNGTestClassProcessor implements TestClassProcessor {
             }
         }
 
-        if (!options.getIncludedTests().isEmpty() || !options.getIncludedTestsCommandLine().isEmpty()) {
+        if (!options.getIncludedTests().isEmpty() || !options.getIncludedTestsCommandLine().isEmpty() || !options.getExcludedTests().isEmpty()) {
             testNg.addListener(new SelectedTestsFilter(options.getIncludedTests(),
                 options.getExcludedTests(), options.getIncludedTestsCommandLine()));
         }
@@ -135,7 +135,7 @@ public class TestNGTestClassProcessor implements TestClassProcessor {
         if (!suiteFiles.isEmpty()) {
             testNg.setTestSuites(GFileUtils.toPaths(suiteFiles));
         } else {
-            testNg.setTestClasses(testClasses.toArray(new Class[0]));
+            testNg.setTestClasses(testClasses.toArray(new Class<?>[0]));
         }
         testNg.addListener((Object) adaptListener(new TestNGTestResultProcessorAdapter(resultProcessor, idGenerator, clock)));
         testNg.run();

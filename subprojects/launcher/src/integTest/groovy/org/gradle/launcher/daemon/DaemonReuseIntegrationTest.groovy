@@ -69,7 +69,7 @@ class DaemonReuseIntegrationTest extends DaemonIntegrationSpec {
         daemons.daemon.becomesCanceled()
 
         when:
-        def build = executer.withTasks("tasks").withArguments("--info").start()
+        def build = executer.withTasks("help").withArguments("--info").start()
         ConcurrentTestUtil.poll {
             assert build.standardOutput.contains(DaemonMessages.WAITING_ON_CANCELED)
         }
@@ -103,7 +103,7 @@ class DaemonReuseIntegrationTest extends DaemonIntegrationSpec {
         daemons.daemon.becomesCanceled()
 
         when:
-        def build = executer.withTasks("tasks").withArguments("--info").start()
+        def build = executer.withTasks("help").withArguments("--info").start()
 
         then:
         build.waitForFinish()
@@ -137,7 +137,7 @@ class DaemonReuseIntegrationTest extends DaemonIntegrationSpec {
         canceledDaemon.becomesCanceled()
 
         when:
-        def build = executer.withTasks("tasks").withArguments("--info").start()
+        def build = executer.withTasks("help").withArguments("--info").start()
         ConcurrentTestUtil.poll {
             assert build.standardOutput.contains(DaemonMessages.WAITING_ON_CANCELED)
         }
@@ -157,8 +157,9 @@ class DaemonReuseIntegrationTest extends DaemonIntegrationSpec {
         expectEvent("started2")
         buildFile << """
             task block {
+                def buildNum = providers.gradleProperty("buildNum")
                 doLast {
-                    new URL("${getUrl('started')}\$buildNum").text
+                    new URL("${getUrl('started')}\${buildNum.get()}").text
 
                     // Block indefinitely for the daemon to appear busy
                     new java.util.concurrent.Semaphore(0).acquireUninterruptibly()
@@ -175,7 +176,7 @@ class DaemonReuseIntegrationTest extends DaemonIntegrationSpec {
         def canceledDaemon2 = daemons.daemons.find { it.context.pid != canceledDaemon1.context.pid }
 
         // 1 daemon we can reuse
-        def build3 = executer.withTasks("tasks").start()
+        def build3 = executer.withTasks("help").start()
 
         when:
         build3.waitForFinish()
@@ -196,7 +197,7 @@ class DaemonReuseIntegrationTest extends DaemonIntegrationSpec {
         canceledDaemon2.becomesCanceled()
 
         when:
-        build3 = executer.withTasks("tasks").start()
+        build3 = executer.withTasks("help").start()
 
         then:
         build3.waitForFinish()
@@ -213,8 +214,9 @@ class DaemonReuseIntegrationTest extends DaemonIntegrationSpec {
         succeeds("help")
         buildFile << """
             task block {
+                def buildNum = providers.gradleProperty("buildNum")
                 doLast {
-                    new URL("${getUrl('started')}\$buildNum").text
+                    new URL("${getUrl('started')}\${buildNum.get()}").text
                 }
             }
         """

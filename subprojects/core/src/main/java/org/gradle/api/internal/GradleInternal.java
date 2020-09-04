@@ -51,6 +51,8 @@ public interface GradleInternal extends Gradle, PluginAwareInternal {
 
     GradleInternal getRoot();
 
+    boolean isRootBuild();
+
     /**
      * Returns the {@link BuildState} that manages the state of this instance.
      */
@@ -75,8 +77,8 @@ public interface GradleInternal extends Gradle, PluginAwareInternal {
     /**
      * The settings for this build.
      *
-     * @throws IllegalStateException when the build is not loaded yet, see {@link #setSettings(SettingsInternal)}
      * @return the settings for this build
+     * @throws IllegalStateException when the build is not loaded yet, see {@link #setSettings(SettingsInternal)}
      */
     SettingsInternal getSettings() throws IllegalStateException;
 
@@ -114,37 +116,43 @@ public interface GradleInternal extends Gradle, PluginAwareInternal {
 
     ServiceRegistryFactory getServiceRegistryFactory();
 
+    void setClassLoaderScope(ClassLoaderScope classLoaderScope);
+
     ClassLoaderScope getClassLoaderScope();
 
     void setIncludedBuilds(Collection<? extends IncludedBuild> includedBuilds);
 
     /**
      * Returns a unique path for this build within the current Gradle invocation.
-     *
-     * @throws IllegalStateException When the path is not yet known. The path is often a function of the name of the root project, which is not known when this `Gradle` instance is created.
      */
-    Path getIdentityPath() throws IllegalStateException;
-
-    /**
-     * Returns a unique path for this build within the current Gradle invocation, or null when not yet known
-     */
-    @Nullable
-    Path findIdentityPath();
-
-    void setIdentityPath(Path path);
+    Path getIdentityPath();
 
     String contextualize(String description);
 
     PublicBuildPath getPublicBuildPath();
 
-    enum BuildType {
-        NONE,
-        TASKS,
-        MODEL
-    }
+    /**
+     * The basis for project build scripts.
+     *
+     * It is the Gradle runtime + buildSrc's contributions.
+     * This is used as the parent scope for the root project's build script, and all script plugins.
+     *
+     * This is only on this object for convenience due to legacy.
+     * Pre Gradle 6, what is now called {@link SettingsInternal#getBaseClassLoaderScope()} was used as the equivalent scope for project scripts.
+     * Since Gradle 6, it does not include buildSrc, whereas this scope does.
+     *
+     * This method is not named as a property getter to avoid getProperties() invoking it.
+     *
+     * @throws IllegalStateException if called before {@link #setBaseProjectClassLoaderScope(ClassLoaderScope)}
+     */
+    ClassLoaderScope baseProjectClassLoaderScope();
 
-    void setBuildType(BuildType buildType);
+    /**
+     * @throws IllegalStateException if called more than once
+     */
+    void setBaseProjectClassLoaderScope(ClassLoaderScope classLoaderScope);
 
-    BuildType getBuildType();
+    @Override
+    StartParameterInternal getStartParameter();
 
 }

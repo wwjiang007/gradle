@@ -38,7 +38,7 @@ import static org.gradle.buildinit.plugins.internal.modifiers.BuildInitTestFrame
 @UsesNativeServices
 class InitBuildSpec extends Specification {
     @Rule
-    public final TestNameTestDirectoryProvider testDir = new TestNameTestDirectoryProvider()
+    public final TestNameTestDirectoryProvider testDir = new TestNameTestDirectoryProvider(getClass())
 
     InitBuild init
 
@@ -82,6 +82,7 @@ class InitBuildSpec extends Specification {
         projectSetupDescriptor.testFrameworks >> [SPOCK]
         projectSetupDescriptor.dsls >> [GROOVY, KOTLIN]
         projectSetupDescriptor.furtherReading >> Optional.empty()
+        projectSetupDescriptor.componentType >> ComponentType.LIBRARY
         init.type = "java-library"
         init.dsl = "kotlin"
         init.testFramework = "spock"

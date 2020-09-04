@@ -21,6 +21,7 @@ import org.gradle.api.attributes.CompatibilityCheckDetails
 import org.gradle.api.attributes.MultipleCandidatesDetails
 import org.gradle.api.attributes.Usage
 import org.gradle.api.internal.artifacts.JavaEcosystemSupport
+import org.gradle.api.internal.project.DefaultProject
 import org.gradle.api.reporting.ReportingExtension
 import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.SourceSet
@@ -30,7 +31,11 @@ import org.gradle.api.tasks.bundling.Jar
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.testing.Test
+import org.gradle.initialization.GradlePropertiesController
+import org.gradle.internal.jvm.Jvm
 import org.gradle.jvm.ClassDirectoryBinarySpec
+import org.gradle.jvm.toolchain.JavaInstallationRegistry
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.language.base.ProjectSourceSet
 import org.gradle.language.java.JavaSourceSet
 import org.gradle.language.jvm.JvmResourceSet
@@ -59,9 +64,11 @@ class JavaBasePluginTest extends AbstractProjectBuilderSpec {
         then:
         project.plugins.hasPlugin(ReportingBasePlugin)
         project.plugins.hasPlugin(BasePlugin)
+        project.plugins.hasPlugin(JvmEcosystemPlugin)
         project.convention.plugins.java instanceof JavaPluginConvention
         project.extensions.sourceSets.is(project.convention.plugins.java.sourceSets)
         project.extensions.java instanceof JavaPluginExtension
+        project.extensions.javaInstalls instanceof JavaInstallationRegistry
     }
 
     void "sourceSets extension is exposed as SourceSetContainer"() {
@@ -131,7 +138,7 @@ class JavaBasePluginTest extends AbstractProjectBuilderSpec {
         SourceSet set = project.sourceSets.custom
         set.java.srcDirs == toLinkedSet(project.file('src/custom/java'))
         set.resources.srcDirs == toLinkedSet(project.file('src/custom/resources'))
-        set.java.outputDir == new File(project.buildDir, 'classes/java/custom')
+        set.java.destinationDirectory.set(new File(project.buildDir, 'classes/java/custom'))
         set.output.resourcesDir == new File(project.buildDir, 'resources/custom')
         set.output.generatedSourcesDirs.files == toLinkedSet(new File(project.buildDir, 'generated/sources/annotationProcessor/java/custom'))
 
@@ -169,7 +176,7 @@ class JavaBasePluginTest extends AbstractProjectBuilderSpec {
         SourceSet set = project.sourceSets.main
         set.java.srcDirs == toLinkedSet(project.file('src/main/java'))
         set.resources.srcDirs == toLinkedSet(project.file('src/main/resources'))
-        set.java.outputDir == new File(project.buildDir, 'classes/java/main')
+        set.java.destinationDirectory.set(new File(project.buildDir, 'classes/java/main'))
         set.output.resourcesDir == new File(project.buildDir, 'resources/main')
         set.output.generatedSourcesDirs.files == toLinkedSet(new File(project.buildDir, 'generated/sources/annotationProcessor/java/main'))
 
@@ -198,6 +205,53 @@ class JavaBasePluginTest extends AbstractProjectBuilderSpec {
         then:
         def customClasses = project.tasks['customClasses']
         TaskDependencyMatchers.dependsOn('someTask', 'processCustomResources', 'compileCustomJava').matches(customClasses)
+    }
+
+    void "wires toolchain for sourceset if toolchain is configured"() {
+        given:
+        def someJdk = Jvm.current()
+        setupProjectWithToolchain(someJdk)
+
+        when:
+        project.sourceSets.create('custom')
+
+        then:
+        def compileTask = project.tasks.named("compileCustomJava", JavaCompile).get()
+        def configuredToolchain = compileTask.javaCompiler.get().javaToolchain
+        configuredToolchain.displayName.contains(someJdk.javaVersion.getMajorVersion())
+    }
+
+    void "wires toolchain for test if toolchain is configured"() {
+        given:
+        def someJdk = Jvm.current()
+        setupProjectWithToolchain(someJdk)
+
+        when:
+        def testTask = project.tasks.named("test", Test).get()
+        def configuredJavaLauncher = testTask.javaLauncher.get()
+
+        then:
+        configuredJavaLauncher.executablePath.toString().contains(someJdk.javaVersion.getMajorVersion())
+    }
+
+    void "wires toolchain for javadoc if toolchain is configured"() {
+        given:
+        def someJdk = Jvm.current()
+        setupProjectWithToolchain(someJdk)
+
+        when:
+        def javadocTask = project.tasks.named("javadoc", Javadoc).get()
+        def configuredJavadocTool = javadocTask.javadocTool
+
+        then:
+        configuredJavadocTool.isPresent()
+    }
+
+    private void setupProjectWithToolchain(Jvm someJdk) {
+        project.pluginManager.apply(JavaPlugin)
+        project.java.toolchain.languageVersion = JavaLanguageVersion.of(someJdk.javaVersion.majorVersion)
+        // workaround for https://github.com/gradle/gradle/issues/13122
+        ((DefaultProject) project).getServices().get(GradlePropertiesController.class).loadGradlePropertiesFrom(project.projectDir)
     }
 
     void tasksReflectChangesToSourceSetConfiguration() {

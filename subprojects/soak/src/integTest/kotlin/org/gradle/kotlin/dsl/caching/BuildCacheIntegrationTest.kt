@@ -16,20 +16,20 @@
 
 package org.gradle.kotlin.dsl.caching
 
+import org.gradle.kotlin.dsl.caching.fixtures.CachedScript
+import org.gradle.kotlin.dsl.caching.fixtures.cachedBuildFile
+import org.gradle.kotlin.dsl.caching.fixtures.cachedSettingsFile
+import org.gradle.kotlin.dsl.caching.fixtures.compilationCache
 import org.gradle.kotlin.dsl.fixtures.normalisedPath
-
-import org.gradle.soak.categories.SoakTest
 
 import org.hamcrest.CoreMatchers.containsString
 import org.hamcrest.MatcherAssert.assertThat
 
 import org.junit.Test
-import org.junit.experimental.categories.Category
 
 import java.io.File
 
 
-@Category(SoakTest::class)
 class BuildCacheIntegrationTest : AbstractScriptCachingIntegrationTest() {
 
     @Test
@@ -39,19 +39,20 @@ class BuildCacheIntegrationTest : AbstractScriptCachingIntegrationTest() {
 
         withLocalBuildCacheSettings(buildCacheDir)
 
-        withBuildScript("""
+        val settingsFile = existing("settings.gradle.kts")
+        settingsFile.writeText("""
             plugins {
-                `build-scan`
+                `gradle-enterprise`
             }
 
-            buildScan {
+            gradleEnterprise.buildScan {
                 termsOfServiceUrl = "https://gradle.com/terms-of-service"
                 termsOfServiceAgree = "yes"
             }
-        """)
+        """ + settingsFile.readText())
 
-        build("--scan", "--build-cache").apply {
-            assertThat(output, containsBuildScanPluginOutput())
+        build("--scan", "--build-cache", "-Dscan.dump").apply {
+            assertThat(output, containsString("Build scan written to"))
         }
     }
 
@@ -134,7 +135,7 @@ class BuildCacheIntegrationTest : AbstractScriptCachingIntegrationTest() {
     fun withLocalBuildCacheSettings(buildCacheDir: File): File =
         withSettings("""
             buildCache {
-                local(DirectoryBuildCache::class.java) {
+                local {
                     directory = file("${buildCacheDir.normalisedPath}")
                     isEnabled = true
                     isPush = true

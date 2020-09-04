@@ -28,68 +28,68 @@ import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
-
 import org.gradle.groovy.scripts.TextResourceScriptSource
-
 import org.gradle.internal.classpath.ClassPath
 import org.gradle.internal.classpath.DefaultClassPath
-import org.gradle.internal.resource.BasicTextResourceLoader
+import org.gradle.internal.resource.TextFileResourceLoader
 import org.gradle.internal.time.Time.startTimer
-
 import org.gradle.kotlin.dsl.*
 import org.gradle.kotlin.dsl.accessors.AccessorsClassPath
-import org.gradle.kotlin.dsl.accessors.pluginSpecBuildersClassPath
-import org.gradle.kotlin.dsl.accessors.projectAccessorsClassPath
-
+import org.gradle.kotlin.dsl.accessors.PluginAccessorClassPathGenerator
+import org.gradle.kotlin.dsl.accessors.ProjectAccessorsClassPathGenerator
 import org.gradle.kotlin.dsl.execution.EvalOption
-
 import org.gradle.kotlin.dsl.precompile.PrecompiledScriptDependenciesResolver
-
 import org.gradle.kotlin.dsl.provider.ClassPathModeExceptionCollector
 import org.gradle.kotlin.dsl.provider.KotlinScriptClassPathProvider
 import org.gradle.kotlin.dsl.provider.KotlinScriptEvaluator
 import org.gradle.kotlin.dsl.provider.ignoringErrors
-
 import org.gradle.kotlin.dsl.resolver.EditorReports
 import org.gradle.kotlin.dsl.resolver.SourceDistributionResolver
 import org.gradle.kotlin.dsl.resolver.SourcePathProvider
-import org.gradle.kotlin.dsl.resolver.kotlinBuildScriptModelCorrelationId
-import org.gradle.kotlin.dsl.resolver.kotlinBuildScriptModelTarget
-
 import org.gradle.kotlin.dsl.support.ImplicitImports
 import org.gradle.kotlin.dsl.support.KotlinScriptType
 import org.gradle.kotlin.dsl.support.kotlinScriptTypeFor
 import org.gradle.kotlin.dsl.support.serviceOf
-
 import org.gradle.kotlin.dsl.tooling.models.EditorReport
 import org.gradle.kotlin.dsl.tooling.models.KotlinBuildScriptModel
-
+import org.gradle.tooling.model.kotlin.dsl.KotlinDslModelsParameters
 import org.gradle.tooling.provider.model.ToolingModelBuilder
-
 import java.io.File
 import java.io.PrintWriter
 import java.io.Serializable
 import java.io.StringWriter
-
 import java.util.EnumSet
 
 
-private
+internal
 data class KotlinBuildScriptModelParameter(
-    val scriptPath: String?,
+    val scriptFile: File?,
     val correlationId: String?
 )
 
 
-private
+internal
 data class StandardKotlinBuildScriptModel(
-    override val classPath: List<File>,
-    override val sourcePath: List<File>,
-    override val implicitImports: List<String>,
-    override val editorReports: List<EditorReport>,
-    override val exceptions: List<String>,
-    override val enclosingScriptProjectDir: File?
-) : KotlinBuildScriptModel, Serializable
+    private val classPath: List<File>,
+    private val sourcePath: List<File>,
+    private val implicitImports: List<String>,
+    private val editorReports: List<EditorReport>,
+    private val exceptions: List<String>,
+    private val enclosingScriptProjectDir: File?
+) : KotlinBuildScriptModel, Serializable {
+
+    override fun getClassPath() = classPath
+
+    override fun getSourcePath() = sourcePath
+
+    override fun getImplicitImports() = implicitImports
+
+    override fun getEditorReports() = editorReports
+
+    override fun getExceptions() = exceptions
+
+    override fun getEnclosingScriptProjectDir() = enclosingScriptProjectDir
+}
 
 
 internal
@@ -113,7 +113,7 @@ object KotlinBuildScriptModelBuilder : ToolingModelBuilder {
         }
     }
 
-    private
+    internal
     fun kotlinBuildScriptModelFor(modelRequestProject: Project, parameter: KotlinBuildScriptModelParameter) =
         scriptModelBuilderFor(modelRequestProject as ProjectInternal, parameter).buildModel()
 
@@ -152,12 +152,17 @@ object KotlinBuildScriptModelBuilder : ToolingModelBuilder {
     private
     fun requestParameterOf(modelRequestProject: Project) =
         KotlinBuildScriptModelParameter(
-            modelRequestProject.findProperty(kotlinBuildScriptModelTarget) as? String,
-            modelRequestProject.findProperty(kotlinBuildScriptModelCorrelationId) as? String
+            (modelRequestProject.findProperty(KotlinBuildScriptModel.SCRIPT_GRADLE_PROPERTY_NAME) as? String)?.let(::canonicalFile),
+            modelRequestProject.findProperty(KotlinDslModelsParameters.CORRELATION_ID_GRADLE_PROPERTY_NAME) as? String
         )
+}
 
-    private
-    fun log(message: String) = println(message)
+
+internal
+fun log(message: String) {
+    if (System.getProperty("org.gradle.kotlin.dsl.logging.tapi") == "true") {
+        println(message)
+    }
 }
 
 
@@ -231,7 +236,8 @@ fun implicitImportsFrom(file: File): List<String> =
 
 
 private
-fun hashOf(scriptFile: File) = PrecompiledScriptDependenciesResolver.hashOf(scriptFile.readText())
+fun hashOf(scriptFile: File) =
+    PrecompiledScriptDependenciesResolver.hashOf(scriptFile.readText())
 
 
 private
@@ -243,7 +249,9 @@ fun projectScriptModelBuilder(
     project = project,
     scriptClassPath = project.scriptCompilationClassPath,
     accessorsClassPath = { classPath ->
-        projectAccessorsClassPath(project, classPath) + pluginSpecBuildersClassPath(project)
+        val pluginAccessorClassPathGenerator = project.serviceOf<PluginAccessorClassPathGenerator>()
+        val projectAccessorClassPathGenerator = project.serviceOf<ProjectAccessorsClassPathGenerator>()
+        projectAccessorClassPathGenerator.projectAccessorsClassPath(project, classPath) + pluginAccessorClassPathGenerator.pluginSpecBuildersClassPath(project)
     },
     sourceLookupScriptHandlers = sourceLookupScriptHandlersFor(project),
     enclosingScriptProjectDir = project.projectDir
@@ -290,7 +298,7 @@ fun settingsScriptPluginModelBuilder(scriptFile: File, project: ProjectInternal)
     val (scriptHandler, scriptClassPath) = compilationClassPathForScriptPluginOf(
         target = settings,
         scriptFile = scriptFile,
-        baseScope = settings.rootClassLoaderScope,
+        baseScope = settings.baseClassLoaderScope,
         scriptHandlerFactory = scriptHandlerFactoryOf(gradle),
         project = project,
         resourceDescription = "settings file"
@@ -336,7 +344,7 @@ fun compilationClassPathForScriptPluginOf(
     resourceDescription: String
 ): Pair<ScriptHandlerInternal, ClassPath> {
 
-    val scriptSource = textResourceScriptSource(resourceDescription, scriptFile)
+    val scriptSource = textResourceScriptSource(resourceDescription, scriptFile, project.serviceOf())
     val scriptScope = baseScope.createChild("model-${scriptFile.toURI()}")
     val scriptHandler = scriptHandlerFactory.create(scriptSource, scriptScope)
 
@@ -370,8 +378,8 @@ fun scriptHandlerFactoryOf(gradle: Gradle) =
 
 
 private
-fun textResourceScriptSource(description: String, scriptFile: File) =
-    TextResourceScriptSource(BasicTextResourceLoader().loadFile(description, scriptFile))
+fun textResourceScriptSource(description: String, scriptFile: File, resourceLoader: TextFileResourceLoader) =
+    TextResourceScriptSource(resourceLoader.loadFile(description, scriptFile))
 
 
 private
@@ -446,14 +454,9 @@ data class KotlinScriptTargetModelBuilder(
 
 
 private
-val KotlinBuildScriptModelParameter.scriptFile
-    get() = scriptPath?.let { canonicalFile(it) }
-
-
-private
 val Settings.scriptCompilationClassPath
-    get() = serviceOf<KotlinScriptClassPathProvider>().safeCompilationClassPathOf(classLoaderScope) {
-        this as SettingsInternal
+    get() = serviceOf<KotlinScriptClassPathProvider>().safeCompilationClassPathOf(classLoaderScope, false) {
+        (this as SettingsInternal).gradle
     }
 
 
@@ -474,19 +477,22 @@ val Project.scriptCompilationClassPath
 
 private
 fun Project.compilationClassPathOf(classLoaderScope: ClassLoaderScope) =
-    serviceOf<KotlinScriptClassPathProvider>().safeCompilationClassPathOf(classLoaderScope) { settings }
+    serviceOf<KotlinScriptClassPathProvider>().safeCompilationClassPathOf(classLoaderScope, true) {
+        (this as ProjectInternal).gradle
+    }
 
 
 private
 inline fun KotlinScriptClassPathProvider.safeCompilationClassPathOf(
     classLoaderScope: ClassLoaderScope,
-    getSettings: () -> SettingsInternal
+    projectScript: Boolean,
+    getGradle: () -> GradleInternal
 ): ClassPath = try {
     compilationClassPathOf(classLoaderScope)
 } catch (error: Exception) {
-    getSettings().run {
+    getGradle().run {
         serviceOf<ClassPathModeExceptionCollector>().collect(error)
-        compilationClassPathOf(rootClassLoaderScope)
+        compilationClassPathOf(if (projectScript) baseProjectClassLoaderScope() else this.classLoaderScope)
     }
 }
 
@@ -513,6 +519,6 @@ val Project.isLocationAwareEditorHintsEnabled: Boolean
     get() = findProperty(EditorReports.locationAwareEditorHintsPropertyName) == "true"
 
 
-private
+internal
 fun canonicalFile(path: String): File =
     File(path).canonicalFile

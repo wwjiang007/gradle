@@ -16,32 +16,56 @@
 
 package org.gradle.smoketests
 
+import org.gradle.integtests.fixtures.executer.GradleContextualExecuter
+import org.gradle.internal.enterprise.core.GradleEnterprisePluginManager
 import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
+import org.gradle.util.VersionNumber
+import org.junit.Assume
 import spock.lang.Unroll
 
-import static org.gradle.internal.scan.config.BuildScanPluginCompatibility.MIN_SUPPORTED_VERSION
-
+// https://plugins.gradle.org/plugin/com.gradle.enterprise
 class BuildScanPluginSmokeTest extends AbstractSmokeTest {
 
     private static final List<String> UNSUPPORTED = [
-            "2.0.1",
-            "2.0",
-            "1.16",
-            "1.15",
-            "1.14"
+        "2.4.2",
+        "2.4.1",
+        "2.4",
+        "2.3",
+        "2.2.1",
+        "2.2",
+        "2.1",
+        "2.0.2",
+        "2.0.1",
+        "2.0",
+        "1.16",
+        "1.15",
+        "1.14"
     ]
 
     private static final List<String> SUPPORTED = [
-            "2.3",
-            "2.2.1",
-            "2.2",
-            "2.1",
-            "2.0.2"
+        "3.0",
+        "3.1",
+        "3.1.1",
+        "3.2",
+        "3.2.1",
+        "3.3",
+        "3.3.1",
+        "3.3.2",
+        "3.3.3",
+        "3.3.4",
+        "3.4",
+        "3.4.1"
     ]
 
+    private static final VersionNumber FIRST_VERSION_SUPPORTING_CONFIGURATION_CACHE = VersionNumber.parse("3.4")
+
     @Unroll
-    "can run build with build scan plugin #version"() {
+    "can use plugin #version"() {
+        given:
+        def versionNumber = VersionNumber.parse(version)
+        Assume.assumeFalse(GradleContextualExecuter.configCache && versionNumber < FIRST_VERSION_SUPPORTING_CONFIGURATION_CACHE)
+
         when:
         usePluginVersion version
 
@@ -53,18 +77,15 @@ class BuildScanPluginSmokeTest extends AbstractSmokeTest {
     }
 
     @Unroll
-    "fail without capturing scan with unsupported version #version"() {
+    "cannot use plugin #version"() {
         when:
         usePluginVersion version
 
         and:
-        def output = buildAndFail("--scan").output
+        def output = buildAndFail().output
 
         then:
-        output.contains("This version of Gradle requires version $MIN_SUPPORTED_VERSION of the build scan plugin or later.")
-
-        and:
-        output.contains("Please see https://gradle.com/scans/help/gradle-incompatible-plugin-version for more information.")
+        output.contains(GradleEnterprisePluginManager.OLD_SCAN_PLUGIN_VERSION_MESSAGE)
 
         where:
         version << UNSUPPORTED
@@ -83,27 +104,39 @@ class BuildScanPluginSmokeTest extends AbstractSmokeTest {
     }
 
     void usePluginVersion(String version) {
+        def gradleEnterprisePlugin = VersionNumber.parse(version) >= VersionNumber.parse("3.0")
+        if (gradleEnterprisePlugin) {
+            settingsFile << """
+                plugins {
+                    id "com.gradle.enterprise" version "$version"
+                }
+
+                gradleEnterprise {
+                    buildScan {
+                        termsOfServiceUrl = 'https://gradle.com/terms-of-service'
+                        termsOfServiceAgree = 'yes'
+                    }
+                }
+            """
+        } else {
+            buildFile << """
+                plugins {
+                    id "com.gradle.build-scan" version "$version"
+                }
+
+                buildScan {
+                    termsOfServiceUrl = 'https://gradle.com/terms-of-service'
+                    termsOfServiceAgree = 'yes'
+                }
+            """
+        }
+
         buildFile << """
-            buildscript {
-                repositories {
-                    gradlePluginPortal()
-                }
-                dependencies {
-                    classpath "com.gradle:build-scan-plugin:${version}"
-                }
-            }
-
-            apply plugin: "com.gradle.build-scan"
-            buildScan {
-                termsOfServiceUrl = 'https://gradle.com/terms-of-service'
-                termsOfServiceAgree = 'yes'
-            }
-
             apply plugin: 'java'
             ${jcenterRepository()}
 
             dependencies {
-                testCompile 'junit:junit:4.12'
+                testImplementation 'junit:junit:4.13'
             }
         """
 

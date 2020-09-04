@@ -69,7 +69,7 @@ class JavaAnnotationProcessingIntegrationTest extends AbstractIntegrationSpec {
         // The class that is the target of the processor
         file('src/main/java/TestApp.java') << '''
             @Helper
-            class TestApp { 
+            class TestApp {
                 public static void main(String[] args) {
                     System.out.println(new TestAppHelper().getValue()); // generated class
                 }
@@ -128,26 +128,26 @@ class JavaAnnotationProcessingIntegrationTest extends AbstractIntegrationSpec {
     }
 
     def "can model annotation processor arguments"() {
-        buildFile << """                                                       
+        buildFile << """
             class HelperAnnotationProcessor implements CommandLineArgumentProvider {
                 @Input
                 String message
-                
+
                 HelperAnnotationProcessor(String message) {
                     this.message = message
                 }
-                
+
                 @Override
                 List<String> asArguments() {
                     ["-Amessage=\${message}".toString()]
                 }
             }
-            
+
             dependencies {
                 compileOnly project(":annotation")
                 annotationProcessor project(":processor")
             }
-            
+
             compileJava.options.compilerArgumentProviders << new HelperAnnotationProcessor("fromOptions")
         """
 
@@ -182,7 +182,7 @@ class JavaAnnotationProcessingIntegrationTest extends AbstractIntegrationSpec {
                 implementation project(":annotation")
                 implementation project(":processor")
             }
-            
+
             compileJava {
               options.annotationProcessorPath = files()
             }
@@ -207,12 +207,12 @@ class JavaAnnotationProcessingIntegrationTest extends AbstractIntegrationSpec {
             configurations {
                 apt
             }
-            
+
             dependencies {
                 implementation project(":annotation")
                 implementation project(":processor")
             }
-            
+
             compileJava {
               options.annotationProcessorPath = configurations.apt
             }
@@ -304,7 +304,7 @@ class JavaAnnotationProcessingIntegrationTest extends AbstractIntegrationSpec {
         when:
         file('src/main/java/TestApp.java').text = '''
             @Helper
-            class TestApp { 
+            class TestApp {
                 public static void main(String[] args) {
                     System.out.println(new TestAppHelper().getValue() + "Changed!"); // generated class
                 }

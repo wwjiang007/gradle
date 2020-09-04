@@ -20,6 +20,8 @@ import org.gradle.internal.serialize.Decoder;
 import org.gradle.internal.serialize.Encoder;
 import org.gradle.internal.serialize.Serializer;
 
+import java.io.File;
+
 public class TransportableActionExecutionSpecSerializer implements Serializer<TransportableActionExecutionSpec> {
     private static final byte FLAT = (byte) 0;
     private static final byte HIERARCHICAL = (byte) 1;
@@ -28,10 +30,10 @@ public class TransportableActionExecutionSpecSerializer implements Serializer<Tr
 
     @Override
     public void write(Encoder encoder, TransportableActionExecutionSpec spec) throws Exception {
-        encoder.writeString(spec.getDisplayName());
         encoder.writeString(spec.getImplementationClassName());
-        encoder.writeInt(spec.getSerializedParameters().length);
-        encoder.writeBytes(spec.getSerializedParameters());
+        encoder.writeBoolean(spec.isInternalServicesRequired());
+        encoder.writeString(spec.getBaseDir().getAbsolutePath());
+        encoder.writeBinary(spec.getSerializedParameters());
         if (spec.getClassLoaderStructure() instanceof HierarchicalClassLoaderStructure) {
             encoder.writeByte(HIERARCHICAL);
             hierarchicalClassLoaderStructureSerializer.write(encoder, (HierarchicalClassLoaderStructure) spec.getClassLoaderStructure());
@@ -45,14 +47,13 @@ public class TransportableActionExecutionSpecSerializer implements Serializer<Tr
 
     @Override
     public TransportableActionExecutionSpec read(Decoder decoder) throws Exception {
-        String displayName = decoder.readString();
         String implementationClassName = decoder.readString();
-        int parametersSize = decoder.readInt();
-        byte[] serializedParameters = new byte[parametersSize];
-        decoder.readBytes(serializedParameters);
+        boolean usesInternalServices = decoder.readBoolean();
+        String baseDirPath = decoder.readString();
+        byte[] serializedParameters = decoder.readBinary();
         byte classLoaderStructureTag = decoder.readByte();
         ClassLoaderStructure classLoaderStructure;
-        switch(classLoaderStructureTag) {
+        switch (classLoaderStructureTag) {
             case FLAT:
                 classLoaderStructure = new FlatClassLoaderStructure(null);
                 break;
@@ -62,6 +63,6 @@ public class TransportableActionExecutionSpecSerializer implements Serializer<Tr
             default:
                 throw new IllegalArgumentException("Unexpected payload type.");
         }
-        return new TransportableActionExecutionSpec(displayName, implementationClassName, serializedParameters, classLoaderStructure);
+        return new TransportableActionExecutionSpec(implementationClassName, serializedParameters, classLoaderStructure, new File(baseDirPath), usesInternalServices);
     }
 }

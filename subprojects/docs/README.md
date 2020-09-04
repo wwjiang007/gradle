@@ -48,9 +48,9 @@ To generate the user manual and see your changes, run:
     
 This will generate:
 
- - A multi-page HTML manual in `build/docs/userguide` for each chapter. There is a 1-1 mapping from `.adoc` file to `.html` file.
- - A single-page HTML manual at `build/docs/userguide/userguide_single.html`
- - A PDF at `build/docs/userguide/userguide.pdf`
+ - A multi-page HTML manual in `build/working/usermanual/render-multi/` for each chapter. There is a 1-1 mapping from `.adoc` file to `.html` file.
+ - A single-page HTML manual at `build/working/usermanual/render-single/userguide_single.html`
+ - A PDF at `build/working/usermanual/render-single/userguide_single.pdf`
 
 Note that PNG files in the source are generated from ".graphml" files in the same directory.  You can edit these files
 with tools like [yEd](http://www.yworks.com/en/products_yed_about.html) and then generate the associated PNG.
@@ -73,16 +73,16 @@ You will find these references useful when authoring AsciiDoc:
 
 To write a chapter in Asciidoctor format, simply place it in `src/docs/userguide` called `<chapter>.adoc`.
 
-### Code Samples
+### Code Snippets
 
-Samples and output belong under `src/samples` and are typically included in the user manual. This is a typical example:
+Snippets and output belong under `src/snippets` and are typically included in the user manual. This is a typical example:
 
 #### Example multi-language sample file listing
-This shows Groovy and Kotlin sample projects under "sample-dir" which is defined as "$projectDir/src/samples".
+This shows Groovy and Kotlin sample projects under "sample-dir" which is defined as "$projectDir/src/snippets".
 
 ```
-subprojects/docs/src/samples/
-└── userguide/initScripts/customLogger/
+subprojects/docs/src/snippets/
+└── initScripts/customLogger/
     ├── customLogger.out
     ├── customLogger.sample.conf
     ├── groovy
@@ -95,37 +95,56 @@ subprojects/docs/src/samples/
         └── settings.gradle.kts
 ```
 
-Note here that there are 2 sample projects under `userguide/initScripts/customLogger/`: one for the Groovy DSL and one for Kotlin DSL. Also note that there is only 1 `customLogger.sample.conf` file that tells Exemplar how to execute both groovy and kotlin samples, with 1 `customLogger.out` file proving the output is identical between the two.
+Note here that there are 2 sample projects under `initScripts/customLogger/`: one for the Groovy DSL and one for Kotlin DSL. Also note that there is only 1 `customLogger.sample.conf` file that tells Exemplar how to execute both groovy and kotlin samples, with 1 `customLogger.out` file proving the output is identical between the two.
 
 #### Example Asciidoctor multi-language sample declaration
 
 ```asciidoc
 .Customizing what Gradle logs
 ====
-include::sample[dir="userguide/initScripts/customLogger/groovy",files="init.gradle[]"]
+include::sample[dir="snippets/initScripts/customLogger/groovy",files="init.gradle[]"]
 
-include::sample[dir="userguide/initScripts/customLogger/kotlin",files="customLogger.init.gradle.kts[]"]
+include::sample[dir="snippets/initScripts/customLogger/kotlin",files="customLogger.init.gradle.kts[]"]
 ====
 
 [.multi-language-text.lang-groovy]
 ----
 $ gradle -I init.gradle build
-include::{samplesPath}/userguide/initScripts/customLogger/customLogger.out[]
+include::{snippetsPath}/initScripts/customLogger/tests/customLogger.out[]
 ----
 [.multi-language-text.lang-kotlin]
 ----
 $ gradle -I customLogger.init.gradle.kts build
-include::{samplesPath}/userguide/initScripts/customLogger/customLogger.out[]
+include::{snippetsPath}/initScripts/customLogger/tests/customLogger.out[]
 ----
 ```
 
 Let's break down this example to explain:
 
 * Enclosing `====` around the sample includes groups these samples and collapses them 
-* `include::sample`: invokes the `SampleIncludeProcessor` asciidoctor extension, with a `dir` relative to `src/samples/`, and a list of `files` separated by `;` (only 1 in this example), each with optional `tags=...` (like Asciidoctor's tags mechanism). We write this once for each DSL dialect. This notes to our front-end code to group these 2 samples and show them with selector tabs.
+* `include::sample`: invokes the `SampleIncludeProcessor` asciidoctor extension, with a `dir` relative to `src/snippets/`, and a list of `files` separated by `;` (only 1 in this example), each with optional `tags=...` (like Asciidoctor's tags mechanism). We write this once for each DSL dialect. This notes to our front-end code to group these 2 samples and show them with selector tabs.
 * `[.multi-language-text.lang-groovy]`: Most times the gradle command is identical between Groovy and Kotlin samples, but in this case we need to use `[.multi-language-text.lang-*]` that our CSS will collapse and switch for the DSL of choice. This is case-sensitive. You can use this construct for any 2 sibling blocks!
 
 It is possible to embed sample sources, commands, and expected output directly in the Asciidoc (or a mixture of embedded and `include`d), but we don't use this for the user manual yet. See the [Exemplar documentation](https://github.com/gradle/exemplar/#configuring-embedded-samples) if you're interested in this.
+
+### Code Samples
+
+Samples and output belong under `src/samples` and are published beside the user manual. See the `org.gradle.samples` plugin.
+
+To run the samples tests:
+```
+./gradlew :docs:docsTest --tests "org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.*"
+```
+
+To run tests for a single sample, let's say from `samples/java/application`:
+```
+./gradlew :docs:docsTest --tests "org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.java-application*"
+```
+
+To run tests for a single snippet, let's say from `snippets/base/distribution`:
+```
+./gradlew :docs:docsTest --tests "org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-base-distribution*"
+```
 
 ## Groovy DSL Reference
 
@@ -138,7 +157,7 @@ To build it, run:
 ./gradlew :docs:dslHtml
 ```
 
-The output is available under `build/docs/dsl`.
+The output is available under `build/working/dsl`.
 
 ### Useful docbook tags
 
@@ -164,7 +183,7 @@ To build these, run:
 
     ./gradlew :docs:javadoc
 
-The output is available within `build/docs/javadoc`.
+The output is available within `build/javadoc`.
 
 ## Building all the docs
 

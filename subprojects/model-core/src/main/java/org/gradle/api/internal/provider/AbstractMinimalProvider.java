@@ -19,67 +19,136 @@ package org.gradle.api.internal.provider;
 import org.gradle.api.Transformer;
 import org.gradle.api.internal.tasks.TaskDependencyResolveContext;
 import org.gradle.api.provider.Provider;
+import org.gradle.internal.Cast;
+import org.gradle.internal.Describables;
+import org.gradle.internal.DisplayName;
+import org.gradle.internal.logging.text.TreeFormatter;
 import org.gradle.internal.state.Managed;
 import org.gradle.util.GUtil;
 
 import javax.annotation.Nullable;
 
 /**
- * A partial {@link Provider} implementation.
+ * A partial {@link Provider} implementation. Subclasses must implement {@link ProviderInternal#getType()} and {@link AbstractMinimalProvider#calculateOwnValue(ValueConsumer)}.
  */
 public abstract class AbstractMinimalProvider<T> implements ProviderInternal<T>, Managed {
+    private static final DisplayName DEFAULT_DISPLAY_NAME = Describables.of("this provider");
+
     @Override
     public <S> ProviderInternal<S> map(final Transformer<? extends S, ? super T> transformer) {
-        return new TransformBackedProvider<S, T>(transformer, this);
+        return new TransformBackedProvider<>(transformer, this);
     }
 
     @Override
     public <S> Provider<S> flatMap(final Transformer<? extends Provider<? extends S>, ? super T> transformer) {
-        return new FlatMapProvider<S, T>(this, transformer);
+        return new FlatMapProvider<>(this, transformer);
     }
+
+    /**
+     * Returns the human consumable display name for this provider, or null if this is not known.
+     */
+    @Nullable
+    protected DisplayName getDeclaredDisplayName() {
+        return null;
+    }
+
+    /**
+     * Returns a display name for this provider, using a default if this is not known.
+     */
+    protected DisplayName getDisplayName() {
+        DisplayName displayName = getDeclaredDisplayName();
+        if (displayName == null) {
+            return DEFAULT_DISPLAY_NAME;
+        }
+        return displayName;
+    }
+
+    protected DisplayName getTypedDisplayName() {
+        return DEFAULT_DISPLAY_NAME;
+    }
+
+    protected abstract ValueSupplier.Value<? extends T> calculateOwnValue(ValueConsumer consumer);
 
     @Override
     public boolean isPresent() {
-        return getOrNull() != null;
+        return calculatePresence(ValueConsumer.IgnoreUnsafeRead);
+    }
+
+    @Override
+    public boolean calculatePresence(ValueConsumer consumer) {
+        return !calculateOwnValue(consumer).isMissing();
+    }
+
+    @Override
+    public T get() {
+        Value<? extends T> value = calculateOwnValue(ValueConsumer.IgnoreUnsafeRead);
+        if (value.isMissing()) {
+            throw new MissingValueException(cannotQueryValueOf(value));
+        }
+        return value.get();
+    }
+
+    @Override
+    public T getOrNull() {
+        return calculateOwnValue(ValueConsumer.IgnoreUnsafeRead).orNull();
     }
 
     @Override
     public T getOrElse(T defaultValue) {
-        T value = getOrNull();
-        if (value == null) {
-            return defaultValue;
-        }
-        return value;
+        return calculateOwnValue(ValueConsumer.IgnoreUnsafeRead).orElse(defaultValue);
+    }
+
+    @Override
+    public Value<? extends T> calculateValue(ValueConsumer consumer) {
+        return calculateOwnValue(consumer).pushWhenMissing(getDeclaredDisplayName());
     }
 
     @Override
     public Provider<T> orElse(T value) {
-        return new OrElseFixedValueProvider<T>(this, value);
+        return new OrElseFixedValueProvider<>(this, value);
     }
 
     @Override
     public Provider<T> orElse(Provider<? extends T> provider) {
-        return new OrElseProvider<T>(this, Providers.internal(provider));
+        return new OrElseProvider<>(this, Providers.internal(provider));
+    }
+
+    @Override
+    public Provider<T> forUseAtConfigurationTime() {
+        // By default, any provider can be used at configuration time
+        return this;
     }
 
     @Override
     public void visitDependencies(TaskDependencyResolveContext context) {
         // When used as an input, add the producing tasks if known
-        maybeVisitBuildDependencies(context);
+        getProducer().visitProducerTasks(context);
     }
 
     @Override
-    public boolean maybeVisitBuildDependencies(TaskDependencyResolveContext context) {
-        return false;
+    public ValueProducer getProducer() {
+        return ValueProducer.unknown();
     }
 
     @Override
-    public ProviderInternal<T> withFinalValue() {
-        T value = getOrNull();
-        if (value == null) {
-            return Providers.notDefined();
+    public ExecutionTimeValue<? extends T> calculateExecutionTimeValue() {
+        return ExecutionTimeValue.value(calculateOwnValue(ValueConsumer.IgnoreUnsafeRead));
+    }
+
+    @Override
+    public ProviderInternal<T> asSupplier(DisplayName owner, Class<? super T> targetType, ValueSanitizer<? super T> sanitizer) {
+        if (getType() != null && !targetType.isAssignableFrom(getType())) {
+            throw new IllegalArgumentException(String.format("Cannot set the value of %s of type %s using a provider of type %s.", owner.getDisplayName(), targetType.getName(), getType().getName()));
+        } else if (getType() == null) {
+            return new MappingProvider<>(Cast.uncheckedCast(targetType), this, new TypeSanitizingTransformer<>(owner, sanitizer, targetType));
+        } else {
+            return this;
         }
-        return Providers.of(value);
+    }
+
+    @Override
+    public ProviderInternal<T> withFinalValue(ValueConsumer consumer) {
+        return Providers.nullableValue(calculateValue(consumer));
     }
 
     @Override
@@ -89,7 +158,7 @@ public abstract class AbstractMinimalProvider<T> implements ProviderInternal<T>,
     }
 
     @Override
-    public boolean immutable() {
+    public boolean isImmutable() {
         return false;
     }
 
@@ -108,133 +177,17 @@ public abstract class AbstractMinimalProvider<T> implements ProviderInternal<T>,
         return ManagedFactories.ProviderManagedFactory.FACTORY_ID;
     }
 
-    private static class FlatMapProvider<S, T> extends AbstractMinimalProvider<S> {
-        private final Provider<? extends T> provider;
-        private final Transformer<? extends Provider<? extends S>, ? super T> transformer;
-
-        FlatMapProvider(ProviderInternal<? extends T> provider, Transformer<? extends Provider<? extends S>, ? super T> transformer) {
-            this.provider = provider;
-            this.transformer = transformer;
-        }
-
-        @Nullable
-        @Override
-        public Class<S> getType() {
-            return null;
-        }
-
-        @Override
-        public boolean isPresent() {
-            T value = provider.getOrNull();
-            if (value == null) {
-                return false;
+    private String cannotQueryValueOf(Value<? extends T> value) {
+        TreeFormatter formatter = new TreeFormatter();
+        formatter.node("Cannot query the value of ").append(getDisplayName().getDisplayName()).append(" because it has no value available.");
+        if (!value.getPathToOrigin().isEmpty()) {
+            formatter.node("The value of ").append(getTypedDisplayName().getDisplayName()).append(" is derived from");
+            formatter.startChildren();
+            for (DisplayName displayName : value.getPathToOrigin()) {
+                formatter.node(displayName.getDisplayName());
             }
-            return map(value).isPresent();
+            formatter.endChildren();
         }
-
-        @Override
-        public S get() {
-            T value = provider.get();
-            return map(value).get();
-        }
-
-        @Nullable
-        @Override
-        public S getOrNull() {
-            T value = provider.getOrNull();
-            if (value == null) {
-                return null;
-            }
-            return map(value).getOrNull();
-        }
-
-        private Provider<? extends S> map(T value) {
-            Provider<? extends S> result = transformer.transform(value);
-            if (result == null) {
-                throw new IllegalStateException(Providers.NULL_TRANSFORMER_RESULT);
-            }
-            return result;
-        }
-
-        @Override
-        public boolean maybeVisitBuildDependencies(TaskDependencyResolveContext context) {
-            return Providers.internal(map(provider.get())).maybeVisitBuildDependencies(context);
-        }
-
-        @Override
-        public String toString() {
-            return "flatmap(" + provider + ")";
-        }
-    }
-
-    private static class OrElseFixedValueProvider<T> extends AbstractProviderWithValue<T> {
-        private final ProviderInternal<T> provider;
-        private final T value;
-
-        public OrElseFixedValueProvider(ProviderInternal<T> provider, T value) {
-            this.provider = provider;
-            this.value = value;
-        }
-
-        @Nullable
-        @Override
-        public Class<T> getType() {
-            return provider.getType();
-        }
-
-        @Override
-        public boolean maybeVisitBuildDependencies(TaskDependencyResolveContext context) {
-            if (provider.isPresent()) {
-                return provider.maybeVisitBuildDependencies(context);
-            } else {
-                return super.maybeVisitBuildDependencies(context);
-            }
-        }
-
-        @Override
-        public T get() {
-            T value = provider.getOrNull();
-            return value != null ? value : this.value;
-        }
-    }
-
-    private static class OrElseProvider<T> extends AbstractReadOnlyProvider<T> {
-        private final ProviderInternal<T> left;
-        private final ProviderInternal<? extends T> right;
-
-        public OrElseProvider(ProviderInternal<T> left, ProviderInternal<? extends T> right) {
-            this.left = left;
-            this.right = right;
-        }
-
-        @Nullable
-        @Override
-        public Class<T> getType() {
-            return left.getType();
-        }
-
-        @Override
-        public boolean maybeVisitBuildDependencies(TaskDependencyResolveContext context) {
-            if (left.isPresent()) {
-                return left.maybeVisitBuildDependencies(context);
-            } else {
-                return right.maybeVisitBuildDependencies(context);
-            }
-        }
-
-        @Override
-        public boolean isPresent() {
-            return left.isPresent() || right.isPresent();
-        }
-
-        @Nullable
-        @Override
-        public T getOrNull() {
-            T value = left.getOrNull();
-            if (value == null) {
-                value = right.getOrNull();
-            }
-            return value;
-        }
+        return formatter.toString();
     }
 }
