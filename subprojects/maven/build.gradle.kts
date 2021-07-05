@@ -1,53 +1,33 @@
-/*
- * Copyright 2018 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import gradlebuild.cleanup.WhenNotEmpty
-import gradlebuild.integrationtests.integrationTestUsesSampleDir
-
 plugins {
     id("gradlebuild.distribution.api-java")
 }
 
 dependencies {
     implementation(project(":base-services"))
-    implementation(project(":logging"))
-    implementation(project(":core-api"))
-    implementation(project(":model-core"))
-    implementation(project(":core"))
-    implementation(project(":file-collections"))
-    implementation(project(":resources"))
     implementation(project(":base-services-groovy"))
+    implementation(project(":core"))
+    implementation(project(":core-api"))
+    implementation(project(":functional"))
     implementation(project(":dependency-management"))
-    implementation(project(":plugins"))
+    implementation(project(":file-collections"))
+    implementation(project(":logging"))
+    implementation(project(":model-core"))
     implementation(project(":plugin-use"))
+    implementation(project(":plugins"))
     implementation(project(":publish"))
+    implementation(project(":resources"))
 
     implementation(libs.slf4jApi)
     implementation(libs.groovy)
     implementation(libs.guava)
     implementation(libs.commonsLang)
     implementation(libs.inject)
-    implementation(libs.ant)
-    implementation(libs.ivy)
-    implementation(libs.maven3)
-    implementation(libs.pmavenCommon)
-    implementation(libs.pmavenGroovy)
-    implementation(libs.maven3WagonFile)
-    implementation(libs.maven3WagonHttp)
-    implementation(libs.plexusContainer)
-    implementation(libs.aetherConnector)
+    implementation(libs.maven3Model) {
+        because("We use the metadata model classes to create POM metadata files for components")
+    }
+    implementation(libs.maven3RepositoryMetadata) {
+        because("We use the metadata model classes to create repository metadata files")
+    }
 
     testImplementation(project(":native"))
     testImplementation(project(":process-services"))
@@ -80,13 +60,8 @@ strictCompile {
 }
 
 classycle {
-    excludePatterns.set(listOf(
-        "org/gradle/api/publication/maven/internal/**",
-        "org/gradle/api/artifacts/maven/**"))
+    excludePatterns.add("org/gradle/api/publication/maven/internal/**")
+    excludePatterns.add("org/gradle/api/artifacts/maven/**")
 }
 
-testFilesCleanup {
-    policy.set(WhenNotEmpty.REPORT)
-}
-
-integrationTestUsesSampleDir("subprojects/maven/src/main")
+integTest.usesJavadocCodeSnippets.set(true)

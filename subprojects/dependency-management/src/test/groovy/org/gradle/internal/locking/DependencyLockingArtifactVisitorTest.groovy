@@ -56,7 +56,7 @@ class DependencyLockingArtifactVisitorTest extends Specification {
         1 * rootNode.metadata >> metadata
         1 * metadata.dependencyLockingState >> lockState
         1 * lockState.mustValidateLockState() >> true
-        1 * lockState.lockedDependencies >> Collections.emptySet()
+        1 * lockState.lockedDependencies >> emptySet()
         0 * _
     }
 
@@ -100,6 +100,7 @@ class DependencyLockingArtifactVisitorTest extends Specification {
 
         then:
         2 * node.owner >> component
+        1 * node.root >> false
         1 * component.componentId >> identifier
         1 * identifier.version >> ''
         1 * component.metadata >> metadata
@@ -121,9 +122,30 @@ class DependencyLockingArtifactVisitorTest extends Specification {
 
         then:
         2 * node.owner >> component
+        1 * node.root >> false
         1 * component.componentId >> identifier
         1 * component.metadata >> null
         0 * _
+    }
+
+    def 'ignores root node'() {
+        given:
+        startWithState([])
+
+        DependencyGraphComponent component = Mock()
+        ComponentIdentifier identifier = Mock()
+
+        when:
+        visitor.visitNode(rootNode)
+
+        then:
+        2 * rootNode.owner >> component
+        1 * rootNode.root >> true
+        1 * component.componentId >> identifier
+        1 * component.metadata >> null
+
+        and:
+        visitor.allResolvedModules.empty
     }
 
     def 'finishes without error when visited match expected'() {
@@ -218,7 +240,7 @@ class DependencyLockingArtifactVisitorTest extends Specification {
         given:
         def identifier = newId(mid, '1.1')
         def ignoredIdentifier = newId(DefaultModuleIdentifier.newId('org', 'ignored'), '1.0')
-        startWithState([identifier], LockEntryFilterFactory.forParameter(['org:ignored'], "Update lock"))
+        startWithState([identifier], LockEntryFilterFactory.forParameter(['org:ignored'], "Update lock", true))
         addVisitedNode(identifier)
         addVisitedNode(ignoredIdentifier)
 

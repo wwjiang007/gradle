@@ -30,6 +30,8 @@ import org.eclipse.jetty.server.ServerConnector
 import org.eclipse.jetty.server.SslConnectionFactory
 import org.eclipse.jetty.server.handler.HandlerCollection
 import org.eclipse.jetty.util.ssl.SslContextFactory
+import org.gradle.api.Action
+import org.gradle.internal.Actions
 import org.gradle.util.ports.FixedAvailablePortAllocator
 import org.gradle.util.ports.PortAllocator
 
@@ -134,15 +136,17 @@ trait HttpServerFixture {
             configured = true
         }
 
-        server.start()
-        for (int i = 0; i < 5; i++) {
-            if (createConnector() && connector.localPort > 0) {
-                return
+        if (!server.started) {
+            server.start()
+            for (int i = 0; i < 5; i++) {
+                if (createConnector() && connector.localPort > 0) {
+                    return
+                }
+                // Has failed to start for some reason - try again
+                releaseConnector()
             }
-            // Has failed to start for some reason - try again
-            releaseConnector()
+            throw new AssertionError((Object) "SocketConnector failed to start.") // cast because of Groovy bug
         }
-        throw new AssertionError((Object) "SocketConnector failed to start.") // cast because of Groovy bug
     }
 
     private void releaseConnector() {
@@ -184,7 +188,13 @@ trait HttpServerFixture {
         securityHandlerWrapper.reset()
     }
 
-    void enableSsl(String keyStore, String keyPassword, String trustStore = null, String trustPassword = null) {
+    void enableSsl(
+        String keyStore,
+        String keyPassword,
+        String trustStore = null,
+        String trustPassword = null,
+        Action<SslContextFactory.Server> configureServer = Actions.doNothing()
+    ) {
         def sslContextFactory = new SslContextFactory.Server()
         sslContextFactory.setIncludeProtocols("TLSv1.2")
         sslContextFactory.setKeyStorePath(keyStore)
@@ -196,6 +206,7 @@ trait HttpServerFixture {
         if (trustPassword) {
             sslContextFactory.setTrustStorePassword(trustPassword)
         }
+        configureServer.execute(sslContextFactory)
         def httpsConfig = new HttpConfiguration()
         httpsConfig.addCustomizer(new SecureRequestCustomizer())
         httpsConfig.addCustomizer(sslPreHandler)
@@ -233,6 +244,7 @@ trait HttpServerFixture {
     }
 }
 
+@CompileStatic
 class SslPreHandler implements HttpConfiguration.Customizer {
 
     private final List<Consumer<Request>> consumers = []

@@ -1,21 +1,3 @@
-/*
- * Copyright 2010 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-import gradlebuild.cleanup.WhenNotEmpty
-import gradlebuild.integrationtests.integrationTestUsesSampleDir
-
 plugins {
     id("gradlebuild.distribution.api-java")
 }
@@ -35,12 +17,12 @@ dependencies {
     implementation(project(":platform-jvm"))
     implementation(project(":language-jvm"))
     implementation(project(":language-java"))
-    implementation(project(":language-scala"))
     implementation(project(":scala"))
     implementation(project(":ear"))
     implementation(project(":tooling-api"))
 
     implementation(libs.groovy)
+    implementation(libs.groovyXml)
     implementation(libs.slf4jApi)
     implementation(libs.guava)
     implementation(libs.commonsLang)
@@ -54,6 +36,7 @@ dependencies {
         because("test fixtures export the ConsoleOutput class")
     }
     testFixturesImplementation(project(":internal-integ-testing"))
+    testFixturesImplementation(libs.groovyXml)
 
     testImplementation(project(":dependency-management"))
     testImplementation(libs.xmlunit)
@@ -73,16 +56,12 @@ strictCompile {
 }
 
 classycle {
-    excludePatterns.set(listOf(
-        "org/gradle/plugins/ide/internal/*",
-        "org/gradle/plugins/ide/eclipse/internal/*",
-        "org/gradle/plugins/ide/idea/internal/*",
-        "org/gradle/plugins/ide/eclipse/model/internal/*",
-        "org/gradle/plugins/ide/idea/model/internal/*"))
+    excludePatterns.add("org/gradle/plugins/ide/internal/*")
+    excludePatterns.add("org/gradle/plugins/ide/eclipse/internal/*")
+    excludePatterns.add("org/gradle/plugins/ide/idea/internal/*")
+    excludePatterns.add("org/gradle/plugins/ide/eclipse/model/internal/*")
+    excludePatterns.add("org/gradle/plugins/ide/idea/model/internal/*")
 }
 
-testFilesCleanup {
-    policy.set(WhenNotEmpty.REPORT)
-}
-
-integrationTestUsesSampleDir("subprojects/ide/src/main")
+integTest.usesJavadocCodeSnippets.set(true)
+testFilesCleanup.reportOnly.set(true)

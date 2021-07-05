@@ -1,31 +1,15 @@
-/*
- * Copyright 2018 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-import gradlebuild.cleanup.WhenNotEmpty
-
 plugins {
     id("gradlebuild.distribution.implementation-java")
 }
 
 dependencies {
     implementation(project(":base-services"))
+    implementation(project(":functional"))
     implementation(project(":messaging"))
     implementation(project(":native"))
     implementation(project(":logging"))
     implementation(project(":files"))
+    implementation(project(":file-temp"))
     implementation(project(":file-collections"))
     implementation(project(":persistent-cache"))
     implementation(project(":core-api"))
@@ -43,21 +27,23 @@ dependencies {
     implementation(libs.groovy)
     implementation(libs.asm)
     implementation(libs.asmCommons)
-    implementation(libs.asmUtil)
     implementation(libs.guava)
     implementation(libs.commonsLang)
     implementation(libs.commonsIo)
-    implementation(libs.commonsHttpclient)
+    implementation(libs.httpcore)
     implementation(libs.inject)
     implementation(libs.gson)
     implementation(libs.ant)
     implementation(libs.ivy)
-    implementation(libs.maven3)
+    implementation(libs.maven3SettingsBuilder)
 
     testImplementation(project(":process-services"))
     testImplementation(project(":diagnostics"))
     testImplementation(project(":build-cache-packaging"))
+    testImplementation(libs.asmUtil)
+    testImplementation(libs.commonsHttpclient)
     testImplementation(libs.nekohtml)
+    testImplementation(libs.groovyXml)
     testImplementation(testFixtures(project(":core")))
     testImplementation(testFixtures(project(":messaging")))
     testImplementation(testFixtures(project(":core-api")))
@@ -70,7 +56,9 @@ dependencies {
     integTestImplementation(project(":build-option"))
     integTestImplementation(libs.jansi)
     integTestImplementation(libs.ansiControlSequenceUtil)
+    integTestImplementation(libs.groovyJson)
     integTestImplementation(testFixtures(project(":security")))
+    integTestImplementation(testFixtures(project(":model-core")))
 
     testFixturesApi(project(":base-services")) {
         because("Test fixtures export the Action class")
@@ -88,6 +76,7 @@ dependencies {
     testFixturesImplementation(project(":internal-integ-testing"))
     testFixturesImplementation(libs.slf4jApi)
     testFixturesImplementation(libs.inject)
+    testFixturesImplementation(libs.groovyJson)
     testFixturesImplementation(libs.guava) {
         because("Groovy compiler reflects on private field on TextUtil")
     }
@@ -111,12 +100,10 @@ dependencies {
 }
 
 classycle {
-    excludePatterns.set(listOf("org/gradle/**"))
+    excludePatterns.add("org/gradle/**")
 }
 
-testFilesCleanup {
-    policy.set(WhenNotEmpty.REPORT)
-}
+testFilesCleanup.reportOnly.set(true)
 
 tasks.clean {
     val testFiles = layout.buildDirectory.dir("tmp/test files")
@@ -128,17 +115,3 @@ tasks.clean {
         }.visit { this.file.setWritable(true) }
     }
 }
-
-afterEvaluate {
-    // This is a workaround for the validate plugins task trying to inspect classes which
-    // have changed but are NOT tasks
-    tasks.withType<ValidatePlugins>().configureEach {
-        val main = sourceSets.main.get()
-        classes.setFrom(main.output.classesDirs.asFileTree.filter { !it.isInternal(main) })
-    }
-}
-
-fun File.isInternal(sourceSet: SourceSet) = isInternal(sourceSet.output.classesDirs.files)
-
-fun File.isInternal(roots: Set<File>): Boolean = name == "internal" ||
-    !roots.contains(parentFile) && parentFile.isInternal(roots)

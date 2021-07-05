@@ -16,7 +16,11 @@
 
 package org.gradle.jvm.toolchain.internal
 
-import org.gradle.util.VersionNumber
+import org.gradle.api.internal.file.TestFiles
+import org.gradle.internal.jvm.inspection.JvmInstallationMetadata
+import org.gradle.internal.jvm.inspection.JvmVendor
+import org.gradle.util.internal.VersionNumber
+import spock.lang.Issue
 import spock.lang.Specification
 
 class JavaToolchainComparatorTest extends Specification {
@@ -31,11 +35,28 @@ class JavaToolchainComparatorTest extends Specification {
         ]
 
         when:
-        println toolchains
         toolchains.sort(new JavaToolchainComparator())
 
         then:
         assertOrder(toolchains, "11.0.0", "8.0.0", "6.0.0", "5.1.0")
+    }
+
+    def "deterministically matches vendor over vendor-specific tool version"() {
+        given:
+        def toolchains = [
+            mockToolchain("8.2", true, JvmVendor.KnownJvmVendor.AMAZON),
+            mockToolchain("8.3", true, JvmVendor.KnownJvmVendor.AMAZON),
+            mockToolchain("8.1", true, JvmVendor.KnownJvmVendor.AMAZON),
+            mockToolchain("8.8", true, JvmVendor.KnownJvmVendor.BELLSOFT),
+            mockToolchain("8.7", true, JvmVendor.KnownJvmVendor.ORACLE),
+            mockToolchain("8.4", true, JvmVendor.KnownJvmVendor.UNKNOWN),
+        ]
+
+        when:
+        toolchains.sort(new JavaToolchainComparator())
+
+        then:
+        assertOrder(toolchains, "8.3.0", "8.2.0", "8.1.0", "8.8.0", "8.7.0", "8.4.0")
     }
 
     def "prefers higher minor versions"() {
@@ -72,14 +93,34 @@ class JavaToolchainComparatorTest extends Specification {
         toolchains == [jdk, jre]
     }
 
+    @Issue("https://github.com/gradle/gradle/issues/17195")
+    def "compares installation paths as a last resort"() {
+        given:
+        def prevJdk = mockToolchain("8.0.1", true, JvmVendor.KnownJvmVendor.ADOPTOPENJDK, "/jdks/openjdk-8.0.1")
+        def nextJdk = mockToolchain("8.0.1", true, JvmVendor.KnownJvmVendor.ADOPTOPENJDK, "/jdks/openjdk-8.0.1.1")
+        def toolchains = [prevJdk, nextJdk]
+
+        when:
+        toolchains.sort(new JavaToolchainComparator())
+
+        then:
+        toolchains == [nextJdk, prevJdk]
+    }
+
+
     void assertOrder(List<JavaToolchain> list, String[] expectedOrder) {
         assert list*.toolVersion.toString() == expectedOrder.toString()
     }
 
-    JavaToolchain mockToolchain(String implementationVersion, boolean isJdk = false) {
+    JavaToolchain mockToolchain(String implementationVersion, boolean isJdk = false, JvmVendor.KnownJvmVendor jvmVendor = JvmVendor.KnownJvmVendor.ADOPTOPENJDK, String installPath = null) {
+        def javaHome = new File(installPath != null ? installPath : "/jdks/" + implementationVersion).absoluteFile
         Mock(JavaToolchain) {
             getToolVersion() >> VersionNumber.parse(implementationVersion)
             isJdk() >> isJdk
+            getInstallationPath() >> TestFiles.fileFactory().dir(javaHome)
+            getMetadata() >> Mock(JvmInstallationMetadata) {
+                getVendor() >> JvmVendor.fromString(jvmVendor.name())
+            }
         }
     }
 }

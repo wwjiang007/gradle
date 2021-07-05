@@ -2,130 +2,115 @@ The Gradle team is excited to announce Gradle @version@.
 
 This release features [1](), [2](), ... [n](), and more.
 
-We would like to thank the following community contributors to this release of Gradle:
-
-[Roberto Perez Alcolea](https://github.com/rpalcolea),
-[SheliakLyr](https://github.com/SheliakLyr),
-[Christian Edward Gruber](https://github.com/cgruber),
-[Rene Groeschke](https://github.com/breskeby),
-[Louis CAD](https://github.com/LouisCAD),
-[Campbell Jones](https://github.com/serebit),
-[Leonardo Bezerra Silva Júnior](https://github.com/leonardobsjr),
-[Christoph Dreis](https://github.com/dreis2211),
-[Matthias Robbers](https://github.com/MatthiasRobbers),
-[Vladimir Sitnikov](https://github.com/vlsi),
-[Stefan Oehme](https://github.com/oehme),
-[Thad House](https://github.com/ThadHouse),
-and [Michał Mlak](https://github.com/Miehau).
-
-<!--
+We would like to thank the following community members for their contributions to this release of Gradle:
+ [Peter Runge](https://github.com/causalnet)
+ [Konstantin Gribov](https://github.com/grossws)
+ [Zoroark](https://github.com/utybo)
+ [Stefan Oehme](https://github.com/oehme)
+ [KotlinIsland](https://github.com/KotlinIsland)
+<!-- 
 Include only their name, impactful features should be called out separately below.
  [Some person](https://github.com/some-person)
 -->
 
-## Upgrade Instructions
+## Upgrade instructions
 
 Switch your build to use Gradle @version@ by updating your wrapper:
 
 `./gradlew wrapper --gradle-version=@version@`
 
-See the [Gradle 6.x upgrade guide](userguide/upgrading_version_6.html#changes_@baseVersion@) to learn about deprecations, breaking changes and other considerations when upgrading to Gradle @version@.
+See the [Gradle 6.x upgrade guide](userguide/upgrading_version_6.html#changes_@baseVersion@) to learn about deprecations, breaking changes and other considerations when upgrading to Gradle @version@. 
 
 For Java, Groovy, Kotlin and Android compatibility, see the [full compatibility notes](userguide/compatibility.html).
 
-<!-- Do not add breaking changes or deprecations here! Add them to the upgrade guide instead. -->
+<!-- Do not add breaking changes or deprecations here! Add them to the upgrade guide instead. --> 
 
-## File system watching is ready for production use
+<!-- 
 
-In an [incremental build](userguide/more_about_tasks.html#sec:up_to_date_checks), input and output files are checked to determine what needs to be rebuilt.
-This feature typically saves a lot of time; however, it adds some I/O overhead, which can be noticeable in large projects when not much has changed since the previous build. 
+<a name="VERSION-CATALOG-IMPROVEMENTS"></a>
+### Version catalog improvements
 
-Back in Gradle 6.5 we've introduced _[file-system watching](userguide/gradle_daemon.html#sec:daemon_watch_fs)_ as an experimental feature.
-When enabled, it allows Gradle to keep what it has learned about the file-system in memory during and between builds instead of polling the file system on each build.
-This significantly reduces the amount of disk I/O needed to determine what has changed since the previous build.
+In previous Gradle releases, it wasn't possible to declare a [version catalog](userguide/platforms.html#sub:version-catalog) where an alias would also contain sub-aliases.
+For example, it wasn't possible to declare both an alias `jackson` and `jackson.xml`, you would have had to create aliases `jackson.core` and `jackson.xml`.
+This limitation is now lifted.
 
-This feature is now ready for production use and supported on Linux, Windows and macOS.
-You can enable it by adding the following to `gradle.properties` in the project root or in your Gradle user home:
+-->
+<a name="new-features-and-usability-improvements"></a>
+## New features and usability improvements
 
-```
-org.gradle.vfs.watch=true
-```
+### Improved credentials handling for HTTP Header-based authentication
 
-Read more about this new feature and its impact [on the Gradle blog](https://blog.gradle.org/introducing-file-system-watching)!
+It is now possible to provide credentials for HTTP header-based authentication [via properties](userguide/declaring_repositories.html#sec:handling_credentials) without additional configuration in the
+build script.
 
-![Build time improvements using Santa Tracker Android with file-system watching enabled, Linux with OpenJDK 8.](https://blog.gradle.org/images/introducing-file-system-watching/watch-fs-santa-tracker-linux.png)
+<!--
+================== TEMPLATE ==============================
 
-_Build time improvements using [Santa Tracker Android](https://github.com/gradle/santa-tracker-performance) with file-system watching enabled, Linux with OpenJDK 8._
+<a name="FILL-IN-KEY-AREA"></a>
+### FILL-IN-KEY-AREA improvements
 
-## Configuration cache improvements
+<<<FILL IN CONTEXT FOR KEY AREA>>>
+Example:
+> The [configuration cache](userguide/configuration_cache.html) improves build performance by caching the result of
+> the configuration phase. Using the configuration cache, Gradle can skip the configuration phase entirely when
+> nothing that affects the build configuration has changed.
 
-TBD - load from cache performance improvements and reduced memory consumption for Android builds
+#### FILL-IN-FEATURE
+> HIGHLIGHT the usecase or existing problem the feature solves
+> EXPLAIN how the new release addresses that problem or use case
+> PROVIDE a screenshot or snippet illustrating the new feature, if applicable
+> LINK to the full documentation for more details 
 
-## Compile-only API dependencies can be declared for JVM libraries
+================== END TEMPLATE ==========================
 
-When writing a Java (or Groovy/Kotlin/Scala) library, there are cases where you require dependencies at compilation time which are parts of the API of your library, but which should not be on the runtime classpath.
 
-An example of such a dependency is an annotation library with annotations that are not used at runtime.
-These typically need to be available at compile time of the library's consumers when annotation processors inspect annotations of all classes.
-Another example is a dependency that is part of the runtime environment the library is expected to run on, but also provides types that are used in the public API of the library.
+==========================================================
+ADD RELEASE FEATURES BELOW
+vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 
-The [Java Library Plugin](userguide/java_library_plugin.html#sec:java_library_configurations_graph) now offers the `compileOnlyApi` configuration for this purpose.
-It effectively combines the major properties of the `compileOnly` configuration (dependency will _not_ be on the runtime classpath)
-and the `api` (dependencies are visible for consumers at compile time).
+--> 
+<a name="http-build-cache-improvements"></a>
+## HTTP build cache usage improvements
 
-```
-plugins {
-  id("java-library")
-  // add Groovy, Kotlin or Scala plugin if desired
-}
+### Automatic retry of uploads on temporary network error
 
-dependencies {
-  compileOnlyApi("com.google.errorprone:error_prone_annotations:2.4.0")
-}
-```
+Previously, only load (i.e. GET) requests that failed during request transmission, after having established a TCP connection, would be automatically retried.
+Now, store (i.e. PUT) requests are also retried.
 
-The behavior of `compileOnlyApi` dependencies is preserved for published libraries when published with [Gradle Module Metadata](userguide/publishing_gradle_module_metadata.html#).
+This prevents temporary problems, such as connection drops, read or write timeouts, and low level network failures such as a connection resets, causing cache operations to fail and disabling the remote cache for the remainder of the build.
 
-## Support kebab case formatting when launching a Gradle build with abbreviated names
+Requests will be retried up to 3 times.
+If the problem persists, the cache operation will fail and the remote cache will be disabled for the remainder of the build.
 
-When running Gradle builds, you can abbreviate project and task names. For example, you can execute the `compileTest` task by running `gradle cT`.
+### Following redirects
 
-Until this release, the name abbreviation only worked for camel case names (e.g. `compileTest`). This format is recommended for task names, but it is unusual for project names. In the Java world the folder names are lower case by convention. 
+Redirect responses are now followed.
+This can be leveraged to gracefully migrate to new cache locations, utilize some form of request signing to read to and write from other systems, or reroute requests from certain users or geographies to other locations.
 
-Many projects - including Gradle - overcome that by using kebab case project directories (e.g. `my-awesome-lib`) and by defining different, camel case project names in the build scripts. This difference leads to unnecessary extra complexity in the build.
+Following of redirects happens by default, with no additional configuration needed.
 
-This release fixes the issue by adding support for kebab case names in the name matching. Now, you can execute the `compileTest` task in the `my-awesome-lib` subproject with the following command:
-```
-gradle mAL:cT
-```
+For more information on the effect of different types of redirects, consult the [User Guide](userguide/build_cache.html#sec:build_cache_redirects).
 
-Note, that even though the kebab case name matching works with tasks too, the recommendation is still to use camel case for them. 
+### Using Expect-Continue to avoid redundant uploads
 
-To learn more about name abbreviation, check out the [user guide](userguide/command_line_interface.html#task_name_abbreviation).
+It is now possible to opt-in to use of [Expect-Continue](https://www.w3.org/Protocols/rfc2616/rfc2616-sec8.html#sec8.2.3) for upload requests.
 
-## Support for version ranges in repository content filtering
+This is useful when cache upload requests are regularly rejected or redirected by the server,
+as it avoids the overhead of transmitting the large file just to have it rejected or redirected.
 
-Builds can control which repositories are queried for which dependency for better performance and security using [repository content filtering](userguide/declaring_repositories.html#sec:repository-content-filtering).
-This feature provides performance and security benefits.
+Consult the [User Guide](userguide/build_cache.html#sec:build_cache_expect_continue) for more on use of expect-continue.
 
-With this release, when including or excluding a specific dependency version, the build author can use a version range:
 
-```
-repositories {
-    maven {
-        url = 'http://some-url'
-        content {
-             excludeVersion('com.google.guava', 'guava', '[19.0,)')
-       }
-    }
-}
-```
+## Support name abbreviation when specifying configuration for `dependencies` and `dependencyInsight`
+When selecting configuration name using `--configuration` parameter from command line you can use camelCase notation like in subproject and task selection. This way `gradle dependencies --configuration tRC` could be used instead of `gradle dependencies --configuration testRuntimeClasspath` if `tRC` resolves to unique configuration within project where task is running.
 
-In this case, no `guava` version after `19.0` will be searched for in the referenced Maven repository.
+<!--
 
-## Gradle init improvements
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ADD RELEASE FEATURES ABOVE
+==========================================================
 
-<-- TBD: add something if we think it is worth mentioning, see #14219 and #14210 -->
+-->
 
 ## Promoted features
 Promoted features are features that were incubating in previous versions of Gradle but are now supported and subject to backwards compatibility.
@@ -147,9 +132,9 @@ Known issues are problems that were discovered post release that are directly re
 
 We love getting contributions from the Gradle community. For information on contributing, please see [gradle.org/contribute](https://gradle.org/contribute).
 
-## Reporting Problems
+## Reporting problems
 
-If you find a problem with this release, please file a bug on [GitHub Issues](https://github.com/gradle/gradle/issues) adhering to our issue guidelines.
+If you find a problem with this release, please file a bug on [GitHub Issues](https://github.com/gradle/gradle/issues) adhering to our issue guidelines. 
 If you're not sure you're encountering a bug, please use the [forum](https://discuss.gradle.org/c/help-discuss).
 
 We hope you will build happiness with Gradle, and we look forward to your feedback via [Twitter](https://twitter.com/gradle) or on [GitHub](https://github.com/gradle).

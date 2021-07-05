@@ -1,31 +1,17 @@
-/*
- * Copyright 2014 the original author or authors.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 plugins {
     id("gradlebuild.distribution.api-java")
 }
 
 dependencies {
     api(project(":core-api"))
+    api(project(":problems"))
 
     implementation(project(":base-services"))
-    implementation(project(":logging"))
-    implementation(project(":persistent-cache"))
     implementation(project(":base-services-groovy"))
+    implementation(project(":functional"))
+    implementation(project(":logging"))
     implementation(project(":messaging"))
+    implementation(project(":persistent-cache"))
     implementation(project(":snapshots"))
 
     implementation(libs.futureKotlin("stdlib"))
@@ -38,8 +24,11 @@ dependencies {
 
     testFixturesApi(testFixtures(project(":diagnostics")))
     testFixturesApi(testFixtures(project(":core")))
-    testFixturesImplementation(project(":internal-integ-testing"))
+    testFixturesApi(project(":internal-integ-testing"))
     testFixturesImplementation(libs.guava)
+    testFixturesImplementation(libs.groovyAnt)
+    testFixturesImplementation(libs.groovyDatetime)
+    testFixturesImplementation(libs.groovyDateUtil)
 
     testImplementation(project(":process-services"))
     testImplementation(project(":file-collections"))
@@ -52,20 +41,28 @@ dependencies {
     testRuntimeOnly(project(":distributions-core")) {
         because("Tests instantiate DefaultClassLoaderRegistry which requires a 'gradle-plugins.properties' through DefaultPluginModuleRegistry")
     }
-    integTestDistributionRuntimeOnly(project(":distributions-core"))
+    integTestDistributionRuntimeOnly(project(":distributions-native")) {
+        because("ModelRuleCachingIntegrationTest requires a rules implementation")
+    }
 }
 
 strictCompile {
     ignoreRawTypes() // raw types used in public API
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(null as? Int)
+    sourceCompatibility = "8"
+    targetCompatibility = "8"
+}
+
+integTest.usesJavadocCodeSnippets.set(true)
+
 classycle {
-    excludePatterns.set(listOf(
-        "org/gradle/model/internal/core/**",
-        "org/gradle/model/internal/inspect/**",
-        "org/gradle/api/internal/tasks/**",
-        "org/gradle/model/internal/manage/schema/**",
-        "org/gradle/model/internal/type/**",
-        "org/gradle/api/internal/plugins/*"
-    ))
+    excludePatterns.add("org/gradle/model/internal/core/**")
+    excludePatterns.add("org/gradle/model/internal/inspect/**")
+    excludePatterns.add("org/gradle/api/internal/tasks/**")
+    excludePatterns.add("org/gradle/model/internal/manage/schema/**")
+    excludePatterns.add("org/gradle/model/internal/type/**")
+    excludePatterns.add("org/gradle/api/internal/plugins/*")
 }

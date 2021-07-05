@@ -16,10 +16,15 @@
 
 package org.gradle.process.internal
 
+import org.gradle.api.JavaVersion
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
-import org.gradle.integtests.fixtures.ToBeFixedForConfigurationCache
 import org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout
+import org.gradle.internal.os.OperatingSystem
+import spock.lang.IgnoreIf
+import spock.lang.Issue
 
+@Issue("https://github.com/gradle/gradle-private/issues/3247")
+@IgnoreIf({ OperatingSystem.current().macOsX && JavaVersion.current() == JavaVersion.VERSION_1_8})
 @IntegrationTestTimeout(180)
 class ErrorInWorkerSocketIntegrationTest extends AbstractIntegrationSpec {
     private static final String MESSAGE = 'This breaks socket connection threads in worker process deliberately'
@@ -68,7 +73,6 @@ task runBrokenWorker {
         executer.getGradleUserHomeDir().file('workers').listFiles().find { it.name.startsWith('worker-error') }.text.contains(MESSAGE)
     }
 
-    @ToBeFixedForConfigurationCache(because="composite build")
     def "worker won't hang when error occurs in socket connection in included build"() {
         given:
         requireOwnGradleUserHomeDir()
@@ -118,8 +122,10 @@ plugins {
 }
 '''
         settingsFile << '''
-includeBuild('included')
-'''
+            pluginManagement {
+                includeBuild('included')
+            }
+        '''
         when:
         fails('runBrokenWorker')
 

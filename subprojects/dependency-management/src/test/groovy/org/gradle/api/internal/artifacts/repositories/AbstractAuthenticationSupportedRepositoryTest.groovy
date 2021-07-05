@@ -24,7 +24,6 @@ import org.gradle.api.credentials.AwsCredentials
 import org.gradle.api.credentials.Credentials
 import org.gradle.api.credentials.HttpHeaderCredentials
 import org.gradle.api.internal.CollectionCallbackActionDecorator
-import org.gradle.api.internal.FeaturePreviews
 import org.gradle.api.internal.artifacts.ivyservice.ivyresolve.ConfiguredModuleComponentRepository
 import org.gradle.api.internal.artifacts.repositories.descriptor.RepositoryDescriptor
 import org.gradle.authentication.Authentication
@@ -32,7 +31,7 @@ import org.gradle.internal.authentication.DefaultAuthenticationContainer
 import org.gradle.internal.credentials.DefaultAwsCredentials
 import org.gradle.internal.credentials.DefaultPasswordCredentials
 import org.gradle.internal.reflect.Instantiator
-import org.gradle.util.ClosureBackedAction
+import org.gradle.util.internal.ClosureBackedAction
 import org.gradle.util.TestUtil
 import spock.lang.Specification
 import spock.lang.Unroll
@@ -227,7 +226,7 @@ class AbstractAuthenticationSupportedRepositoryTest extends Specification {
 
     class AuthSupportedRepository extends AbstractAuthenticationSupportedRepository {
         AuthSupportedRepository(Instantiator instantiator, AuthenticationContainer authenticationContainer) {
-            super(instantiator, authenticationContainer, TestUtil.objectFactory(), null, new FeaturePreviews())
+            super(instantiator, authenticationContainer, TestUtil.objectFactory(), null)
         }
 
         @Override

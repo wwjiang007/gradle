@@ -19,15 +19,15 @@ package org.gradle.integtests.tooling.r25
 
 import org.gradle.integtests.tooling.fixture.ProgressEvents
 import org.gradle.integtests.tooling.fixture.ToolingApiSpecification
+import org.gradle.integtests.tooling.fixture.WithOldConfigurationsSupport
 import org.gradle.tooling.BuildException
 import org.gradle.tooling.ListenerFailedException
 import org.gradle.tooling.ProjectConnection
 import org.gradle.tooling.events.OperationType
 import org.gradle.tooling.events.ProgressEvent
 import org.gradle.tooling.model.gradle.BuildInvocations
-import org.gradle.util.GradleVersion
 
-class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
+class BuildProgressCrossVersionSpec extends ToolingApiSpecification implements WithOldConfigurationsSupport {
 
     def "receive build progress events when requesting a model"() {
         given:
@@ -110,14 +110,18 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
 
         // Verify the most interesting operations; there may be others
         def runBuild = events.operation("Run build")
+        runBuild.descriptor.name == "Run build"
         runBuild.descriptor.parent == null
-        runBuild.successful
 
-        assertConfigureOperationFound(events)
+        def configureBuild = events.operation("Configure build")
+        configureBuild.descriptor.name == "Configure build"
+        configureBuild.descriptor.parent == runBuild.descriptor
+
+        def runTasksParent = parentOfRunTasksOperation(events, runBuild)
 
         def runTasks = events.operation("Run tasks")
         runTasks.descriptor.name == "Run tasks"
-        runTasks.descriptor.parent == runBuild.descriptor
+        runTasks.descriptor.parent == runTasksParent.descriptor
 
         events.operations[0] == runBuild
 
@@ -130,7 +134,7 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         buildFile << """
             apply plugin: 'java'
             ${mavenCentralRepository()}
-            dependencies { testCompile 'junit:junit:4.13' }
+            dependencies { ${testImplementationConfiguration} 'junit:junit:4.13' }
             compileTestJava.options.fork = true  // forked as 'Gradle Test Executor 1'
         """
 
@@ -163,10 +167,14 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         runBuild.failed
         runBuild.failures.size() == 1
 
-        assertConfigureOperationFound(events)
+        def configureBuild = events.operation("Configure build")
+        configureBuild.descriptor.parent == runBuild.descriptor
+        configureBuild.successful
+
+        def runTasksParent = parentOfRunTasksOperation(events, runBuild)
 
         def runTasks = events.operation("Run tasks")
-        runTasks.descriptor.parent == runBuild.descriptor
+        assert runTasks.descriptor.parent == runTasksParent.descriptor
         runTasks.failed
         runTasks.failures.size() == 1
 
@@ -177,20 +185,13 @@ class BuildProgressCrossVersionSpec extends ToolingApiSpecification {
         events.successful == events.operations - [runBuild, runTasks]
     }
 
-    private void assertConfigureOperationFound(ProgressEvents events) {
-        def runBuild = events.operation("Run build")
-
-        if (targetVersion < GradleVersion.version("6.7")) {
-            def configureBuild = events.operation("Configure build")
-            assert configureBuild.descriptor.parent == runBuild.descriptor
-            assert configureBuild.successful
+    private ProgressEvents.Operation parentOfRunTasksOperation(ProgressEvents events, ProgressEvents.Operation runBuild) {
+        if (targetDist.toolingApiHasExecutionPhaseBuildOperation) {
+            def runTasksParent = events.operation("Run main tasks")
+            assert runTasksParent.parent.descriptor == runBuild.descriptor
+            return runTasksParent
         } else {
-            def prepareBuildTree = events.operation("Prepare build tree")
-            assert prepareBuildTree.descriptor.parent == runBuild.descriptor
-
-            def configureBuild = events.operation("Configure build")
-            assert configureBuild.descriptor.parent == prepareBuildTree.descriptor
-            assert configureBuild.successful
+            return runBuild
         }
     }
 

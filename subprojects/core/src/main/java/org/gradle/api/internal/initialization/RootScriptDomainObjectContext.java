@@ -30,6 +30,13 @@ public class RootScriptDomainObjectContext implements DomainObjectContext, Model
     private static final Object MODEL = new Object();
     public static final DomainObjectContext INSTANCE = new RootScriptDomainObjectContext();
 
+    public static final DomainObjectContext PLUGINS = new RootScriptDomainObjectContext() {
+        @Override
+        public boolean isPluginContext() {
+            return true;
+        }
+    };
+
     private RootScriptDomainObjectContext() {
     }
 
@@ -70,6 +77,11 @@ public class RootScriptDomainObjectContext implements DomainObjectContext, Model
     }
 
     @Override
+    public <S> S forceAccessToMutableState(Function<? super Object, ? extends S> factory) {
+        return factory.apply(MODEL);
+    }
+
+    @Override
     public void applyToMutableState(Consumer<? super Object> action) {
         action.accept(MODEL);
     }
@@ -85,12 +97,22 @@ public class RootScriptDomainObjectContext implements DomainObjectContext, Model
     }
 
     @Override
+    public boolean isRootScript() {
+        return true;
+    }
+
+    @Override
+    public boolean isPluginContext() {
+        return false;
+    }
+
+    @Override
     public <T> CalculatedModelValue<T> newCalculatedValue(@Nullable T initialValue) {
         return new CalculatedModelValueImpl<>(initialValue);
     }
 
     private static class CalculatedModelValueImpl<T> implements CalculatedModelValue<T> {
-        private T value;
+        private volatile T value;
 
         CalculatedModelValueImpl(@Nullable T initialValue) {
             value = initialValue;
@@ -117,9 +139,11 @@ public class RootScriptDomainObjectContext implements DomainObjectContext, Model
 
         @Override
         public T update(Function<T, T> updateFunction) {
-            T newValue = updateFunction.apply(value);
-            value = newValue;
-            return newValue;
+            synchronized (this) {
+                T newValue = updateFunction.apply(value);
+                value = newValue;
+                return newValue;
+            }
         }
     }
 }

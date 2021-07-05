@@ -28,12 +28,13 @@ import org.gradle.api.publish.ivy.IvyPublication;
 import org.gradle.api.publish.ivy.internal.publication.IvyPublicationInternal;
 import org.gradle.api.publish.ivy.internal.publisher.IvyNormalizedPublication;
 import org.gradle.api.publish.ivy.internal.publisher.IvyPublisher;
-import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.internal.artifacts.repositories.AuthenticationSupportedInternal;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.inject.Inject;
 import java.util.concurrent.Callable;
@@ -43,6 +44,7 @@ import java.util.concurrent.Callable;
  *
  * @since 1.3
  */
+@DisableCachingByDefault(because = "Not worth caching")
 public class PublishToIvyRepository extends DefaultTask {
 
     private IvyPublicationInternal publication;
@@ -115,7 +117,7 @@ public class PublishToIvyRepository extends DefaultTask {
         return repository;
     }
 
-    @Input
+    @Nested
     @Optional
     Property<Credentials> getCredentials() {
         return credentials;

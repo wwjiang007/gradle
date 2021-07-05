@@ -47,19 +47,15 @@ class ChangesDuringTheBuildFileSystemWatchingIntegrationTest extends AbstractFil
                 def projectRoot = project.projectDir.absolutePath
                 def vfs = gradle.services.get(VirtualFileSystem)
                 int filesInVfs = 0
-                vfs.getRoot().visitSnapshotRoots { snapshot ->
-                    snapshot.accept(new FileSystemSnapshotVisitor() {
+                vfs.rootReference.getRoot().visitSnapshotRoots { snapshot ->
+                    snapshot.accept(new FileSystemSnapshotHierarchyVisitor() {
                         @Override
-                        void visitFile(CompleteFileSystemLocationSnapshot fileSnapshot) {
+                        SnapshotVisitResult visitEntry(FileSystemLocationSnapshot fileSnapshot) {
                             if (fileSnapshot.type == FileType.RegularFile && fileSnapshot.absolutePath.startsWith(projectRoot)) {
                                 filesInVfs++
                             }
+                            return SnapshotVisitResult.CONTINUE
                         }
-
-                        @Override
-                        boolean preVisitDirectory(CompleteDirectorySnapshot directorySnapshot) { return true }
-                        @Override
-                        void postVisitDirectory(CompleteDirectorySnapshot directorySnapshot) {}
                     })
                 }
                 println("Project files in VFS: \$filesInVfs")

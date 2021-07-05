@@ -35,7 +35,8 @@ import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.bundling.Zip;
 import org.gradle.internal.execution.OutputChangeListener;
 import org.gradle.internal.serialization.Cached;
-import org.gradle.util.ConfigureUtil;
+import org.gradle.util.internal.ConfigureUtil;
+import org.gradle.work.DisableCachingByDefault;
 
 import java.nio.charset.Charset;
 
@@ -44,6 +45,7 @@ import static org.gradle.api.internal.lambdas.SerializableLambdas.action;
 /**
  * Assembles a JAR archive.
  */
+@DisableCachingByDefault(because = "Not worth caching")
 public class Jar extends Zip {
 
     public static final String DEFAULT_EXTENSION = "jar";

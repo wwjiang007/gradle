@@ -16,13 +16,15 @@
 
 package org.gradle.buildinit.plugins.internal;
 
-import org.gradle.util.GFileUtils;
+import org.gradle.util.internal.GFileUtils;
 
 public class ResourceDirsGenerator implements BuildContentGenerator {
 
     @Override
     public void generate(InitSettings settings) {
-        GFileUtils.mkdirs(settings.getTarget().dir(settings.getSubprojectName() + "/src/main/resources").getAsFile());
-        GFileUtils.mkdirs(settings.getTarget().dir(settings.getSubprojectName() + "/src/test/resources").getAsFile());
+        for (String subproject : settings.getSubprojects()) {
+            GFileUtils.mkdirs(settings.getTarget().dir(subproject + "/src/main/resources").getAsFile());
+            GFileUtils.mkdirs(settings.getTarget().dir(subproject + "/src/test/resources").getAsFile());
+        }
     }
 }

@@ -18,7 +18,6 @@ package org.gradle.api.internal.artifacts.repositories;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import groovy.lang.Closure;
 import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.artifacts.ComponentMetadataListerDetails;
@@ -27,8 +26,6 @@ import org.gradle.api.artifacts.repositories.AuthenticationContainer;
 import org.gradle.api.artifacts.repositories.IvyArtifactRepository;
 import org.gradle.api.artifacts.repositories.IvyArtifactRepositoryMetaDataProvider;
 import org.gradle.api.artifacts.repositories.IvyPatternRepositoryLayout;
-import org.gradle.api.artifacts.repositories.RepositoryLayout;
-import org.gradle.api.internal.FeaturePreviews;
 import org.gradle.api.internal.artifacts.ImmutableModuleIdentifierFactory;
 import org.gradle.api.internal.artifacts.ivyservice.IvyContextManager;
 import org.gradle.api.internal.artifacts.ivyservice.IvyContextualMetaDataParser;
@@ -65,7 +62,6 @@ import org.gradle.internal.action.InstantiatingAction;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactIdentifier;
 import org.gradle.internal.component.external.model.ModuleComponentArtifactMetadata;
 import org.gradle.internal.component.external.model.ivy.MutableIvyModuleResolveMetadata;
-import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.hash.ChecksumService;
 import org.gradle.internal.instantiation.InstantiatorFactory;
 import org.gradle.internal.isolation.IsolatableFactory;
@@ -73,7 +69,6 @@ import org.gradle.internal.reflect.Instantiator;
 import org.gradle.internal.resource.local.FileResourceRepository;
 import org.gradle.internal.resource.local.FileStore;
 import org.gradle.internal.resource.local.LocallyAvailableResourceFinder;
-import org.gradle.util.ConfigureUtil;
 
 import javax.annotation.Nullable;
 import java.net.URI;
@@ -121,9 +116,8 @@ public class DefaultIvyArtifactRepository extends AbstractAuthenticationSupporte
                                         ObjectFactory objectFactory,
                                         DefaultUrlArtifactRepository.Factory urlArtifactRepositoryFactory,
                                         ChecksumService checksumService,
-                                        ProviderFactory providerFactory,
-                                        FeaturePreviews featurePreviews) {
-        super(instantiatorFactory.decorateLenient(), authenticationContainer, objectFactory, providerFactory, featurePreviews);
+                                        ProviderFactory providerFactory) {
+        super(instantiatorFactory.decorateLenient(), authenticationContainer, objectFactory, providerFactory);
         this.fileResolver = fileResolver;
         this.urlArtifactRepository = urlArtifactRepositoryFactory.create("Ivy", this::getDisplayName);
         this.transportFactory = transportFactory;
@@ -218,7 +212,7 @@ public class DefaultIvyArtifactRepository extends AbstractAuthenticationSupporte
 
     private void validate(Set<String> schemes) {
         if (schemes.isEmpty()) {
-            throw new InvalidUserDataException("You must specify a base url or at least one artifact pattern for an Ivy repository.");
+            throw new InvalidUserDataException("You must specify a base url or at least one artifact pattern for the Ivy repository '" + getDisplayName() + "'.");
         }
     }
 
@@ -357,34 +351,6 @@ public class DefaultIvyArtifactRepository extends AbstractAuthenticationSupporte
                 layout = instantiator.newInstance(GradleRepositoryLayout.class);
                 break;
         }
-    }
-
-    @Override
-    @SuppressWarnings({"rawtypes", "deprecation"})
-    public void layout(String layoutName, Closure config) {
-        DeprecationLogger.deprecateMethod(IvyArtifactRepository.class, "layout(String, Closure)")
-            .replaceWith("IvyArtifactRepository.patternLayout(Action)")
-            .willBeRemovedInGradle7()
-            .withUserManual("declaring_repositories", "sub:defining_custom_pattern_layout_for_an_ivy_repository")
-            .nagUser();
-        internalLayout(layoutName, ConfigureUtil.<RepositoryLayout>configureUsing(config));
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public void layout(String layoutName, Action<? extends RepositoryLayout> config) {
-        DeprecationLogger.deprecateMethod(IvyArtifactRepository.class, "layout(String, Action)")
-            .replaceWith("IvyArtifactRepository.patternLayout(Action)")
-            .willBeRemovedInGradle7()
-            .withUserManual("declaring_repositories", "sub:defining_custom_pattern_layout_for_an_ivy_repository")
-            .nagUser();
-        internalLayout(layoutName, config);
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private void internalLayout(String layoutName, Action config) {
-        layout(layoutName);
-        config.execute(layout);
     }
 
     @Override

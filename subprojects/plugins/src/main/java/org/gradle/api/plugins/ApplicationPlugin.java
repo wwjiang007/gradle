@@ -27,7 +27,6 @@ import org.gradle.api.distribution.DistributionContainer;
 import org.gradle.api.distribution.plugins.DistributionPlugin;
 import org.gradle.api.file.CopySpec;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.provider.Providers;
 import org.gradle.api.plugins.internal.DefaultApplicationPluginConvention;
 import org.gradle.api.plugins.internal.DefaultJavaApplication;
 import org.gradle.api.provider.Provider;
@@ -54,6 +53,8 @@ import static org.gradle.api.distribution.plugins.DistributionPlugin.TASK_INSTAL
  * <p>A {@link Plugin} which runs a project as a Java Application.</p>
  *
  * <p>The plugin can be configured via its companion {@link ApplicationPluginConvention} object.</p>
+ *
+ * @see <a href="https://docs.gradle.org/current/userguide/application_plugin.html">Application plugin reference</a>
  */
 public class ApplicationPlugin implements Plugin<Project> {
     public static final String APPLICATION_PLUGIN_NAME = "application";
@@ -172,7 +173,7 @@ public class ApplicationPlugin implements Plugin<Project> {
     private <T> Provider<T> getToolchainTool(Project project, BiFunction<JavaToolchainService, JavaToolchainSpec, Provider<T>> toolMapper) {
         final JavaPluginExtension extension = project.getExtensions().getByType(JavaPluginExtension.class);
         final JavaToolchainService service = project.getExtensions().getByType(JavaToolchainService.class);
-        return toolMapper.apply(service, extension.getToolchain()).orElse(Providers.notDefined());
+        return toolMapper.apply(service, extension.getToolchain());
     }
 
     // @Todo: refactor this task configuration to extend a copy task and use replace tokens
@@ -198,7 +199,8 @@ public class ApplicationPlugin implements Plugin<Project> {
     }
 
     private FileCollection runtimeClasspath(Project project) {
-        return project.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getRuntimeClasspath();
+
+        return project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getRuntimeClasspath();
     }
 
     private FileCollection jarsOnlyRuntimeClasspath(Project project) {

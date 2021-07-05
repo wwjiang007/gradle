@@ -16,20 +16,25 @@
 
 package org.gradle.internal.buildtree;
 
-import org.gradle.api.internal.BuildType;
 import org.gradle.api.internal.project.DefaultProjectStateRegistry;
+import org.gradle.api.internal.provider.ConfigurationTimeBarrier;
+import org.gradle.api.internal.provider.DefaultConfigurationTimeBarrier;
 import org.gradle.api.logging.configuration.LoggingConfiguration;
 import org.gradle.api.logging.configuration.ShowStacktrace;
+import org.gradle.initialization.BuildOptionBuildOperationProgressEventsEmitter;
 import org.gradle.initialization.exception.DefaultExceptionAnalyser;
 import org.gradle.initialization.exception.ExceptionAnalyser;
 import org.gradle.initialization.exception.MultipleBuildFailuresExceptionAnalyser;
 import org.gradle.initialization.exception.StackTraceSanitizingExceptionAnalyser;
+import org.gradle.internal.build.DefaultBuildLifecycleControllerFactory;
 import org.gradle.internal.enterprise.core.GradleEnterprisePluginManager;
+import org.gradle.internal.event.DefaultListenerManager;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.service.ServiceRegistration;
 import org.gradle.internal.service.scopes.PluginServiceRegistry;
 import org.gradle.internal.service.scopes.Scopes;
 import org.gradle.internal.work.WorkerLeaseService;
+import org.gradle.problems.buildtree.ProblemReporter;
 
 import java.util.List;
 
@@ -38,11 +43,11 @@ import java.util.List;
  */
 public class BuildTreeScopeServices {
     private final BuildTreeState buildTree;
-    private final BuildType buildType;
+    private final BuildTreeModelControllerServices.Supplier modelServices;
 
-    public BuildTreeScopeServices(BuildTreeState buildTree, BuildType buildType) {
+    public BuildTreeScopeServices(BuildTreeState buildTree, BuildTreeModelControllerServices.Supplier modelServices) {
         this.buildTree = buildTree;
-        this.buildType = buildType;
+        this.modelServices = modelServices;
     }
 
     protected void configure(ServiceRegistration registration, List<PluginServiceRegistry> pluginServiceRegistries) {
@@ -50,11 +55,13 @@ public class BuildTreeScopeServices {
             pluginServiceRegistry.registerBuildTreeServices(registration);
         }
         registration.add(BuildTreeState.class, buildTree);
-        registration.add(BuildType.class, buildType);
         registration.add(GradleEnterprisePluginManager.class);
+        registration.add(DefaultBuildLifecycleControllerFactory.class);
+        registration.add(BuildOptionBuildOperationProgressEventsEmitter.class);
+        modelServices.applyServicesTo(registration);
     }
 
-    protected ListenerManager createListenerManager(ListenerManager parent) {
+    protected DefaultListenerManager createListenerManager(DefaultListenerManager parent) {
         return parent.createChild(Scopes.BuildTree.class);
     }
 
@@ -66,7 +73,15 @@ public class BuildTreeScopeServices {
         return exceptionAnalyser;
     }
 
-    public DefaultProjectStateRegistry createProjectPathRegistry(WorkerLeaseService workerLeaseService) {
+    protected DefaultProjectStateRegistry createProjectPathRegistry(WorkerLeaseService workerLeaseService) {
         return new DefaultProjectStateRegistry(workerLeaseService);
+    }
+
+    protected ConfigurationTimeBarrier createConfigurationTimeBarrier() {
+        return new DefaultConfigurationTimeBarrier();
+    }
+
+    protected ProblemReporter createProblemReporter() {
+        return new DeprecationsReporter();
     }
 }

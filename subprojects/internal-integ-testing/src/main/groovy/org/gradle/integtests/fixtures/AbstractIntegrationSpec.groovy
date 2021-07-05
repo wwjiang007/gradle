@@ -42,8 +42,11 @@ import org.gradle.test.fixtures.maven.MavenFileRepository
 import org.gradle.test.fixtures.maven.MavenLocalRepository
 import org.hamcrest.CoreMatchers
 import org.hamcrest.Matcher
+import org.intellij.lang.annotations.Language
 import org.junit.Rule
 import spock.lang.Specification
+
+import javax.annotation.Nullable
 
 import static org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout.DEFAULT_TIMEOUT_SECONDS
 import static org.gradle.test.fixtures.dsl.GradleDsl.GROOVY
@@ -60,7 +63,7 @@ import static org.gradle.util.Matchers.normalizedLineSeparators
 class AbstractIntegrationSpec extends Specification {
 
     @Rule
-    final TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider(getClass())
+    public final TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider(getClass())
 
     GradleDistribution distribution = new UnderDevelopmentGradleDistribution(getBuildContext())
     private GradleExecuter executor
@@ -84,10 +87,10 @@ class AbstractIntegrationSpec extends Specification {
 
     M2Installation m2 = new M2Installation(temporaryFolder)
 
-    ExecutionResult result
-    ExecutionFailure failure
-    private MavenFileRepository mavenRepo
-    private IvyFileRepository ivyRepo
+    private ExecutionResult currentResult
+    private ExecutionFailure currentFailure
+    public final MavenFileRepository mavenRepo = new MavenFileRepository(temporaryFolder.testDirectory.file("maven-repo"))
+    public final IvyFileRepository ivyRepo = new IvyFileRepository(temporaryFolder.testDirectory.file("ivy-repo"))
 
     protected int maxHttpRetries = 1
     protected Integer maxUploadAttempts
@@ -95,9 +98,9 @@ class AbstractIntegrationSpec extends Specification {
     def setup() {
         m2.isolateMavenLocalRepo(executer)
         executer.beforeExecute {
-            executer.withArgument("-Dorg.gradle.internal.repository.max.tentatives=$maxHttpRetries")
+            withArgument("-Dorg.gradle.internal.repository.max.tentatives=$maxHttpRetries")
             if (maxUploadAttempts != null) {
-                executer.withArgument("-Dorg.gradle.internal.network.retry.max.attempts=$maxUploadAttempts")
+                withArgument("-Dorg.gradle.internal.network.retry.max.attempts=$maxUploadAttempts")
             }
         }
     }
@@ -129,8 +132,19 @@ class AbstractIntegrationSpec extends Specification {
         }
     }
 
+    /**
+     * Want syntax highlighting inside of IntelliJ? Consider using {@link AbstractIntegrationSpec#buildFile(String)}
+     */
     TestFile getBuildFile() {
         testDirectory.file(getDefaultBuildFileName())
+    }
+
+    /**
+     * Provides best-effort groovy script syntax highlighting.
+     * The highlighting is imperfect since {@link GroovyBuildScriptLanguage} uses stub methods to create a simulated script target environment.
+     */
+    void buildFile(@GroovyBuildScriptLanguage String script) {
+        buildFile << script
     }
 
     TestFile getBuildKotlinFile() {
@@ -145,7 +159,7 @@ class AbstractIntegrationSpec extends Specification {
         'build.gradle.kts'
     }
 
-    protected TestFile buildScript(String script) {
+    protected TestFile buildScript(@GroovyBuildScriptLanguage String script) {
         buildFile.text = script
         buildFile
     }
@@ -233,6 +247,14 @@ class AbstractIntegrationSpec extends Specification {
         file("build/generated/sources/annotationProcessor/", language, sourceSet, fqcn)
     }
 
+    TestFile groovyTestSourceFile(@Language("groovy") String source) {
+        file("src/test/groovy/Test.groovy") << source
+    }
+
+    TestFile javaTestSourceFile(@Language("java") String source) {
+        file("src/test/java/Test.java") << source
+    }
+
     protected GradleExecuter sample(Sample sample) {
         inDirectory(sample.dir)
     }
@@ -289,6 +311,41 @@ class AbstractIntegrationSpec extends Specification {
 
     protected ExecutionResult succeeds(String... tasks) {
         result = executer.withTasks(*tasks).run()
+        return result
+    }
+
+    ExecutionResult getResult() {
+        if (currentResult == null) {
+            throw new IllegalStateException("No build result is available yet.")
+        }
+        return currentResult
+    }
+
+    @Nullable
+    ExecutionResult getResultOrNull() {
+        return currentResult
+    }
+
+    void setResult(ExecutionResult result) {
+        currentFailure = null
+        currentResult = result
+    }
+
+    ExecutionFailure getFailure() {
+        if (currentFailure == null) {
+            throw new IllegalStateException("No build failure result is available yet.")
+        }
+        return currentFailure
+    }
+
+    @Nullable
+    ExecutionFailure getFailureOrNull() {
+        return currentFailure
+    }
+
+    void setFailure(ExecutionFailure failure) {
+        currentResult = failure
+        currentFailure = failure
     }
 
     protected ExecutionFailure runAndFail(String... tasks) {
@@ -297,7 +354,7 @@ class AbstractIntegrationSpec extends Specification {
 
     protected ExecutionFailure fails(String... tasks) {
         failure = executer.withTasks(*tasks).runWithFailure()
-        result = failure
+        return failure
     }
 
     protected void executedAndNotSkipped(String... tasks) {
@@ -406,13 +463,6 @@ class AbstractIntegrationSpec extends Specification {
         return new MavenLocalRepository(file(repo))
     }
 
-    public MavenFileRepository getMavenRepo() {
-        if (mavenRepo == null) {
-            mavenRepo = new MavenFileRepository(file("maven-repo"))
-        }
-        return mavenRepo
-    }
-
     public MavenFileRepository publishedMavenModules(String... modulesToPublish) {
         modulesToPublish.each { String notation ->
             def modules = notation.split("->").reverse()
@@ -432,13 +482,6 @@ class AbstractIntegrationSpec extends Specification {
 
     public IvyFileRepository ivy(Object repo) {
         return new IvyFileRepository(file(repo))
-    }
-
-    public IvyFileRepository getIvyRepo() {
-        if (ivyRepo == null) {
-            ivyRepo = new IvyFileRepository(file("ivy-repo"))
-        }
-        return ivyRepo
     }
 
     public GradleExecuter using(Action<GradleExecuter> action) {
@@ -499,12 +542,8 @@ class AbstractIntegrationSpec extends Specification {
         result.assertNotOutput(string.trim())
     }
 
-    static String jcenterRepository(GradleDsl dsl = GROOVY) {
-        RepoScriptBlockUtil.jcenterRepository(dsl)
-    }
-
-    static String mavenCentralRepository() {
-        RepoScriptBlockUtil.mavenCentralRepository()
+    static String mavenCentralRepository(GradleDsl dsl = GROOVY) {
+        RepoScriptBlockUtil.mavenCentralRepository(dsl)
     }
 
     static String googleRepository() {
@@ -519,5 +558,13 @@ class AbstractIntegrationSpec extends Specification {
         if (executor != null) {
             executor.ignoreCleanupAssertions()
         }
+    }
+
+    /**
+     * Called by {@link org.gradle.integtests.fixtures.extensions.AbstractMultiTestInterceptor} when the test class is reused
+     */
+    void resetExecuter() {
+        this.ignoreCleanupAssertions = false
+        recreateExecuter()
     }
 }

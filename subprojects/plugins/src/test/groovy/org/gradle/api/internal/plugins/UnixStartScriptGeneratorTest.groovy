@@ -17,8 +17,8 @@
 package org.gradle.api.internal.plugins
 
 import org.gradle.jvm.application.scripts.JavaAppStartScriptGenerationDetails
-import org.gradle.util.TextUtil
-import org.gradle.util.WrapUtil
+import org.gradle.util.internal.TextUtil
+import org.gradle.util.internal.WrapUtil
 import spock.lang.Specification
 
 class UnixStartScriptGeneratorTest extends Specification {
@@ -46,7 +46,7 @@ class UnixStartScriptGeneratorTest extends Specification {
         generator.generateScript(details, destination)
 
         then:
-        destination.toString().split(TextUtil.unixLineSeparator).length == 185
+        destination.toString().split(TextUtil.unixLineSeparator).length == 183
     }
 
     def "defaultJvmOpts is expanded properly in unix script"() {

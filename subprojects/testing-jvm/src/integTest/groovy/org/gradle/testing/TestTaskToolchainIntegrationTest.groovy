@@ -31,7 +31,7 @@ class TestTaskToolchainIntegrationTest extends AbstractPluginIntegrationTest {
         buildFile << """
             apply plugin: "java"
 
-            ${jcenterRepository()}
+            ${mavenCentralRepository()}
 
             dependencies {
                 testImplementation 'junit:junit:4.13'
@@ -53,7 +53,6 @@ class TestTaskToolchainIntegrationTest extends AbstractPluginIntegrationTest {
 
         when:
         result = executer
-            .withArgument("-Porg.gradle.java.installations.auto-detect=false")
             .withArgument("-Porg.gradle.java.installations.paths=" + jdk.javaHome.absolutePath)
             .withArgument("--info")
             .withTasks("test")
@@ -71,11 +70,11 @@ class TestTaskToolchainIntegrationTest extends AbstractPluginIntegrationTest {
 
     @IgnoreIf({ AvailableJavaHomes.differentJdk == null })
     def "Test task is configured using default toolchain"() {
-        def someJdk = AvailableJavaHomes.getDifferentJdk()
+        def someJdk = AvailableJavaHomes.getDifferentVersion()
         buildFile << """
             apply plugin: "java"
 
-            ${jcenterRepository()}
+            ${mavenCentralRepository()}
 
             dependencies {
                 testImplementation 'junit:junit:4.13'

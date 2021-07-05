@@ -35,7 +35,7 @@ dependencies {
 // end::compatibility-rule-use[]
 
 // tag::compatibility-rule[]
-open class InstrumentedJarsRule: AttributeCompatibilityRule<LibraryElements> {
+abstract class InstrumentedJarsRule: AttributeCompatibilityRule<LibraryElements> {
 
     override fun execute(details: CompatibilityCheckDetails<LibraryElements>) = details.run {
         if (consumerValue?.name == "instrumented-jar" && producerValue?.name == "jar") {
@@ -49,7 +49,7 @@ tasks.register("showTestClasspath") {
     inputs.files(configurations.testCompileClasspath)
     inputs.files(configurations.testRuntimeClasspath)
     doLast {
-        println(configurations.testCompileClasspath.get().files.map(File::name))
-        println(configurations.testRuntimeClasspath.get().files.map(File::name))
+        println(configurations.testCompileClasspath.get().files.map(File::getName))
+        println(configurations.testRuntimeClasspath.get().files.map(File::getName))
     }
 }

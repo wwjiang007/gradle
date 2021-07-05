@@ -20,40 +20,42 @@ import org.gradle.api.Describable;
 import org.gradle.api.file.Directory;
 import org.gradle.api.file.RegularFile;
 import org.gradle.api.internal.file.FileFactory;
-import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.Nested;
+import org.gradle.internal.jvm.inspection.JvmInstallationMetadata;
 import org.gradle.internal.os.OperatingSystem;
 import org.gradle.jvm.toolchain.JavaCompiler;
+import org.gradle.jvm.toolchain.JavaInstallationMetadata;
 import org.gradle.jvm.toolchain.JavaLanguageVersion;
 import org.gradle.jvm.toolchain.JavaLauncher;
-import org.gradle.jvm.toolchain.JavaInstallationMetadata;
 import org.gradle.jvm.toolchain.JavadocTool;
-import org.gradle.util.VersionNumber;
+import org.gradle.util.internal.VersionNumber;
 
-import javax.inject.Inject;
 import java.nio.file.Path;
 
 public class JavaToolchain implements Describable, JavaInstallationMetadata {
 
-    private final boolean isJdk;
     private final JavaCompilerFactory compilerFactory;
     private final ToolchainToolFactory toolFactory;
     private final Directory javaHome;
     private final VersionNumber implementationVersion;
     private final JavaLanguageVersion javaVersion;
+    private final JvmInstallationMetadata metadata;
+    private final JavaToolchainInput input;
 
-    @Inject
-    public JavaToolchain(JavaInstallationProbe.ProbeResult probe, JavaCompilerFactory compilerFactory, ToolchainToolFactory toolFactory, FileFactory fileFactory) {
-        this(probe.getJavaHome(), JavaLanguageVersion.of(Integer.parseInt(probe.getJavaVersion().getMajorVersion())), probe.getImplementationJavaVersion(), probe.getInstallType() == JavaInstallationProbe.InstallType.IS_JDK, compilerFactory, toolFactory, fileFactory);
-    }
-
-    JavaToolchain(Path javaHome, JavaLanguageVersion version, String implementationJavaVersion, boolean isJdk, JavaCompilerFactory compilerFactory, ToolchainToolFactory toolFactory, FileFactory fileFactory) {
-        this.javaHome = fileFactory.dir(computeEnclosingJavaHome(javaHome).toFile());
-        this.javaVersion = version;
-        this.isJdk = isJdk;
+    public JavaToolchain(JvmInstallationMetadata metadata, JavaCompilerFactory compilerFactory, ToolchainToolFactory toolFactory, FileFactory fileFactory, JavaToolchainInput input) {
+        this.javaHome = fileFactory.dir(computeEnclosingJavaHome(metadata.getJavaHome()).toFile());
+        this.javaVersion = JavaLanguageVersion.of(metadata.getLanguageVersion().getMajorVersion());
         this.compilerFactory = compilerFactory;
         this.toolFactory = toolFactory;
-        this.implementationVersion = VersionNumber.parse(implementationJavaVersion);
+        this.implementationVersion = VersionNumber.withPatchNumber().parse(metadata.getImplementationVersion());
+        this.metadata = metadata;
+        this.input = input;
+    }
+
+    @Nested
+    protected JavaToolchainInput getTaskInputs() {
+        return input;
     }
 
     @Internal
@@ -71,9 +73,20 @@ public class JavaToolchain implements Describable, JavaInstallationMetadata {
         return toolFactory.create(JavadocTool.class, this);
     }
 
-    @Input
+    @Internal
     public JavaLanguageVersion getLanguageVersion() {
         return javaVersion;
+    }
+
+    @Internal
+    @Override
+    public String getJavaRuntimeVersion() {
+        return metadata.getRuntimeVersion();
+    }
+
+    @Override
+    public String getJvmVersion() {
+        return metadata.getJvmVersion();
     }
 
     @Internal
@@ -88,7 +101,17 @@ public class JavaToolchain implements Describable, JavaInstallationMetadata {
 
     @Internal
     public boolean isJdk() {
-        return isJdk;
+        return metadata.hasCapability(JvmInstallationMetadata.JavaInstallationCapability.JAVA_COMPILER);
+    }
+
+    @Internal
+    public JvmInstallationMetadata getMetadata() {
+        return metadata;
+    }
+
+    @Override
+    public String getVendor() {
+        return metadata.getVendor().getDisplayName();
     }
 
     @Internal

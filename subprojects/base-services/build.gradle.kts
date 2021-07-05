@@ -1,27 +1,25 @@
-/*
- * A set of generic services and utilities.
- *
- * Should have a very small set of dependencies, and should be appropriate to embed in an external
- * application (eg as part of the tooling API).
- */
-
 plugins {
     id("gradlebuild.distribution.api-java")
     id("gradlebuild.jmh")
 }
 
+description = "A set of generic services and utilities."
+
 gradlebuildJava.usedInWorkers()
+
+moduleIdentity.createBuildReceipt()
 
 dependencies {
     api(project(":base-annotations"))
     api(project(":hashing"))
     api(project(":build-operations"))
 
-    implementation(libs.slf4jApi)
-    implementation(libs.guava)
-    implementation(libs.commonsLang)
-    implementation(libs.commonsIo)
     implementation(libs.asm)
+    implementation(libs.commonsIo)
+    implementation(libs.commonsLang)
+    implementation(libs.guava)
+    implementation(libs.inject)
+    implementation(libs.slf4jApi)
 
     integTestImplementation(project(":logging"))
 
@@ -30,10 +28,14 @@ dependencies {
 
     integTestDistributionRuntimeOnly(project(":distributions-core"))
 
+    jmh(platform(project(":distributions-dependencies")))
     jmh(libs.bouncycastleProvider)
     jmh(libs.guava)
 }
 
-jmh.include = listOf("HashingAlgorithmsBenchmark")
+classycle {
+    // Needed for the factory methods in the base class
+    excludePatterns.add("org/gradle/util/GradleVersion**")
+}
 
-moduleIdentity.createBuildReceipt()
+jmh.includes.set(listOf("HashingAlgorithmsBenchmark"))

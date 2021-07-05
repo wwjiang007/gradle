@@ -17,8 +17,10 @@
 package org.gradle.performance.regression.corefeature
 
 import org.eclipse.jetty.webapp.WebAppContext
-import org.gradle.performance.AbstractCrossVersionGradleProfilerPerformanceTest
+import org.gradle.performance.AbstractCrossVersionPerformanceTest
 import org.gradle.performance.WithExternalRepository
+import org.gradle.performance.annotations.RunFor
+import org.gradle.performance.annotations.Scenario
 import org.gradle.profiler.BuildContext
 import org.gradle.profiler.BuildMutator
 
@@ -32,9 +34,13 @@ import javax.servlet.ServletResponse
 import javax.servlet.http.HttpServletRequest
 import java.util.concurrent.atomic.AtomicInteger
 
-class ParallelDownloadsPerformanceTest extends AbstractCrossVersionGradleProfilerPerformanceTest implements WithExternalRepository {
-    private final static String TEST_PROJECT_NAME = 'springBootApp'
+import static org.gradle.performance.annotations.ScenarioType.PER_DAY
+import static org.gradle.performance.results.OperatingSystem.LINUX
 
+@RunFor(
+    @Scenario(type = PER_DAY, operatingSystems = [LINUX], testProjects = ["springBootApp"])
+)
+class ParallelDownloadsPerformanceTest extends AbstractCrossVersionPerformanceTest implements WithExternalRepository {
     File tmpRepoDir = temporaryFolder.createDir('repository')
 
     @Override
@@ -43,9 +49,9 @@ class ParallelDownloadsPerformanceTest extends AbstractCrossVersionGradleProfile
     }
 
     def setup() {
-        runner.targetVersions = ["6.7-20200723220251+0000"]
+        runner.targetVersions = ["7.1-20210523230047+0000"]
         // Example project requires TaskContainer.register
-        runner.minimumBaseVersion = "4.9"
+        runner.minimumBaseVersion = "5.6"
         runner.warmUpRuns = 5
         runner.runs = 15
         runner.addBuildMutator { invocationSettings ->
@@ -65,13 +71,11 @@ class ParallelDownloadsPerformanceTest extends AbstractCrossVersionGradleProfile
     }
 
     def "resolves dependencies from external repository"() {
-        runner.testProject = TEST_PROJECT_NAME
         startServer()
 
         given:
         runner.tasksToRun = ['resolveDependencies']
-        runner.gradleOpts = ["-Xms1g", "-Xmx1g"]
-        runner.args = ['-I', 'init.gradle', "-PmirrorPath=${repoDir.absolutePath}", "-PmavenRepoURL=http://127.0.0.1:${serverPort}/"]
+        runner.args = ['-I', 'init.gradle', "-PmirrorPath=${repoDir.absolutePath}", "-PmavenRepoURL=http://127.0.0.1:${serverPort}/", "-Dorg.gradle.parallel=false"]
 
         when:
         def result = runner.run()
@@ -84,12 +88,10 @@ class ParallelDownloadsPerformanceTest extends AbstractCrossVersionGradleProfile
     }
 
     def "resolves dependencies from external repository (parallel)"() {
-        runner.testProject = TEST_PROJECT_NAME
         startServer()
 
         given:
         runner.tasksToRun = ['resolveDependencies']
-        runner.gradleOpts = ["-Xms1g", "-Xmx1g"]
         runner.args = ['-I', 'init.gradle', "-PmirrorPath=${repoDir.absolutePath}", "-PmavenRepoURL=http://127.0.0.1:${serverPort}/", '--parallel']
 
         when:

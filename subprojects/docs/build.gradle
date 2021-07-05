@@ -1,15 +1,18 @@
-
 import gradlebuild.integrationtests.model.GradleDistribution
+import org.asciidoctor.gradle.jvm.AsciidoctorTask
 import org.gradle.docs.samples.internal.tasks.InstallSample
 
+import static gradlebuild.basics.BuildEnvironmentKt.repoRoot
 import static gradlebuild.basics.Repositories_extensionsKt.googleApisJs
+import org.gradle.docs.internal.tasks.CheckLinks
 
 plugins {
     id 'gradlebuild.internal.java'
     // TODO: Apply asciidoctor in documentation plugin instead.
-    id 'org.asciidoctor.convert'
+    id 'org.asciidoctor.jvm.convert'
     id 'gradlebuild.documentation'
-    id 'org.gradle.samples' version "0.16.8"
+    id 'gradlebuild.generate-samples'
+    id 'gradlebuild.split-docs'
 }
 
 repositories { handler ->
@@ -34,10 +37,6 @@ dependencies {
     // generate Javadoc for the full Gradle distribution
     runtimeOnly project(":distributions-full")
 
-    asciidoctor "org.gradle:docs-asciidoctor-extensions:0.4.0"
-    // TODO: Why isn't this using the output instead?
-    asciidoctor project.files("src/main/resources")
-
     userGuideTask 'xalan:xalan:2.7.1'
     userGuideTask 'xerces:xercesImpl:2.11.0'
     userGuideTask 'xhtmlrenderer:xhtmlrenderer:R8rc1'
@@ -59,16 +58,34 @@ dependencies {
 
     docsTestImplementation platform(project(":distributions-dependencies"))
     docsTestImplementation project(":internal-integ-testing")
-    docsTestImplementation project(":test-kit")
+    docsTestImplementation project(":base-services")
+    docsTestImplementation project(":logging")
     docsTestImplementation libs.junit5Vintage
     docsTestImplementation libs.junit
 
     integTestDistributionRuntimeOnly project(":distributions-full")
 }
 
+configurations.docsTestRuntimeClasspath {
+    exclude group: "org.slf4j", module: "slf4j-simple"
+}
+
 asciidoctorj {
-    version = '1.5.8.1'
-    noDefaultRepositories = true
+    version = '2.4.2'
+    modules.pdf.version '1.5.4'
+}
+
+tasks.withType(AsciidoctorTask).configureEach { task ->
+    if (task.name == "userguideSinglePagePdf") {
+        task.asciidoctorj.docExtensions(
+            project.getDependencies().create("org.gradle:docs-asciidoctor-extensions-base:0.10.0"),
+        )
+    } else {
+        task.asciidoctorj.docExtensions(
+            project.getDependencies().create("org.gradle:docs-asciidoctor-extensions:0.10.0"),
+            project.getDependencies().create(project.files("src/main/resources"))
+        )
+    }
 }
 
 gradleDocumentation {
@@ -88,11 +105,16 @@ tasks.named("stageDocs") {
 samples {
     templates {
         javaAndroidApplication
+        structuringSoftwareProjects
         springBootWebApplication {
             target = "app"
         }
         gradlePluginInJava {
             target = "greeting-plugin"
+        }
+        gradlePluginInJavaInBuildSrc {
+            sourceDirectory = gradlePluginInJava.sourceDirectory
+            target = "buildSrc"
         }
         buildSrcPluginJavaModuleTransform
 
@@ -120,12 +142,6 @@ samples {
             target = "utilities"
         }
 
-        groovySpockTestForListLibrary {
-            target = "list"
-        }
-        groovySpockTestForApplication {
-            target = "application"
-        }
         javaJunit5TestForApplication {
             target = "application"
         }
@@ -155,7 +171,6 @@ samples {
             target = "application"
         }
 
-        groovyApplication
         groovyListLibrary
         groovyUtilitiesLibrary
         groovyListLibraryInMyLibrary {
@@ -166,23 +181,6 @@ samples {
             sourceDirectory = groovyUtilitiesLibrary.sourceDirectory
             target = "my-library"
         }
-        groovyApplicationInApplication {
-            sourceDirectory = groovyApplication.sourceDirectory
-            target = "application"
-        }
-        groovyListLibraryInList {
-            sourceDirectory = groovyListLibrary.sourceDirectory
-            target = "list"
-        }
-        groovyUtilitiesLibraryInUtilities {
-            sourceDirectory = groovyUtilitiesLibrary.sourceDirectory
-            target = "utilities"
-        }
-
-        // These are currently unused, but we plan to integrate these into the 'init plugin' in some form an then have a larger multi-project sample for each JVM language generated
-        kotlinApplication
-        kotlinListLibrary
-        kotlinUtilitiesLibrary
 
         projectInfoPlugin
 
@@ -217,72 +215,6 @@ samples {
     }
 
     publishedSamples {
-        // Libraries - Guide-style samples generated from 'build init'
-        buildingJavaLibraries {
-            sampleDirectory = samplesRoot.dir("generated/java-library")
-            description = "Setup a Java library project step-by-step."
-            category = "Java"
-        }
-        buildingGroovyLibraries {
-            sampleDirectory = samplesRoot.dir("generated/groovy-library")
-            description = "Setup a Groovy library project step-by-step."
-            category = "Groovy"
-        }
-        buildingKotlinLibraries {
-            sampleDirectory = samplesRoot.dir("generated/kotlin-library")
-            description = "Setup a Kotlin library project step-by-step."
-            category = "Kotlin"
-        }
-        buildingScalaLibraries {
-            sampleDirectory = samplesRoot.dir("generated/scala-library")
-            description = "Setup a Scala library project step-by-step."
-            category = "Scala"
-        }
-        buildingCppLibraries {
-            displayName = "Building {cpp} Libraries"
-            sampleDirectory = samplesRoot.dir("generated/cpp-library")
-            description = "Setup a C++ library project step-by-step."
-            category = "C++"
-        }
-        buildingSwiftLibraries {
-            sampleDirectory = samplesRoot.dir("generated/swift-library")
-            description = "Setup a Swift library project step-by-step."
-            category = "Swift"
-        }
-
-        // Applications - Guide-style samples generated from 'build init'
-        buildingJavaApplications {
-            sampleDirectory = samplesRoot.dir("generated/java-application")
-            description = "Setup a Java application project step-by-step."
-            category = "Java"
-        }
-        buildingGroovyApplications {
-            sampleDirectory = samplesRoot.dir("generated/groovy-application")
-            description = "Setup a Groovy application project step-by-step."
-            category = "Groovy"
-        }
-        buildingKotlinApplications {
-            sampleDirectory = samplesRoot.dir("generated/kotlin-application")
-            description = "Setup a Kotlin application project step-by-step."
-            category = "Kotlin"
-        }
-        buildingScalaApplications {
-            sampleDirectory = samplesRoot.dir("generated/scala-application")
-            description = "Setup a Scala library project step-by-step."
-            category = "Scala"
-        }
-        buildingCppApplications {
-            displayName = "Building {cpp} Applications"
-            sampleDirectory = samplesRoot.dir("generated/cpp-application")
-            description = "Setup a C++ application project step-by-step."
-            category = "C++"
-        }
-        buildingSwiftApplications {
-            sampleDirectory = samplesRoot.dir("generated/swift-application")
-            description = "Setup a Swift application project step-by-step."
-            category = "Swift"
-        }
-
         buildingAndroidApps {
             sampleDirectory = samplesRoot.dir("android-application")
             description = "Build a simple Android app."
@@ -318,34 +250,27 @@ samples {
                 from(templates.javaUtilitiesLibraryAsSubproject)
             }
         }
-        javaMultiProjectWithSpockTests {
-            sampleDirectory = samplesRoot.dir("java/multi-project-with-spock-tests")
-            displayName = "Testing with Spock"
-            description = "Test a Java application and library with link:https://github.com/spockframework/spock[Spock]."
+        jvmMultiProjectWithToolchains {
+            sampleDirectory = samplesRoot.dir("java/jvm-multi-project-with-toolchains")
+            displayName = "Using toolchains"
+            description = "Use toolchains to configure the JVM to use for compilation and testing."
             category = "Java"
+
             common {
                 from(templates.javaApplicationAsSubproject)
-                from(templates.javaListLibraryAsSubproject)
-                from(templates.javaUtilitiesLibraryAsSubproject)
-                from(templates.groovySpockTestForApplication)
-                from(templates.groovySpockTestForListLibrary)
-            }
-        }
-        javaMultiProjectWithJUnit5Tests {
-            sampleDirectory = samplesRoot.dir("java/multi-project-with-junit-5-tests")
-            displayName = "Testing with JUnit5"
-            description = "Test a Java application and library with link:https://junit.org/junit5[JUnit5]."
-            category = "Java"
-            common {
-                from(templates.javaApplicationAsSubproject)
-                from(templates.javaListLibraryAsSubproject)
-                from(templates.javaUtilitiesLibraryAsSubproject)
                 from(templates.javaJunit5TestForApplication)
+                from(templates.javaJunit5IntegrationTestForApplication)
+
+                from(templates.javaListLibraryAsSubproject)
                 from(templates.javaJunit5TestForListLibrary)
+                from(templates.javaJunit5IntegrationTestForUtilitiesLibrary)
+
+                from(templates.javaUtilitiesLibraryAsSubproject)
             }
         }
-        buildingJavaModules {
+        javaModulesMultiProject {
             sampleDirectory = samplesRoot.dir("java/modules-multi-project")
+            displayName = "Building Java Modules"
             description = "Build Java Modules and a modular Java application."
             category = "Java Modules"
             common {
@@ -359,8 +284,9 @@ samples {
                 from(templates.javaJunit5TestForListLibrary)
             }
         }
-        buildingJavaModulesWithBlackboxTests {
+        javaModulesMultiProjectWithIntegrationTests {
             sampleDirectory = samplesRoot.dir("java/modules-multi-project-with-integration-tests")
+            displayName = "Building Java Modules with Blackbox Tests"
             description = "Build Java Modules with blackbox integration tests."
             category = "Java Modules"
             common {
@@ -379,8 +305,9 @@ samples {
                 from(templates.javaJunit5ModuleInfoForUtilitiesLibrary)
             }
         }
-        buildingJavaModulesWithLegacyLibraries {
+        javaModulesWithTransform {
             sampleDirectory = samplesRoot.dir("java/modules-with-transform")
+            displayName = "Building Java Modules with Legacy Libraries"
             description = "Build a modular Java application that integrates legacy libraries."
             category = "Java Modules"
             common {
@@ -407,20 +334,6 @@ samples {
             common {
                 from(templates.javaListLibraryInMyLibrary)
                 from(templates.javaUtilitiesLibraryInMyLibrary)
-            }
-        }
-
-        groovyMultiProjectWithSpockTests {
-            sampleDirectory = samplesRoot.dir("groovy/multi-project-with-spock-tests")
-            displayName = "Testing with Spock"
-            description = "Test a Groovy application and library with link:https://github.com/spockframework/spock[Spock]."
-            category = "Groovy"
-            common {
-                from(templates.groovyApplicationInApplication)
-                from(templates.groovyListLibraryInList)
-                from(templates.groovyUtilitiesLibraryInUtilities)
-                from(templates.groovySpockTestForApplication)
-                from(templates.groovySpockTestForListLibrary)
             }
         }
         publishingGroovyLibraries {
@@ -462,15 +375,15 @@ samples {
             }
         }
 
-        jvmMultiProjectBuild {
-            sampleDirectory = samplesRoot.dir("build-organization/jvm-multi-project-build")
-            displayName = "Structuring a multi-project build"
-            description = "Use dependencies and share build logic in a multi-project JVM build."
+        sharingConventionPluginsWithBuildLogic {
+            sampleDirectory = samplesRoot.dir("build-organization/sharing-convention-plugins-with-build-logic")
+            displayName = "Sharing convention plugins with build logic build"
+            description = "Reuse convention plugins in both main build and build logic build"
             category = "Build organization"
             common {
                 from(templates.javaApplicationAsSubproject)
-                from(templates.javaListLibraryAsSubproject)
                 from(templates.javaUtilitiesLibraryAsSubproject)
+                from(templates.javaListLibraryAsSubproject)
             }
         }
 
@@ -496,6 +409,15 @@ samples {
             displayName = "Supply credentials to external tool"
             description = "Pass credentials to an external tool via stdin using Gradle properties."
             category = "Using Credentials"
+        }
+
+        structuringSoftwareProjects {
+            sampleDirectory = samplesRoot.dir("build-organization/structuring-software-projects")
+            description = "Structuring a software product project with Gradle"
+            category = "Build organization"
+            common {
+                from(templates.structuringSoftwareProjects)
+            }
         }
 
         compositeBuildsBasics {
@@ -544,6 +466,7 @@ tasks.withType(InstallSample) {
 
 // TODO add some kind of test precondition support in sample test conf
 tasks.named("docsTest") { task ->
+    maxParallelForks = 2
     // The org.gradle.samples plugin uses Exemplar to execute integration tests on the samples.
     // Exemplar doesn't know about that it's running in the context of the gradle/gradle build
     // so it uses the Gradle distribution from the running build. This is not correct, because
@@ -558,52 +481,34 @@ tasks.named("docsTest") { task ->
     // 'integTest.samplesdir' is set to an absolute path by the 'org.gradle.samples' plugin
     systemProperties.clear()
 
-    // // TODO (donat) investigate ignored snippets
     filter {
         // workaround for https://github.com/gradle/dotcom/issues/5958
         failOnNoMatchingTests = false
         // Only execute C++ sample tests on Linux because it is the configured target
         if (!org.gradle.internal.os.OperatingSystem.current().linux) {
-            excludeTestsMatching "org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.building-cpp-*.sample"
+            excludeTestsMatching "org.gradle.docs.samples.*.building-cpp-*.sample"
         }
         // Only execute Swift sample tests on OS X because it is the configured target
         if (!org.gradle.internal.os.OperatingSystem.current().macOsX) {
-            excludeTestsMatching "org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.building-swift-*.sample"
+            excludeTestsMatching "org.gradle.docs.samples.*.building-swift-*.sample"
         }
         // Only execute Groovy sample tests on Java < 9 to avoid warnings in output
-        if (buildJvms.testJvm.get().javaVersion.java9Compatible) {
-            excludeTestsMatching "org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.building-groovy-*.sample"
+        if (javaVersion.java9Compatible) {
+            excludeTestsMatching "org.gradle.docs.samples.*.building-groovy-*.sample"
         }
+        // Build Android only with Java 8
+        if (javaVersion.java9Compatible) {
+            excludeTestsMatching "org.gradle.docs.samples.*.building-android-apps_*_buildTask.sample"
+            excludeTestsMatching "org.gradle.docs.samples.*.structuring-software-projects*android-app.sample"
+        }
+        // disable sanityCheck of 'structuring-software-projects' in any case due to deprecation warning in Android project
+        excludeTestsMatching "org.gradle.docs.samples.*.structuring-software-projects*_sanityCheck.sample"
+
         // Do not execute Java Module tests on JVM < 9
-        if (!buildJvms.testJvm.get().javaVersion.java9Compatible) {
-            excludeTestsMatching "org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.building-java-modules*.sample"
+        if (!javaVersion.java9Compatible) {
+            excludeTestsMatching "org.gradle.docs.samples.*.java-modules-*.sample"
+            excludeTestsMatching 'org.gradle.docs.samples.*.snippet-java-library-module*.sample'
         }
-
-        // Do not execute JaCoCo tests on JDK >= 15 until JaCoCo we use starts supporting newer JDKs
-        if (buildJvms.testJvm.get().javaVersion.isCompatibleWith(JavaVersion.VERSION_15)) {
-            excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.jvm-multi-project-with-code-coverage_*_testTask.sample'
-            excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-testing-jacoco-application_*_jacocoApp.sample'
-        }
-
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-best-practices-logic-during-configuration-dont_*.sample' // negative sanity check fails (= build succeeds) for Kotlin variant
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-scala-cross-compilation_groovy_sanityCheck.sample' // There is no java executable in /Library/Java/JavaVirtualMachines/1.6.0.jdk/Contents/Home/bin. Expression: executable.exists()
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-composite-builds*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-groovy-cross-compilation_*.sample'  // compilation error
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-init-scripts-custom-logger_*.sample' // seems legit: Smart cast to 'Throwable' is impossible, because 'result.failure' is a property that has open or custom getter
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-kotlin-dsl-android-build_*.sample' // plugin [id: 'com.android.application', version: '3.2.0', apply: false] was not found: Gradle Central Plugin Repository
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-kotlin-dsl-android-single-build_*.sample' // seems legit: java.lang.NoClassDefFoundError: Could not initialize class org.jetbrains.kotlin.gradle.plugin.sources.DefaultKotlinSourceSetKt
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-multiproject-flat-with-no-default-master_groovy_sanityCheck.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-multiproject-flat_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-plugins-consuming_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-plugins-custom-plugin_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-plugins-multiproject_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-plugins-plugin-versions_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-plugins-resolution-rules_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-tasks-custom-task-using-convention_*.sample' // seems legit: Could not set unknown property 'greeting' for root project 'custom-task-using-convention' of Project.
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-tooling-api-custom-model_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-tutorial-archive-content_*.sample'  // seems like a legit failure
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-tutorial-select-project_*.sample' // emits deprecation warning
-        excludeTestsMatching 'org.gradle.docs.samples.ExemplarExternalSamplesFunctionalTest.snippet-java-cross-compilation_*.sample' // fails to find javadoc
     }
 }
 
@@ -650,6 +555,14 @@ class GradleInstallationForTestEnvironmentProvider implements CommandLineArgumen
         def distributionName = testTask.classpath.filter { it.name.startsWith("gradle-runtime-api-info") }.singleFile.parentFile.parentFile.parentFile.name
         ["-DintegTest.gradleHomeDir=${gradleHomeDir.singleFile}",
          "-DintegTest.samplesdir=${samplesdir.get().asFile}",
-         "-Dorg.gradle.testkit.dir=${project.rootProject.layout.projectDirectory.dir("intTestHomeDir/$distributionName").asFile}"]
+         "-DintegTest.gradleUserHomeDir=${repoRoot(project).dir("intTestHomeDir/$distributionName").asFile}"]
     }
+}
+
+tasks.withType(CheckLinks).configureEach {
+    enabled = !gradle.startParameter.taskNames.contains("docs:platformTest")
+}
+
+tasks.register("checkLinks") {
+    dependsOn(tasks.withType(CheckLinks))
 }

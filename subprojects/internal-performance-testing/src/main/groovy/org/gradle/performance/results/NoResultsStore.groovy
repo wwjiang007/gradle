@@ -29,18 +29,23 @@ class NoResultsStore<T extends PerformanceTestResult> implements WritableResults
     }
 
     @Override
-    List<String> getTestNames() {
+    List<PerformanceExperiment> getPerformanceExperiments() {
         []
     }
 
     @Override
-    PerformanceTestHistory getTestResults(String testName, String channel) {
-        new EmptyPerformanceTestHistory(testName)
+    PerformanceTestHistory getTestResults(PerformanceExperiment experiment, String channel) {
+        new EmptyPerformanceTestHistory(experiment)
     }
 
     @Override
-    PerformanceTestHistory getTestResults(String testName, int mostRecentN, int maxDaysOld, String channel) {
-        new EmptyPerformanceTestHistory(testName)
+    PerformanceTestHistory getTestResults(PerformanceExperiment experiment, int mostRecentN, int maxDaysOld, String channel, List<String> teamcityBuildIds) {
+        new EmptyPerformanceTestHistory(experiment)
+    }
+
+    @Override
+    Map<PerformanceExperimentOnOs, Long> getEstimatedExperimentDurationsInMillis() {
+        return Collections.emptyMap()
     }
 
     @Override

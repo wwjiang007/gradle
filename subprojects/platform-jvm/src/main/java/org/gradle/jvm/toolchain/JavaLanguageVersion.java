@@ -16,7 +16,6 @@
 
 package org.gradle.jvm.toolchain;
 
-import org.gradle.api.Incubating;
 import org.gradle.jvm.toolchain.internal.DefaultJavaLanguageVersion;
 
 /**
@@ -24,7 +23,6 @@ import org.gradle.jvm.toolchain.internal.DefaultJavaLanguageVersion;
  *
  * @since 6.7
  */
-@Incubating
 public interface JavaLanguageVersion extends Comparable<JavaLanguageVersion> {
 
     static JavaLanguageVersion of(int version) {
@@ -37,17 +35,23 @@ public interface JavaLanguageVersion extends Comparable<JavaLanguageVersion> {
 
     /**
      * Return this version as a number, 14 for Java 14.
+     * <p>
+     * Given the type used, this method returns the simple version even for versions lower than 5.
      *
      * @return the version number
+     * @see #toString()
      */
     int asInt();
 
     /**
      * Return this version as a String, "14" for Java 14.
+     * <p>
+     * This method will return {@code 1.<version>} when the version is lower than 5.
      *
+     * @since 6.8
      * @return the version number
      */
-    String asString();
+    String toString();
 
     /**
      * Indicates if this version can compile or run code based on the passed in language version.

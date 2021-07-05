@@ -24,7 +24,7 @@ import org.gradle.integtests.fixtures.RichConsoleStyling;
 import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.test.fixtures.file.TestDirectoryProvider;
 import org.gradle.test.fixtures.file.TestFile;
-import org.gradle.util.TextUtil;
+import org.gradle.util.internal.TextUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -76,6 +76,7 @@ public interface GradleExecuter extends Stoppable {
      */
     GradleExecuter withEnvironmentVars(Map<String, ?> environment);
 
+    @Deprecated
     GradleExecuter usingSettingsFile(File settingsFile);
 
     GradleExecuter usingInitScript(File initScript);
@@ -88,6 +89,7 @@ public interface GradleExecuter extends Stoppable {
     /**
      * Uses the given build script
      */
+    @Deprecated
     GradleExecuter usingBuildScript(File buildScript);
 
     /**
@@ -198,9 +200,9 @@ public interface GradleExecuter extends Stoppable {
     GradleExecuter withNoExplicitNativeServicesDir();
 
     /**
-     * Disables the rendering of stack traces for deprecation logging.
+     * Enables the rendering of stack traces for deprecation logging.
      */
-    GradleExecuter withFullDeprecationStackTraceDisabled();
+    GradleExecuter withFullDeprecationStackTraceEnabled();
 
     /**
      * Downloads and sets up the JVM arguments for running the Gradle daemon with the file leak detector: https://file-leak-detector.kohsuke.org/
@@ -539,4 +541,9 @@ public interface GradleExecuter extends Stoppable {
     GradleExecuter ignoreMissingSettingsFile();
 
     GradleExecuter ignoreCleanupAssertions();
+
+    GradleExecuter withToolchainDetectionEnabled();
+
+    GradleExecuter withToolchainDownloadEnabled();
+
 }

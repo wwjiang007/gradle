@@ -17,61 +17,44 @@
 package org.gradle.performance.regression.java
 
 import org.gradle.initialization.StartParameterBuildOptions.ConfigurationCacheOption
-import org.gradle.performance.AbstractCrossVersionGradleProfilerPerformanceTest
-import org.gradle.performance.categories.PerformanceRegressionTest
-import org.gradle.performance.fixture.GradleBuildExperimentRunner
+import org.gradle.performance.AbstractCrossVersionPerformanceTest
+import org.gradle.performance.annotations.RunFor
+import org.gradle.performance.annotations.Scenario
 import org.gradle.profiler.BuildContext
 import org.gradle.profiler.BuildMutator
 import org.gradle.profiler.InvocationSettings
-import org.gradle.profiler.instrument.PidInstrumentation
-import org.junit.experimental.categories.Category
 import spock.lang.Unroll
 
 import java.nio.file.Files
 
-import static org.gradle.performance.generator.JavaTestProject.LARGE_JAVA_MULTI_PROJECT_NO_BUILD_SRC
-import static org.gradle.performance.generator.JavaTestProject.SMALL_JAVA_MULTI_PROJECT_NO_BUILD_SRC
+import static org.gradle.performance.annotations.ScenarioType.PER_COMMIT
+import static org.gradle.performance.annotations.ScenarioType.PER_DAY
+import static org.gradle.performance.results.OperatingSystem.LINUX
 import static org.junit.Assert.assertTrue
 
-@Category(PerformanceRegressionTest)
-class JavaConfigurationCachePerformanceTest extends AbstractCrossVersionGradleProfilerPerformanceTest {
+class JavaConfigurationCachePerformanceTest extends AbstractCrossVersionPerformanceTest {
     private File stateDirectory
 
     def setup() {
         stateDirectory = temporaryFolder.file(".gradle/configuration-cache")
-    }
-
-    // Disable pid instrumentation in case of configuration cache code daemon
-    // Otherwise it complains: Gradle daemon was reused but should not be reused because init script is not executed properly
-    // https://github.com/gradle/gradle-profiler/pull/238
-    private void disablePidInstrumentationOnCodeDaemon(String daemon) {
-        if (daemon == 'cold') {
-            (runner.experimentRunner as GradleBuildExperimentRunner).with {
-                it.pidInstrumentation = new PidInstrumentation() {
-                    @Override
-                    void calculateGradleArgs(List<String> gradleArgs) {
-                    }
-
-                    @Override
-                    String getPidForLastBuild() {
-                        return UUID.randomUUID().toString()
-                    }
-                }
-            }
-        }
-    }
-
-    @Unroll
-    def "assemble on #testProject #action configuration cache state with #daemon daemon"() {
-        given:
-        runner.targetVersions = ["6.7-20200827220028+0000"]
+        runner.targetVersions = ["7.2-20210527220045+0000"]
         runner.minimumBaseVersion = "6.6"
-        runner.testProject = testProject.projectName
+    }
+
+    @RunFor([
+        @Scenario(type = PER_COMMIT, operatingSystems = [LINUX], testProjects = ["smallJavaMultiProject"], iterationMatcher = ".*with hot.*"),
+        @Scenario(type = PER_COMMIT, operatingSystems = [LINUX], testProjects = ["largeJavaMultiProjectNoBuildSrc"], iterationMatcher = "assemble loading configuration cache state with cold daemon"),
+        @Scenario(type = PER_COMMIT, operatingSystems = [LINUX], testProjects = ["largeJavaMultiProjectNoBuildSrc"], iterationMatcher = "assemble storing configuration cache state with hot daemon"),
+        @Scenario(type = PER_DAY, operatingSystems = [LINUX], testProjects = ["largeJavaMultiProjectNoBuildSrc"], iterationMatcher = "assemble storing configuration cache state with cold daemon"),
+        @Scenario(type = PER_DAY, operatingSystems = [LINUX], testProjects = ["largeJavaMultiProjectNoBuildSrc"], iterationMatcher = "assemble loading configuration cache state with hot daemon")
+    ])
+    @Unroll
+    def "assemble #action configuration cache state with #daemon daemon"() {
+        given:
         runner.tasksToRun = ["assemble"]
         runner.args = ["-D${ConfigurationCacheOption.PROPERTY_NAME}=true"]
 
         and:
-        disablePidInstrumentationOnCodeDaemon(daemon)
         runner.useDaemon = daemon == hot
         runner.addBuildMutator { configurationCacheInvocationListenerFor(it, action, stateDirectory) }
         runner.warmUpRuns = daemon == hot ? 20 : 1
@@ -84,15 +67,11 @@ class JavaConfigurationCachePerformanceTest extends AbstractCrossVersionGradlePr
         result.assertCurrentVersionHasNotRegressed()
 
         where:
-        testProject                           | daemon | action
-        LARGE_JAVA_MULTI_PROJECT_NO_BUILD_SRC | hot    | loading
-        LARGE_JAVA_MULTI_PROJECT_NO_BUILD_SRC | hot    | storing
-        LARGE_JAVA_MULTI_PROJECT_NO_BUILD_SRC | cold   | loading
-        LARGE_JAVA_MULTI_PROJECT_NO_BUILD_SRC | cold   | storing
-        SMALL_JAVA_MULTI_PROJECT_NO_BUILD_SRC | hot    | loading
-        SMALL_JAVA_MULTI_PROJECT_NO_BUILD_SRC | hot    | storing
-//        SMALL_JAVA_MULTI_PROJECT_NO_BUILD_SRC | cold   | loading
-//        SMALL_JAVA_MULTI_PROJECT_NO_BUILD_SRC | cold   | storing
+        daemon | action
+        hot    | loading
+        hot    | storing
+        cold   | loading
+        cold   | storing
     }
 
     static String loading = "loading"

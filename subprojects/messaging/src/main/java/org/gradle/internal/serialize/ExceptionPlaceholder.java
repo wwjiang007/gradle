@@ -60,7 +60,7 @@ class ExceptionPlaceholder implements Serializable {
     private final boolean assertionError;
     private final List<ExceptionPlaceholder> causes;
     private final List<ExceptionPlaceholder> suppressed;
-    private StackTraceElement[] stackTrace;
+    private List<StackTraceElementPlaceholder> stackTrace;
     private Throwable toStringRuntimeExec;
     private Throwable getMessageExec;
 
@@ -71,11 +71,11 @@ class ExceptionPlaceholder implements Serializable {
         contextual = throwable.getClass().getAnnotation(Contextual.class) != null;
         assertionError = throwable instanceof AssertionError;
         try {
-            stackTrace = throwable.getStackTrace() == null ? new StackTraceElement[0] : throwable.getStackTrace();
+            stackTrace = throwable.getStackTrace() == null ? Collections.<StackTraceElementPlaceholder>emptyList() : convertStackTrace(throwable.getStackTrace());
         } catch (Throwable ignored) {
 // TODO:ADAM - switch the logging back on. Need to make sending messages from daemon to client async wrt log event generation
 //                LOGGER.debug("Ignoring failure to extract throwable stack trace.", ignored);
-            stackTrace = new StackTraceElement[0];
+            stackTrace = Collections.emptyList();
         }
 
         try {
@@ -141,6 +141,22 @@ class ExceptionPlaceholder implements Serializable {
         this.causes = convertToExceptionPlaceholderList(causes, objectOutputStreamCreator, dejaVu);
         this.suppressed = convertToExceptionPlaceholderList(suppressed, objectOutputStreamCreator, dejaVu);
 
+    }
+
+    private List<StackTraceElementPlaceholder> convertStackTrace(StackTraceElement[] stackTrace) {
+        List<StackTraceElementPlaceholder> placeholders = new ArrayList<StackTraceElementPlaceholder>(stackTrace.length);
+        for (StackTraceElement stackTraceElement : stackTrace) {
+            placeholders.add(new StackTraceElementPlaceholder(stackTraceElement));
+        }
+        return placeholders;
+    }
+
+    private StackTraceElement[] convertStackTrace(List<StackTraceElementPlaceholder> placeholders) {
+        StackTraceElement[] stackTrace = new StackTraceElement[placeholders.size()];
+        for (int i = 0; i < placeholders.size(); i++) {
+            stackTrace[i] = placeholders.get(i).toStackTraceElement();
+        }
+        return stackTrace;
     }
 
     @SuppressWarnings("Since15")
@@ -215,13 +231,8 @@ class ExceptionPlaceholder implements Serializable {
                 if (!causes.isEmpty()) {
                     reconstructed.initCause(causes.get(0));
                 }
-                reconstructed.setStackTrace(stackTrace);
-                if (!suppressed.isEmpty()) {
-                    for (Throwable throwable : suppressed) {
-                        //noinspection Since15
-                        reconstructed.addSuppressed(throwable);
-                    }
-                }
+                reconstructed.setStackTrace(convertStackTrace(stackTrace));
+                registerSuppressedExceptions(suppressed, reconstructed);
                 return reconstructed;
             }
         } catch (UncheckedException ignore) {
@@ -247,11 +258,21 @@ class ExceptionPlaceholder implements Serializable {
         } else {
             placeholder = new DefaultMultiCauseException(message, causes);
         }
-        placeholder.setStackTrace(stackTrace);
+        placeholder.setStackTrace(convertStackTrace(stackTrace));
+        registerSuppressedExceptions(suppressed, placeholder);
         return placeholder;
     }
 
-    private List<? extends Throwable> extractCauses(Throwable throwable) {
+    private static void registerSuppressedExceptions(List<Throwable> suppressed, Throwable reconstructed) {
+        if (!suppressed.isEmpty()) {
+            for (Throwable throwable : suppressed) {
+                //noinspection Since15
+                reconstructed.addSuppressed(throwable);
+            }
+        }
+    }
+
+    private static List<? extends Throwable> extractCauses(Throwable throwable) {
         if (throwable instanceof MultiCauseException) {
             return ((MultiCauseException) throwable).getCauses();
         } else {

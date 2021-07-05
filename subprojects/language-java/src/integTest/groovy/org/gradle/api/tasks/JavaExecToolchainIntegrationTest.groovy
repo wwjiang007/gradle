@@ -55,7 +55,6 @@ class JavaExecToolchainIntegrationTest extends AbstractPluginIntegrationTest {
 
         when:
         result = executer
-            .withArgument("-Porg.gradle.java.installations.auto-detect=false")
             .withArgument("-Porg.gradle.java.installations.paths=" + jdk.javaHome.absolutePath)
             .withArgument("--info")
             .withTasks("run")
@@ -95,7 +94,6 @@ class JavaExecToolchainIntegrationTest extends AbstractPluginIntegrationTest {
 
         when:
         result = executer
-            .withArgument("-Porg.gradle.java.installations.auto-detect=false")
             .withArgument("-Porg.gradle.java.installations.paths=" + someJdk.javaHome.absolutePath)
             .withArgument("--info")
             .withTasks("run")

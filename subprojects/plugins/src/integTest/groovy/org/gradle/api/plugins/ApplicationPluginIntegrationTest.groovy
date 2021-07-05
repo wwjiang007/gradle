@@ -15,6 +15,7 @@
  */
 package org.gradle.api.plugins
 
+
 import org.gradle.integtests.fixtures.WellBehavedPluginTest
 import org.gradle.integtests.fixtures.executer.ExecutionResult
 import org.gradle.internal.jvm.Jvm
@@ -203,7 +204,8 @@ class CustomWindowsStartScriptGenerator implements ScriptGenerator {
         given:
         succeeds('installDist')
         def binFile = file('build/install/sample/bin/sample')
-        binFile.text = """echo Script PID: \$\$
+        binFile.text = """#!/usr/bin/env bash
+echo Script PID: \$\$
 
 $binFile.text
 """
@@ -516,6 +518,44 @@ startScripts {
         OperatingSystem.current().isWindows() ? runViaWindowsStartScript(startScriptDir) : runViaUnixStartScript(startScriptDir)
     }
 
+    def "setMainClassName method startScripts task is deprecated"() {
+        when:
+        buildFile.setText("""
+            plugins {
+                id("application")
+            }
+
+            tasks.named("startScripts") {
+                mainClassName = 'org.gradle.test.Main'
+            }
+        """)
+
+        executer.expectDocumentedDeprecationWarning("The CreateStartScripts.mainClassName property has been deprecated. This is scheduled to be removed in Gradle 8.0. Please use the mainClass property instead. See https://docs.gradle.org/current/dsl/org.gradle.jvm.application.tasks.CreateStartScripts.html#org.gradle.jvm.application.tasks.CreateStartScripts:mainClassName for more details.")
+
+        then:
+        succeeds("startScripts")
+    }
+
+    def "getMainClassName method in startScripts task deprecated"() {
+        when:
+        buildFile.setText("""
+            plugins {
+                id("application")
+            }
+
+            tasks.named("startScripts") {
+                doLast {
+                    println(mainClassName)
+                }
+            }
+        """)
+
+        executer.expectDocumentedDeprecationWarning("The CreateStartScripts.mainClassName property has been deprecated. This is scheduled to be removed in Gradle 8.0. Please use the mainClass property instead. See https://docs.gradle.org/current/dsl/org.gradle.jvm.application.tasks.CreateStartScripts.html#org.gradle.jvm.application.tasks.CreateStartScripts:mainClassName for more details.")
+
+        then:
+        succeeds("startScripts")
+    }
+
     private void createSampleProjectSetup() {
         createMainClass()
         populateBuildFile()
@@ -557,12 +597,6 @@ application {
         buildFile << """
 application {
     mainModule.set('org.gradle.test.main')
-}
-compileJava {
-    modularity.inferModulePath.set(true)
-}
-startScripts {
-    modularity.inferModulePath.set(true)
 }
 """
     }
@@ -664,5 +698,35 @@ rootProject.name = 'sample'
 
         then:
         executed(':compileJava', ':processResources', ':classes', ':jar', ':run')
+    }
+
+    @Issue("https://github.com/gradle/gradle-private/issues/3386")
+    @Requires(TestPrecondition.UNIX_DERIVATIVE)
+    def "does not execute code in user-set environment variable"() {
+        when:
+        succeeds('installDist')
+
+        then:
+        file('build/install/sample').exists()
+
+        when:
+        def exploit = file("i-do-whatever-i-want")
+        assert !exploit.exists()
+
+        buildFile << """
+            task execStartScript(type: Exec) {
+                workingDir 'build/install/sample/bin'
+                commandLine './sample'
+                environment ${envVar}: '`\$(touch "${exploit.absolutePath}")`'
+            }
+        """
+        fails('execStartScript')
+
+        then:
+        errorOutput.contains("Could not find or load main class `\$(touch")
+        !exploit.exists()
+
+        where:
+        envVar << ["JAVA_OPTS", "SAMPLE_OPTS"]
     }
 }

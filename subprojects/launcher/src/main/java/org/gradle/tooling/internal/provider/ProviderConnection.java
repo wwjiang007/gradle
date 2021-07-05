@@ -68,6 +68,10 @@ import org.gradle.tooling.internal.protocol.ModelIdentifier;
 import org.gradle.tooling.internal.protocol.PhasedActionResultListener;
 import org.gradle.tooling.internal.protocol.events.InternalProgressEvent;
 import org.gradle.tooling.internal.protocol.test.InternalTestExecutionException;
+import org.gradle.tooling.internal.provider.action.BuildModelAction;
+import org.gradle.tooling.internal.provider.action.ClientProvidedBuildAction;
+import org.gradle.tooling.internal.provider.action.ClientProvidedPhasedAction;
+import org.gradle.tooling.internal.provider.action.TestExecutionRequestAction;
 import org.gradle.tooling.internal.provider.connection.ProviderConnectionParameters;
 import org.gradle.tooling.internal.provider.connection.ProviderOperationParameters;
 import org.gradle.tooling.internal.provider.serialization.PayloadSerializer;
@@ -284,14 +288,10 @@ public class ProviderConnection {
             if (operationParameters.getGradleUserHomeDir() != null) {
                 layout.setGradleUserHomeDir(operationParameters.getGradleUserHomeDir());
             }
-            Boolean searchUpwards = operationParameters.isSearchUpwards();
-            if (searchUpwards != null) {
-                layout.setSearchUpwards(searchUpwards);
-            }
             layout.setProjectDir(operationParameters.getProjectDir());
         });
 
-        AllProperties properties = new LayoutToPropertiesConverter(buildLayoutFactory).convert(initialProperties, buildLayoutResult);
+        AllProperties properties = new LayoutToPropertiesConverter(buildLayoutFactory).convert(initialProperties, buildLayoutResult, parsedCommandLine.getExtraArguments());
 
         DaemonParameters daemonParams = new DaemonParameters(buildLayoutResult, fileCollectionFactory);
         new DaemonBuildOptions().propertiesConverter().convert(properties.getProperties(), daemonParams);

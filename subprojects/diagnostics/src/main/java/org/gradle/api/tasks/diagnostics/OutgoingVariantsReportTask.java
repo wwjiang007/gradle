@@ -17,7 +17,6 @@ package org.gradle.api.tasks.diagnostics;
 
 import org.apache.commons.lang.StringUtils;
 import org.gradle.api.DefaultTask;
-import org.gradle.api.Incubating;
 import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationVariant;
@@ -38,6 +37,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.options.Option;
 import org.gradle.internal.logging.text.StyledTextOutput;
 import org.gradle.internal.logging.text.StyledTextOutputFactory;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -57,7 +57,7 @@ import java.util.stream.Stream;
  *
  * @since 6.0
  */
-@Incubating
+@DisableCachingByDefault(because = "Produces only non-cacheable console output")
 public class OutgoingVariantsReportTask extends DefaultTask {
     private final Property<String> variantSpec = getProject().getObjects().property(String.class);
     private final Property<Boolean> showAll = getProject().getObjects().property(Boolean.class).convention(false);
@@ -161,7 +161,7 @@ public class OutgoingVariantsReportTask extends DefaultTask {
     private void formatArtifact(PublishArtifact artifact, Formatter tree) {
         String type = artifact.getType();
         File file = artifact.getFile();
-        tree.text(getFileResolver().resolveAsRelativePath(file));
+        tree.text(getFileResolver().resolveForDisplay(file));
         if (StringUtils.isNotEmpty(type)) {
             tree.append(" (");
             tree.appendValue("artifactType", type);

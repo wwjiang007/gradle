@@ -20,7 +20,6 @@ import com.google.common.collect.Lists;
 import groovy.lang.Closure;
 import org.gradle.StartParameter;
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.NonNullApi;
 import org.gradle.api.file.ConfigurableFileCollection;
@@ -29,7 +28,6 @@ import org.gradle.api.file.FileTree;
 import org.gradle.api.file.FileTreeElement;
 import org.gradle.api.internal.DocumentationRegistry;
 import org.gradle.api.internal.classpath.ModuleRegistry;
-import org.gradle.api.internal.initialization.loadercache.ClassLoaderCache;
 import org.gradle.api.internal.tasks.testing.JvmTestExecutionSpec;
 import org.gradle.api.internal.tasks.testing.TestExecuter;
 import org.gradle.api.internal.tasks.testing.TestFramework;
@@ -40,6 +38,7 @@ import org.gradle.api.internal.tasks.testing.junit.result.TestClassResult;
 import org.gradle.api.internal.tasks.testing.junit.result.TestResultSerializer;
 import org.gradle.api.internal.tasks.testing.junitplatform.JUnitPlatformTestFramework;
 import org.gradle.api.internal.tasks.testing.testng.TestNGTestFramework;
+import org.gradle.api.internal.tasks.testing.worker.TestWorker;
 import org.gradle.api.jvm.ModularitySpec;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.provider.Property;
@@ -50,6 +49,7 @@ import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputFiles;
 import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.Nested;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.PathSensitive;
 import org.gradle.api.tasks.PathSensitivity;
 import org.gradle.api.tasks.SkipWhenEmpty;
@@ -64,13 +64,11 @@ import org.gradle.internal.Actions;
 import org.gradle.internal.Cast;
 import org.gradle.internal.Factory;
 import org.gradle.internal.actor.ActorFactory;
-import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.jvm.DefaultModularitySpec;
 import org.gradle.internal.jvm.JavaModuleDetector;
 import org.gradle.internal.jvm.Jvm;
 import org.gradle.internal.jvm.UnsupportedJavaRuntimeException;
 import org.gradle.internal.jvm.inspection.JvmVersionDetector;
-import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.scan.UsedByScanPlugin;
 import org.gradle.internal.time.Clock;
 import org.gradle.internal.work.WorkerLeaseRegistry;
@@ -81,7 +79,7 @@ import org.gradle.process.JavaForkOptions;
 import org.gradle.process.ProcessForkOptions;
 import org.gradle.process.internal.JavaForkOptionsFactory;
 import org.gradle.process.internal.worker.WorkerProcessFactory;
-import org.gradle.util.ConfigureUtil;
+import org.gradle.util.internal.ConfigureUtil;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -94,7 +92,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 
 import static com.google.common.base.Preconditions.checkState;
-import static org.gradle.util.ConfigureUtil.configureUsing;
+import static org.gradle.util.internal.ConfigureUtil.configureUsing;
 
 /**
  * Executes JUnit (3.8.x, 4.x or 5.x) or TestNG tests. Test are always run in (one or more) separate JVMs.
@@ -103,7 +101,9 @@ import static org.gradle.util.ConfigureUtil.configureUsing;
  * The sample below shows various configuration options.
  *
  * <pre class='autoTested'>
- * apply plugin: 'java' // adds 'test' task
+ * plugins {
+ *     id 'java' // adds 'test' task
+ * }
  *
  * test {
  *   // enable TestNG support (default is JUnit)
@@ -192,16 +192,6 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
     @Inject
     protected ActorFactory getActorFactory() {
         throw new UnsupportedOperationException();
-    }
-
-    @Internal
-    @Deprecated
-    protected ClassLoaderCache getClassLoaderCache() {
-        DeprecationLogger.deprecateMethod(Test.class, "getClassLoaderCache()")
-            .willBeRemovedInGradle7()
-            .undocumented()
-            .nagUser();
-        return getServices().get(ClassLoaderCache.class);
     }
 
     @Inject
@@ -621,7 +611,6 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      *
      * @since 6.4
      */
-    @Incubating
     @Nested
     public ModularitySpec getModularity() {
         return modularity;
@@ -651,7 +640,7 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
     }
 
     private Set<String> getPreviousFailedTestClasses() {
-        TestResultSerializer serializer = new TestResultSerializer(getBinResultsDir());
+        TestResultSerializer serializer = new TestResultSerializer(getBinaryResultsDirectory().getAsFile().get());
         if (serializer.isHasResults()) {
             final Set<String> previousFailedTestClasses = new HashSet<String>();
             serializer.read(new Action<TestClassResult>() {
@@ -679,6 +668,7 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
         if (getDebug()) {
             getLogger().info("Running tests for remote debugging.");
         }
+        forkOptions.systemProperty(TestWorker.WORKER_TMPDIR_SYS_PROPERTY, new File(getTemporaryDir(), "work"));
 
         try {
             super.executeTests();
@@ -692,7 +682,6 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
         if (testExecuter == null) {
             return new DefaultTestExecuter(getProcessBuilderFactory(), getActorFactory(), getModuleRegistry(),
                 getServices().get(WorkerLeaseRegistry.class),
-                getServices().get(BuildOperationExecutor.class),
                 getServices().get(StartParameter.class).getMaxWorkerCount(),
                 getServices().get(Clock.class),
                 getServices().get(DocumentationRegistry.class),
@@ -820,7 +809,9 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      *
      * Typically, this would be configured to use the output of a source set:
      * <pre class='autoTested'>
-     * apply plugin: 'java'
+     * plugins {
+     *     id 'java'
+     * }
      *
      * sourceSets {
      *    integrationTest {
@@ -1032,7 +1023,6 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      *
      * @since 6.6
      */
-    @Incubating
     @Classpath
     protected FileCollection getStableClasspath() {
         return stableClasspath;
@@ -1168,13 +1158,12 @@ public class Test extends AbstractTestTask implements JavaForkOptions, PatternFi
      *
      * @since 6.7
      */
-    @Incubating
-    @Internal("getJavaVersion() is used as @Input")
+    @Nested
+    @Optional
     public Property<JavaLauncher> getJavaLauncher() {
         return javaLauncher;
     }
 
-    @Nullable
     private String getEffectiveExecutable() {
         if (javaLauncher.isPresent()) {
             // The below line is OK because it will only be exercised in the Gradle daemon and not in the worker running tests.

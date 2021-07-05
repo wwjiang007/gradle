@@ -1,6 +1,3 @@
-import gradlebuild.cleanup.WhenNotEmpty
-import gradlebuild.integrationtests.integrationTestUsesSampleDir
-
 plugins {
     id("gradlebuild.internal.java")
 }
@@ -19,12 +16,9 @@ dependencies {
         exclude(module = "slf4j-simple")
     }
     integTestImplementation(testFixtures(project(":core")))
+    integTestImplementation(testFixtures(project(":model-core")))
 
     integTestDistributionRuntimeOnly(project(":distributions-full"))
 }
 
-testFilesCleanup {
-    policy.set(WhenNotEmpty.REPORT)
-}
-
-integrationTestUsesSampleDir("subprojects/core-api/src/main/java", "subprojects/core/src/main/java")
+testFilesCleanup.reportOnly.set(true)

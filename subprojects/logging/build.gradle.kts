@@ -18,6 +18,7 @@ dependencies {
     implementation(libs.julToSlf4j)
     implementation(libs.ant)
     implementation(libs.commonsLang)
+    implementation(libs.commonsIo)
     implementation(libs.guava)
     implementation(libs.jansi)
 
@@ -25,6 +26,9 @@ dependencies {
     runtimeOnly(libs.jclToSlf4j)
 
     testImplementation(testFixtures(project(":core")))
+    testImplementation(testFixtures(project(":testing-jvm")))
+    testImplementation(libs.groovyDatetime)
+    testImplementation(libs.groovyDateUtil)
 
     integTestImplementation(libs.ansiControlSequenceUtil)
 
@@ -36,5 +40,5 @@ dependencies {
 }
 
 classycle {
-    excludePatterns.set(listOf("org/gradle/internal/featurelifecycle/**"))
+    excludePatterns.add("org/gradle/internal/featurelifecycle/**")
 }

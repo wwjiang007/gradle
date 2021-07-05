@@ -7,7 +7,7 @@ repositories {
             includeGroup("my.company")
         }
     }
-    jcenter {
+    mavenCentral {
         content {
             // this repository contains everything BUT artifacts with group starting with "my.company"
             excludeGroupByRegex("my\\.company.*")
@@ -20,7 +20,7 @@ repositories {
 repositories {
     // This repository will _not_ be searched for artifacts in my.company
     // despite being declared first
-    jcenter()
+    mavenCentral()
     exclusiveContent {
         forRepository {
             maven {
@@ -60,5 +60,5 @@ dependencies {
 
 tasks.register<Copy>("copyLibs") {
     from(libs)
-    into("$buildDir/libs")
+    into(layout.buildDirectory.dir("libs"))
 }

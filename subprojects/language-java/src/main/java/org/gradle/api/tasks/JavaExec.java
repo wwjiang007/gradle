@@ -18,16 +18,17 @@ package org.gradle.api.tasks;
 
 import org.apache.tools.ant.types.Commandline;
 import org.gradle.api.Action;
-import org.gradle.api.Incubating;
 import org.gradle.api.JavaVersion;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ConventionTask;
 import org.gradle.api.jvm.ModularitySpec;
 import org.gradle.api.model.ObjectFactory;
+import org.gradle.api.model.ReplacedBy;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.provider.ProviderFactory;
 import org.gradle.api.tasks.options.Option;
+import org.gradle.internal.deprecation.DeprecationLogger;
 import org.gradle.internal.jvm.DefaultModularitySpec;
 import org.gradle.internal.jvm.Jvm;
 import org.gradle.internal.jvm.inspection.JvmVersionDetector;
@@ -41,6 +42,7 @@ import org.gradle.process.ProcessForkOptions;
 import org.gradle.process.internal.DefaultJavaExecSpec;
 import org.gradle.process.internal.ExecActionFactory;
 import org.gradle.process.internal.JavaExecAction;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -64,7 +66,7 @@ import java.util.Map;
  * task runApp(type: JavaExec) {
  *   classpath = sourceSets.main.runtimeClasspath
  *
- *   main = 'package.Main'
+ *   mainClass = 'package.Main'
  *
  *   // arguments to pass to the application
  *   args 'appArg1'
@@ -108,6 +110,7 @@ import java.util.Map;
  * }
  * </pre>
  */
+@DisableCachingByDefault(because = "Gradle would require more information to cache this task")
 public class JavaExec extends ConventionTask implements JavaExecSpec {
     private final DefaultJavaExecSpec javaExecSpec;
     private final Property<String> mainModule;
@@ -124,7 +127,8 @@ public class JavaExec extends ConventionTask implements JavaExecSpec {
         execResult = objectFactory.property(ExecResult.class);
 
         javaExecSpec = objectFactory.newInstance(DefaultJavaExecSpec.class);
-        javaExecSpec.getMainClass().convention(getMainClass().orElse(getProviderFactory().provider(this::getMain))); // go through 'main' to keep this compatible with existing convention mappings
+        javaExecSpec.getMainClass().convention(getMainClass().orElse(getProviderFactory()
+            .provider(() -> DeprecationLogger.whileDisabled(this::getMain)))); // go through 'main' to keep this compatible with existing convention mappings
         javaExecSpec.getMainModule().convention(mainModule);
         javaExecSpec.getModularity().getInferModulePath().convention(modularity.getInferModulePath());
         javaLauncher = objectFactory.property(JavaLauncher.class);
@@ -391,7 +395,15 @@ public class JavaExec extends ConventionTask implements JavaExecSpec {
      * {@inheritDoc}
      */
     @Override
+    @Deprecated
+    @ReplacedBy("mainClass")
     public String getMain() {
+        DeprecationLogger.deprecateProperty(JavaExec.class, "main")
+            .replaceWith("mainClass")
+            .willBeRemovedInGradle8()
+            .withDslReference()
+            .nagUser();
+
         return getMainClass().getOrNull();
     }
 
@@ -399,7 +411,14 @@ public class JavaExec extends ConventionTask implements JavaExecSpec {
      * {@inheritDoc}
      */
     @Override
+    @Deprecated
     public JavaExec setMain(String mainClassName) {
+        DeprecationLogger.deprecateProperty(JavaExec.class, "main")
+            .replaceWith("mainClass")
+            .willBeRemovedInGradle8()
+            .withDslReference()
+            .nagUser();
+
         getMainClass().set(mainClassName);
         return this;
     }
@@ -740,24 +759,21 @@ public class JavaExec extends ConventionTask implements JavaExecSpec {
      * @since 6.1
      */
     @Internal
-    @Incubating
     public Provider<ExecResult> getExecutionResult() {
         return execResult;
     }
 
-
     /**
-     * Configures the java exectuable to be used to run the tests.
+     * Configures the java executable to be used to run the tests.
      *
      * @since 6.7
      */
-    @Incubating
-    @Internal("getJavaVersion() is used as @Input")
+    @Nested
+    @Optional
     public Property<JavaLauncher> getJavaLauncher() {
         return javaLauncher;
     }
 
-    @Nullable
     private String getEffectiveExecutable() {
         if (javaLauncher.isPresent()) {
             return javaLauncher.get().getExecutablePath().toString();

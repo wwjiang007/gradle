@@ -21,7 +21,6 @@ import com.google.common.collect.Lists;
 import org.gradle.api.Buildable;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.DomainObjectSet;
-import org.gradle.api.Incubating;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
@@ -40,6 +39,7 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.bundling.AbstractArchiveTask;
 import org.gradle.plugins.signing.signatory.Signatory;
 import org.gradle.plugins.signing.type.SignatureType;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.inject.Inject;
 import java.io.File;
@@ -57,6 +57,7 @@ import static java.util.stream.Collectors.toMap;
  * <p>The task produces {@link Signature}</p> objects that are publishable artifacts and can be assigned to another configuration. <p> The signature objects are created with defaults and using this
  * tasks signatory and signature type.
  */
+@DisableCachingByDefault(because = "Not made cacheable, yet")
 public class Sign extends DefaultTask implements SignatureSpec {
 
     private SignatureType signatureType;
@@ -220,7 +221,6 @@ public class Sign extends DefaultTask implements SignatureSpec {
      * @since 5.1
      */
     @Nested
-    @Incubating
     public Map<String, Signature> getSignaturesByKey() {
         return sanitizedSignatures();
     }

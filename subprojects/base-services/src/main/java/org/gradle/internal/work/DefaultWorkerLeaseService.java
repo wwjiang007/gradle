@@ -16,7 +16,6 @@
 
 package org.gradle.internal.work;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import org.gradle.api.Action;
@@ -38,12 +37,11 @@ import org.gradle.internal.resources.ResourceLockCoordinationService;
 import org.gradle.internal.resources.ResourceLockState;
 import org.gradle.internal.time.Time;
 import org.gradle.internal.time.Timer;
-import org.gradle.util.CollectionUtils;
 import org.gradle.util.Path;
+import org.gradle.util.internal.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
@@ -134,6 +132,11 @@ public class DefaultWorkerLeaseService implements WorkerLeaseService, Stoppable 
     }
 
     @Override
+    public boolean getAllowsParallelExecution() {
+        return projectLockRegistry.getAllowsParallelExecution();
+    }
+
+    @Override
     public ResourceLock getProjectLock(Path buildIdentityPath, Path projectIdentityPath) {
         return projectLockRegistry.getResourceLock(buildIdentityPath, projectIdentityPath);
     }
@@ -149,6 +152,10 @@ public class DefaultWorkerLeaseService implements WorkerLeaseService, Stoppable 
         releaseLocks(projectLocks);
     }
 
+    public void releaseCurrentResourceLocks() {
+        releaseLocks(workerLeaseLockRegistry.getResourceLocksByCurrentThread());
+    }
+
     @Override
     public void withoutProjectLock(Runnable runnable) {
         withoutProjectLock(Factories.toFactory(runnable));
@@ -158,6 +165,32 @@ public class DefaultWorkerLeaseService implements WorkerLeaseService, Stoppable 
     public <T> T withoutProjectLock(Factory<T> factory) {
         final Iterable<? extends ResourceLock> projectLocks = getCurrentProjectLocks();
         return withoutLocks(projectLocks, factory);
+    }
+
+    @Override
+    public void blocking(Runnable action) {
+        if (projectLockRegistry.mayAttemptToChangeLocks()) {
+            // Need to run the action without the project locks
+            withoutProjectLock(action);
+        } else {
+            // Can just run the action, as it is safe to retain the project locks or the current thread is allowed to do whatever it likes
+            action.run();
+        }
+    }
+
+    @Override
+    public <T> T whileDisallowingProjectLockChanges(Factory<T> action) {
+        return projectLockRegistry.whileDisallowingLockChanges(action);
+    }
+
+    @Override
+    public <T> T allowUncontrolledAccessToAnyProject(Factory<T> factory) {
+        return projectLockRegistry.allowUncontrolledAccessToAnyResource(factory);
+    }
+
+    @Override
+    public boolean isAllowedUncontrolledAccessToAnyProject() {
+        return projectLockRegistry.isAllowedUncontrolledAccessToAnyResource();
     }
 
     @Override
@@ -199,12 +232,12 @@ public class DefaultWorkerLeaseService implements WorkerLeaseService, Stoppable 
     }
 
     private boolean containsProjectLocks(Iterable<? extends ResourceLock> locks) {
-        return Iterables.any(locks, new Predicate<ResourceLock>() {
-            @Override
-            public boolean apply(@Nullable ResourceLock lock) {
-                return lock instanceof ProjectLock;
+        for (ResourceLock lock : locks) {
+            if (lock instanceof ProjectLock) {
+                return true;
             }
-        });
+        }
+        return false;
     }
 
     private Iterable<? extends ResourceLock> locksNotHeld(final Iterable<? extends ResourceLock> locks) {
@@ -288,6 +321,10 @@ public class DefaultWorkerLeaseService implements WorkerLeaseService, Stoppable 
         public ProjectLockRegistry(ResourceLockCoordinationService coordinationService, boolean parallelEnabled) {
             super(coordinationService);
             this.parallelEnabled = parallelEnabled;
+        }
+
+        public boolean getAllowsParallelExecution() {
+            return parallelEnabled;
         }
 
         ResourceLock getResourceLock(Path buildIdentityPath, Path projectIdentityPath) {

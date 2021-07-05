@@ -35,11 +35,7 @@ class OrElseProvider<T> extends AbstractMinimalProvider<T> {
 
     @Override
     public ValueProducer getProducer() {
-        if (left.isPresent()) {
-            return left.getProducer();
-        } else {
-            return right.getProducer();
-        }
+        return new OrElseValueProducer(left, right, right.getProducer());
     }
 
     @Override

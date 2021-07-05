@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":process-services"))
     implementation(project(":worker-processes"))
     implementation(project(":file-collections"))
+    implementation(project(":file-temp"))
     implementation(project(":core-api"))
     implementation(project(":model-core"))
     implementation(project(":core"))
@@ -19,8 +20,9 @@ dependencies {
     implementation(project(":language-java"))
     implementation(project(":files"))
 
-    implementation(libs.slf4jApi)
     implementation(libs.groovy)
+    implementation(libs.groovyAnt)
+    implementation(libs.groovyDoc)
     implementation(libs.guava)
     implementation(libs.asm)
     implementation(libs.inject)
@@ -35,6 +37,9 @@ dependencies {
     testFixturesImplementation(project(":base-services"))
 
     integTestImplementation(libs.commonsLang)
+    integTestImplementation(libs.javaParser) {
+        because("The Groovy docs inspects the dependencies at compile time")
+    }
 
     testRuntimeOnly(project(":distributions-core")) {
         because("Tests instantiate DefaultClassLoaderRegistry which requires a 'gradle-plugins.properties' through DefaultPluginModuleRegistry")
@@ -43,8 +48,6 @@ dependencies {
 }
 
 classycle {
-    excludePatterns.set(listOf(
-        "org/gradle/api/internal/tasks/compile/**",
-        "org/gradle/api/tasks/javadoc/**"
-    ))
+    excludePatterns.add("org/gradle/api/internal/tasks/compile/**")
+    excludePatterns.add("org/gradle/api/tasks/javadoc/**")
 }

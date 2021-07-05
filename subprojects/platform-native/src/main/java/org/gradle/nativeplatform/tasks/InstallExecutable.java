@@ -43,7 +43,8 @@ import org.gradle.internal.work.WorkerLeaseService;
 import org.gradle.nativeplatform.platform.NativePlatform;
 import org.gradle.nativeplatform.toolchain.Gcc;
 import org.gradle.nativeplatform.toolchain.NativeToolChain;
-import org.gradle.util.GFileUtils;
+import org.gradle.util.internal.GFileUtils;
+import org.gradle.work.DisableCachingByDefault;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -53,6 +54,7 @@ import java.util.Collection;
 /**
  * Installs an executable with it's dependent libraries so it can be easily executed.
  */
+@DisableCachingByDefault(because = "Not worth caching")
 public class InstallExecutable extends DefaultTask {
     private final Property<NativePlatform> targetPlatform;
     private final Property<NativeToolChain> toolChain;

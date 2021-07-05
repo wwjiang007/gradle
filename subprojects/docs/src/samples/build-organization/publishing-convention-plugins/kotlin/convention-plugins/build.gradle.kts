@@ -15,12 +15,12 @@ publishing {
     repositories {
         maven {
             // change to point to your repo, e.g. http://my.org/repo
-            url = uri("$buildDir/repo")
+            url = uri(layout.buildDirectory.dir("repo"))
         }
     }
 }
 
-tasks.named("publish") {
+tasks.publish {
     dependsOn("check")
 }
 // end::publish[]
@@ -31,7 +31,7 @@ repositories {
 }
 
 dependencies {
-    implementation("gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:4.0.5")
+    implementation("gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:4.6.2")
     testImplementation("junit:junit:4.13")
 }
 // end::repositories-and-dependencies[]

@@ -40,7 +40,7 @@ import org.gradle.internal.Cast;
 import org.gradle.internal.Factory;
 import org.gradle.internal.MutableBoolean;
 import org.gradle.internal.logging.text.TreeFormatter;
-import org.gradle.util.GUtil;
+import org.gradle.util.internal.GUtil;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -76,7 +76,7 @@ public abstract class AbstractFileCollection implements FileCollectionInternal {
     }
 
     /**
-     * This is final - override {@link #appendContents(TreeFormatter)}  instead.
+     * This is final - override {@link #appendContents(TreeFormatter)}  instead to add type specific content.
      */
     @Override
     public final TreeFormatter describeContents(TreeFormatter formatter) {
@@ -93,6 +93,7 @@ public abstract class AbstractFileCollection implements FileCollectionInternal {
     // This is final - override {@link TaskDependencyContainer#visitDependencies} to provide the dependencies instead.
     @Override
     public final TaskDependency getBuildDependencies() {
+        assertCanCarryBuildDependencies();
         return new AbstractTaskDependency() {
             @Override
             public String toString() {
@@ -104,6 +105,9 @@ public abstract class AbstractFileCollection implements FileCollectionInternal {
                 context.add(AbstractFileCollection.this);
             }
         };
+    }
+
+    protected void assertCanCarryBuildDependencies() {
     }
 
     @Override
@@ -347,11 +351,6 @@ public abstract class AbstractFileCollection implements FileCollectionInternal {
         public ValueProducer getProducer() {
             return new ValueProducer() {
                 @Override
-                public boolean isKnown() {
-                    return true;
-                }
-
-                @Override
                 public boolean isProducesDifferentValueOverTime() {
                     return false;
                 }
@@ -367,12 +366,10 @@ public abstract class AbstractFileCollection implements FileCollectionInternal {
 
         @Override
         public ExecutionTimeValue<Set<FileSystemLocation>> calculateExecutionTimeValue() {
-            ExecutionTimeValue<Set<FileSystemLocation>> value = ExecutionTimeValue.fixedValue(get());
             if (contentsAreBuiltByTask()) {
-                return value.withChangingContent();
-            } else {
-                return value;
+                return ExecutionTimeValue.changingValue(this);
             }
+            return ExecutionTimeValue.fixedValue(get());
         }
 
         private boolean contentsAreBuiltByTask() {

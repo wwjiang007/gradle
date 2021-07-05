@@ -17,17 +17,14 @@
 package org.gradle.performance
 
 import org.apache.commons.io.FileUtils
-import org.gradle.performance.categories.PerformanceRegressionTest
 import org.gradle.profiler.BuildContext
 import org.gradle.profiler.BuildMutator
 import org.gradle.profiler.InvocationSettings
 import org.gradle.profiler.Phase
 import org.gradle.profiler.ScenarioContext
 import org.gradle.test.fixtures.file.TestFile
-import org.junit.experimental.categories.Category
 import spock.lang.Unroll
 
-@Category(PerformanceRegressionTest)
 class BuildScanPluginPerformanceTest extends AbstractBuildScanPluginPerformanceTest {
 
     private static final int MEDIAN_PERCENTAGES_SHIFT = 10
@@ -38,22 +35,17 @@ class BuildScanPluginPerformanceTest extends AbstractBuildScanPluginPerformanceT
     public static final int INVOCATIONS = 20
 
     @Unroll
-    def "large java project with and without plugin application (#scenario)"() {
+    def "with and without plugin application (#scenario)"() {
         given:
-        def sourceProject = "javaProject"
         def jobArgs = ['--continue', '-Dscan.capture-task-input-files'] + scenarioArgs
-        def opts = ['-Xms4096m', '-Xmx4096m']
 
-        runner.testId = "large java project with and without plugin application ($scenario)"
         runner.baseline {
             warmUpCount WARMUPS
             invocationCount INVOCATIONS
-            projectName(sourceProject)
             displayName(WITHOUT_PLUGIN_LABEL)
             invocation {
                 args(*jobArgs)
                 tasksToRun(*tasks)
-                gradleOpts(*opts)
                 if (withFailure) {
                     expectFailure()
                 }
@@ -68,13 +60,11 @@ class BuildScanPluginPerformanceTest extends AbstractBuildScanPluginPerformanceT
         runner.buildSpec {
             warmUpCount WARMUPS
             invocationCount INVOCATIONS
-            projectName(sourceProject)
             displayName(WITH_PLUGIN_LABEL)
             invocation {
                 args(*jobArgs)
                 args("-DenableScan=true")
                 tasksToRun(*tasks)
-                gradleOpts(*opts)
                 if (withFailure) {
                     expectFailure()
                 }
@@ -101,13 +91,12 @@ class BuildScanPluginPerformanceTest extends AbstractBuildScanPluginPerformanceT
         }
 
         where:
-        scenario                                                | expectedMedianPercentageShift | tasks                              | withFailure | scenarioArgs                                                                                   | manageCacheState
-        "clean build - 50 projects"                             | MEDIAN_PERCENTAGES_SHIFT      | ['clean', 'build']                 | true        | ['--build-cache', '--parallel', '--max-workers=4']                                             | true
-        "clean build - 20 projects - slow tasks - less console" | MEDIAN_PERCENTAGES_SHIFT      | ['clean', 'project20:buildNeeded'] | true        | ['--build-cache', '--parallel', '--max-workers=4', '-DreducedOutput=true', '-DslowTasks=true'] | true
-        "help"                                                  | MEDIAN_PERCENTAGES_SHIFT      | ['help']                           | false       | []                                                                                             | false
-        "help - no console output"                              | MEDIAN_PERCENTAGES_SHIFT      | ['help']                           | false       | ['-DreducedOutput=true']                                                                       | false
+        scenario                                                | expectedMedianPercentageShift | tasks                              | withFailure | scenarioArgs                                                  | manageCacheState
+        "clean build - 50 projects"                             | MEDIAN_PERCENTAGES_SHIFT      | ['clean', 'build']                 | true        | ['--build-cache']                                             | true
+        "clean build - 20 projects - slow tasks - less console" | MEDIAN_PERCENTAGES_SHIFT      | ['clean', 'project20:buildNeeded'] | true        | ['--build-cache', '-DreducedOutput=true', '-DslowTasks=true'] | true
+        "help"                                                  | MEDIAN_PERCENTAGES_SHIFT      | ['help']                           | false       | []                                                            | false
+        "help - no console output"                              | MEDIAN_PERCENTAGES_SHIFT      | ['help']                           | false       | ['-DreducedOutput=true']                                      | false
     }
-
 
     static class ManageLocalCacheState implements BuildMutator {
         final File projectDir
@@ -184,7 +173,7 @@ class BuildScanPluginPerformanceTest extends AbstractBuildScanPluginPerformanceT
 
         @Override
         void beforeScenario(ScenarioContext context) {
-            def projectTestDir = new TestFile(context.projectDir)
+            def projectTestDir = new TestFile(projectDir)
             def settingsScript = projectTestDir.file('settings.gradle')
             settingsScript.text = """
                     buildscript {

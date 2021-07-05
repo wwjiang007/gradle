@@ -16,9 +16,10 @@
 
 package org.gradle.internal.watch.registry;
 
-import org.gradle.internal.snapshot.CompleteFileSystemLocationSnapshot;
+import org.gradle.internal.snapshot.FileSystemLocationSnapshot;
 import org.gradle.internal.snapshot.SnapshotHierarchy;
 import org.gradle.internal.watch.WatchingNotSupportedException;
+import org.gradle.internal.watch.vfs.WatchMode;
 
 import javax.annotation.CheckReturnValue;
 import java.io.Closeable;
@@ -33,14 +34,15 @@ public interface FileWatcherRegistry extends Closeable {
     interface ChangeHandler {
         void handleChange(Type type, Path path);
 
-        void handleLostState();
+        void stopWatchingAfterError();
     }
 
     enum Type {
         CREATED,
         MODIFIED,
         REMOVED,
-        INVALIDATED
+        INVALIDATED,
+        OVERFLOW
     }
 
     /**
@@ -57,7 +59,7 @@ public interface FileWatcherRegistry extends Closeable {
      *
      * @throws WatchingNotSupportedException when the native watchers can't be updated.
      */
-    void virtualFileSystemContentsChanged(Collection<CompleteFileSystemLocationSnapshot> removedSnapshots, Collection<CompleteFileSystemLocationSnapshot> addedSnapshots, SnapshotHierarchy root);
+    void virtualFileSystemContentsChanged(Collection<FileSystemLocationSnapshot> removedSnapshots, Collection<FileSystemLocationSnapshot> addedSnapshots, SnapshotHierarchy root);
 
     /**
      * Remove everything from the root which can't be kept after the current build finished.
@@ -67,7 +69,7 @@ public interface FileWatcherRegistry extends Closeable {
      * @return the snapshot hierarchy without snapshots which can't be kept till the next build.
      */
     @CheckReturnValue
-    SnapshotHierarchy buildFinished(SnapshotHierarchy root, int maximumNumberOfWatchedHierarchies);
+    SnapshotHierarchy buildFinished(SnapshotHierarchy root, WatchMode watchMode, int maximumNumberOfWatchedHierarchies);
 
     /**
      * Get statistics about the received changes.

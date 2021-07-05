@@ -15,86 +15,106 @@
  */
 package org.gradle.performance.regression.inception
 
-import org.gradle.performance.AbstractCrossVersionGradleProfilerPerformanceTest
-import org.gradle.performance.categories.SlowPerformanceRegressionTest
-import org.gradle.profiler.BuildContext
+import org.gradle.api.JavaVersion
+import org.gradle.performance.AbstractCrossVersionPerformanceTest
+import org.gradle.performance.annotations.RunFor
+import org.gradle.performance.annotations.Scenario
+import org.gradle.performance.fixture.CrossVersionPerformanceTestRunner
+import org.gradle.performance.mutator.ApplyAbiChangeToGroovySourceFileMutator
+import org.gradle.performance.mutator.ApplyNonAbiChangeToGroovySourceFileMutator
 import org.gradle.profiler.BuildMutator
-import org.gradle.util.GradleVersion
-import org.junit.experimental.categories.Category
-import spock.lang.Issue
-import spock.lang.Unroll
+import org.gradle.profiler.InvocationSettings
 
-import static org.gradle.integtests.fixtures.RepoScriptBlockUtil.createMirrorInitScript
-import static org.gradle.integtests.fixtures.RepoScriptBlockUtil.gradlePluginRepositoryMirrorUrl
-import static org.gradle.performance.generator.JavaTestProject.LARGE_JAVA_MULTI_PROJECT
-import static org.gradle.performance.generator.JavaTestProject.LARGE_JAVA_MULTI_PROJECT_KOTLIN_DSL
-import static org.gradle.performance.generator.JavaTestProject.MEDIUM_MONOLITHIC_JAVA_PROJECT
-import static org.gradle.test.fixtures.server.http.MavenHttpPluginRepository.PLUGIN_PORTAL_OVERRIDE_URL_PROPERTY
+import static org.gradle.performance.annotations.ScenarioType.PER_DAY
+import static org.gradle.performance.results.OperatingSystem.LINUX
 
-/**
- * Test Gradle performance against it's own build.
- *
- * Reasons for re-baselining:
- * - accept a regression in Gradle itself
- * - accept a regression in the Gradle build
- * - improvements to Gradle or its build!
- *
- * Reasons for breaking:
- *   - e.g. change in Gradle that breaks the Gradle build
- */
-@Issue('https://github.com/gradle/gradle-private/issues/1313')
-@Category(SlowPerformanceRegressionTest)
-class BuildSrcApiChangePerformanceTest extends AbstractCrossVersionGradleProfilerPerformanceTest {
-
-    static List<String> extraGradleBuildArguments() {
-        ["-D${PLUGIN_PORTAL_OVERRIDE_URL_PROPERTY}=${gradlePluginRepositoryMirrorUrl()}",
-         "-Dorg.gradle.ignoreBuildJavaVersionCheck=true",
-         "-PbuildSrcCheck=false",
-         "-I", createMirrorInitScript().absolutePath]
-    }
+@RunFor(
+    @Scenario(type = PER_DAY, operatingSystems = [LINUX],
+        testProjects = ["mediumMonolithicJavaProject", "largeJavaMultiProject", "largeJavaMultiProjectKotlinDsl"])
+)
+class BuildSrcApiChangePerformanceTest extends AbstractCrossVersionPerformanceTest {
 
     def setup() {
-        def targetVersion = "6.7-20200812220226+0000"
+        def targetVersion = "7.1-20210510220058+0000"
         runner.targetVersions = [targetVersion]
-        runner.minimumBaseVersion = GradleVersion.version(targetVersion).baseVersion.version
+        runner.minimumBaseVersion = "6.8"
+        runner.warmUpRuns = 3
     }
 
-    @Unroll
-    def "buildSrc api change in #testProject comparing gradle"() {
+    def setupGradleOpts() {
+        useG1GarbageCollectorOnJava8(runner)
+    }
+
+    def "buildSrc abi change"() {
         given:
-        runner.testProject = testProject
+        setupGradleOpts()
         runner.tasksToRun = ['help']
-        runner.runs = runs
-        runner.args = extraGradleBuildArguments()
+        runner.runs = determineNumberOfRuns(runner.testProject)
 
         and:
-        def changingClassFilePath = "buildSrc/${buildSrcProjectDir}src/main/groovy/ChangingClass.groovy"
-        runner.addBuildMutator { invocationSettings ->
-            new BuildMutator() {
-                @Override
-                void beforeBuild(BuildContext context) {
-                    new File(invocationSettings.projectDir, changingClassFilePath).tap {
-                        parentFile.mkdirs()
-                        text = """
-                        class ChangingClass {
-                            void changingMethod${context.phase}${context.iteration}() {}
-                        }
-                    """.stripIndent()
-                    }
-                }
-            }
-        }
+        def changingClassFilePath = "buildSrc/src/main/groovy/ChangingClass.groovy"
+        runner.addBuildMutator { new CreateChangingClassMutator(it, changingClassFilePath) }
+        runner.addBuildMutator { new ApplyAbiChangeToGroovySourceFileMutator(new File(it.projectDir, changingClassFilePath)) }
 
         when:
         def result = runner.run()
 
         then:
         result.assertCurrentVersionHasNotRegressed()
+    }
 
-        where:
-        testProject                         | buildSrcProjectDir | runs
-        MEDIUM_MONOLITHIC_JAVA_PROJECT      | ""                 | 40
-        LARGE_JAVA_MULTI_PROJECT            | ""                 | 20
-        LARGE_JAVA_MULTI_PROJECT_KOTLIN_DSL | ""                 | 10
+    def "buildSrc non-abi change"() {
+        given:
+        setupGradleOpts()
+        runner.tasksToRun = ['help']
+        runner.runs = determineNumberOfRuns(runner.testProject)
+
+        and:
+        def changingClassFilePath = "buildSrc/src/main/groovy/ChangingClass.groovy"
+        runner.addBuildMutator { new CreateChangingClassMutator(it, changingClassFilePath) }
+        runner.addBuildMutator { new ApplyNonAbiChangeToGroovySourceFileMutator(new File(it.projectDir, changingClassFilePath)) }
+
+        when:
+        def result = runner.run()
+        then:
+        result.assertCurrentVersionHasNotRegressed()
+    }
+
+    private static int determineNumberOfRuns(String testProject) {
+        switch (testProject) {
+            case 'mediumMonolithicJavaProject':
+                return 40
+            case 'largeJavaMultiProject':
+                return 20
+            case 'largeJavaMultiProjectKotlinDsl':
+                return 10
+            default:
+                20
+        }
+    }
+
+    private static void useG1GarbageCollectorOnJava8(CrossVersionPerformanceTestRunner runner) {
+        if (!JavaVersion.current().isJava9Compatible()) {
+            runner.gradleOpts.addAll(['-XX:+UnlockExperimentalVMOptions', '-XX:+UseG1GC'])
+        }
+    }
+
+    private static class CreateChangingClassMutator implements BuildMutator {
+
+        CreateChangingClassMutator(InvocationSettings settings, String filePath) {
+            new File(settings.projectDir, filePath).with {
+                parentFile.mkdirs()
+                // We need to create the file in the constructor, since the file change mutators read the text of the file in the constructor as well.
+                // It would be better if the file change mutators would read the original test in `beforeScenario`, so we could create the file here
+                // as well in beforeScenario.
+                text = """
+                    class ChangingClass {
+                        void changingMethod() {
+                            System.out.println("Do the thing");
+                        }
+                    }
+                """
+            }
+        }
     }
 }

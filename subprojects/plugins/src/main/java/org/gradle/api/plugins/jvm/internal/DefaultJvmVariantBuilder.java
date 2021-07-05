@@ -30,7 +30,6 @@ import org.gradle.api.plugins.BasePlugin;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.plugins.internal.JavaConfigurationVariantMapping;
-import org.gradle.api.plugins.jvm.JvmVariantBuilder;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskContainer;
@@ -39,7 +38,7 @@ import org.gradle.api.tasks.bundling.Jar;
 import org.gradle.internal.component.external.model.ImmutableCapability;
 import org.gradle.internal.component.external.model.ProjectDerivedCapability;
 import org.gradle.language.base.plugins.LifecycleBasePlugin;
-import org.gradle.util.TextUtil;
+import org.gradle.util.internal.TextUtil;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -213,10 +212,10 @@ public class DefaultJvmVariantBuilder implements JvmVariantBuilderInternal {
         });
         if (mainSourceSet) {
             // we need to wire the compile only and runtime only to the classpath configurations
-            configurations.getByName(sourceSet.getCompileClasspathConfigurationName()).extendsFrom(implementation, compileOnly, compileOnlyApi);
+            configurations.getByName(sourceSet.getCompileClasspathConfigurationName()).extendsFrom(implementation, compileOnly);
             configurations.getByName(sourceSet.getRuntimeClasspathConfigurationName()).extendsFrom(implementation, runtimeOnly);
             // and we also want the feature dependencies to be available on the test classpath
-            configurations.getByName(JavaPlugin.TEST_COMPILE_CLASSPATH_CONFIGURATION_NAME).extendsFrom(implementation);
+            configurations.getByName(JavaPlugin.TEST_COMPILE_CLASSPATH_CONFIGURATION_NAME).extendsFrom(implementation, compileOnlyApi);
             configurations.getByName(JavaPlugin.TEST_RUNTIME_CLASSPATH_CONFIGURATION_NAME).extendsFrom(implementation, runtimeOnly);
         }
 

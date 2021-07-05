@@ -23,7 +23,7 @@ import org.gradle.integtests.fixtures.publish.maven.AbstractMavenPublishIntegTes
 import org.gradle.test.fixtures.maven.MavenDependencyExclusion
 import org.gradle.test.fixtures.maven.MavenFileModule
 import org.gradle.test.fixtures.maven.MavenJavaModule
-import org.gradle.util.ToBeImplemented
+import org.gradle.util.internal.ToBeImplemented
 import spock.lang.Ignore
 import spock.lang.Issue
 import spock.lang.Unroll
@@ -65,11 +65,15 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         given:
         javaLibrary(mavenRepo.module("org.test", "foo", "1.0")).withModuleMetadata().publish()
         javaLibrary(mavenRepo.module("org.test", "bar", "1.0")).withModuleMetadata().publish()
+        javaLibrary(mavenRepo.module("org.test", "baz", "1.0+10")).withModuleMetadata().publish()
+        javaLibrary(mavenRepo.module("org.test", "qux", "1.0-latest")).withModuleMetadata().publish()
 
         createBuildScripts("""
             dependencies {
                 api "org.test:foo:1.0"
                 implementation "org.test:bar:1.0"
+                implementation "org.test:baz:1.0+10"
+                implementation "org.test:qux:1.0-latest"
             }
             publishing {
                 publications {
@@ -84,13 +88,14 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         run "publish"
 
         then:
+        outputDoesNotContain(DefaultMavenPublication.INCOMPATIBLE_FEATURE)
         javaLibrary.assertPublished()
         javaLibrary.assertApiDependencies("org.test:foo:1.0")
-        javaLibrary.assertRuntimeDependencies("org.test:bar:1.0")
+        javaLibrary.assertRuntimeDependencies("org.test:bar:1.0", "org.test:baz:1.0+10", "org.test:qux:1.0-latest")
 
         and:
         resolveArtifacts(javaLibrary) {
-            expectFiles "bar-1.0.jar", "foo-1.0.jar", "publishTest-1.9.jar"
+            expectFiles "bar-1.0.jar", "baz-1.0+10.jar", "qux-1.0-latest.jar", "foo-1.0.jar", "publishTest-1.9.jar"
         }
 
         and:
@@ -105,7 +110,7 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
 
         and:
         resolveRuntimeArtifacts(javaLibrary) {
-            expectFiles "bar-1.0.jar", "foo-1.0.jar", "publishTest-1.9.jar"
+            expectFiles "bar-1.0.jar", "baz-1.0+10.jar", "qux-1.0-latest.jar", "foo-1.0.jar", "publishTest-1.9.jar"
         }
     }
 
@@ -182,7 +187,7 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         given:
         createBuildScripts("""
 
-            ${jcenterRepository()}
+            ${mavenCentralRepository()}
 
             dependencies {
                 api "org.springframework:spring-core:2.5.6"
@@ -248,7 +253,7 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         given:
         createBuildScripts("""
 
-            ${jcenterRepository()}
+            ${mavenCentralRepository()}
 
             dependencies {
                 api "org.springframework:spring-core:1.2.9"
@@ -335,7 +340,7 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         given:
         createBuildScripts("""
 
-            ${jcenterRepository()}
+            ${mavenCentralRepository()}
 
             dependencies {
                 constraints {
@@ -410,7 +415,7 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         given:
         createBuildScripts("""
 
-            ${jcenterRepository()}
+            ${mavenCentralRepository()}
 
             dependencies {
                 implementation "commons-collections:commons-collections"
@@ -464,7 +469,7 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         given:
         createBuildScripts("""
 
-            ${jcenterRepository()}
+            ${mavenCentralRepository()}
 
             dependencies {
                 implementation "commons-collections:commons-collections:$version"
@@ -503,7 +508,7 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         }
 
         where:
-        version << ['1.+', 'latest.milestone']
+        version << ['1.+', 'latest.milestone', '+']
     }
 
     def "can publish java-library with attached artifacts"() {
@@ -544,9 +549,6 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
 
     @Unroll("'#gradleConfiguration' dependencies end up in '#mavenScope' scope with '#plugin' plugin")
     void "maps dependencies in the correct Maven scope"() {
-        if (deprecatedConfiguration) {
-            executer.expectDeprecationWarning()
-        }
         given:
         createBuildScripts """
             publishing {
@@ -589,18 +591,14 @@ abstract class AbstractMavenPublishJavaIntegTest extends AbstractMavenPublishInt
         }
 
         where:
-        plugin         | gradleConfiguration | mavenScope | deprecatedConfiguration
-        'java'         | 'compile'           | 'compile'  | true
-        'java'         | 'runtime'           | 'compile'  | true
-        'java'         | 'implementation'    | 'runtime'  | false
-        'java'         | 'runtimeOnly'       | 'runtime'  | false
+        plugin         | gradleConfiguration | mavenScope
+        'java'         | 'implementation'    | 'runtime'
+        'java'         | 'runtimeOnly'       | 'runtime'
 
-        'java-library' | 'api'               | 'compile'  | false
-        'java-library' | 'compileOnlyApi'    | 'compile'  | false
-        'java-library' | 'compile'           | 'compile'  | true
-        'java-library' | 'runtime'           | 'compile'  | true
-        'java-library' | 'runtimeOnly'       | 'runtime'  | false
-        'java-library' | 'implementation'    | 'runtime'  | false
+        'java-library' | 'api'               | 'compile'
+        'java-library' | 'compileOnlyApi'    | 'compile'
+        'java-library' | 'runtimeOnly'       | 'runtime'
+        'java-library' | 'implementation'    | 'runtime'
 
     }
 
@@ -810,7 +808,6 @@ Maven publication 'maven' pom metadata warnings (silence with 'suppressPomMetada
             configurations {
                 api.exclude(group: "api-group", module: "api-module")
                 apiElements.exclude(group: "apiElements-group", module: "apiElements-module")
-                runtime.exclude(group: "runtime-group", module: "runtime-module")
                 runtimeElements.exclude(group: "runtimeElements-group", module: "runtimeElements-module")
                 implementation.exclude(group: "implementation-group", module: "implementation-module")
                 runtimeOnly.exclude(group: "runtimeOnly-group", module: "runtimeOnly-module")
@@ -849,10 +846,8 @@ Maven publication 'maven' pom metadata warnings (silence with 'suppressPomMetada
         with(javaLibrary.parsedPom) {
             with(scopes.compile) {
                 hasDependencyExclusion("org.test:a:1.0", new MavenDependencyExclusion("apiElements-group", "apiElements-module"))
-                hasDependencyExclusion("org.test:a:1.0", new MavenDependencyExclusion("runtime-group", "runtime-module"))
                 hasDependencyExclusion("org.test:a:1.0", new MavenDependencyExclusion("api-group", "api-module"))
                 hasDependencyExclusion("org.gradle.test:subproject:1.2", new MavenDependencyExclusion("apiElements-group", "apiElements-module"))
-                hasDependencyExclusion("org.gradle.test:subproject:1.2", new MavenDependencyExclusion("runtime-group", "runtime-module"))
                 hasDependencyExclusion("org.gradle.test:subproject:1.2", new MavenDependencyExclusion("api-group", "api-module"))
             }
             with(scopes.runtime) {
@@ -860,7 +855,6 @@ Maven publication 'maven' pom metadata warnings (silence with 'suppressPomMetada
                 hasDependencyExclusion("org.test:b:2.0", new MavenDependencyExclusion("implementation-group", "implementation-module"))
                 hasDependencyExclusion("org.test:b:2.0", new MavenDependencyExclusion("api-group", "api-module"))
                 hasDependencyExclusion("org.test:b:2.0", new MavenDependencyExclusion("runtimeOnly-group", "runtimeOnly-module"))
-                hasDependencyExclusion("org.test:b:2.0", new MavenDependencyExclusion("runtime-group", "runtime-module"))
             }
         }
 
@@ -869,13 +863,11 @@ Maven publication 'maven' pom metadata warnings (silence with 'suppressPomMetada
             variant("apiElements") {
                 dependency('org.test:a:1.0') {
                     hasExclude('apiElements-group', 'apiElements-module')
-                    hasExclude('runtime-group', 'runtime-module')
                     hasExclude('api-group', 'api-module')
                     noMoreExcludes()
                 }
                 dependency('org.gradle.test:subproject:1.2') {
                     hasExclude('apiElements-group', 'apiElements-module')
-                    hasExclude('runtime-group', 'runtime-module')
                     hasExclude('api-group', 'api-module')
                     noMoreExcludes()
                 }
@@ -886,7 +878,6 @@ Maven publication 'maven' pom metadata warnings (silence with 'suppressPomMetada
                     hasExclude('implementation-group', 'implementation-module')
                     hasExclude('api-group', 'api-module')
                     hasExclude('runtimeOnly-group', 'runtimeOnly-module')
-                    hasExclude('runtime-group', 'runtime-module')
                     noMoreExcludes()
                 }
             }

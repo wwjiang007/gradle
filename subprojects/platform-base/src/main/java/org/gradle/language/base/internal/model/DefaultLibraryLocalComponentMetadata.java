@@ -18,6 +18,7 @@ package org.gradle.language.base.internal.model;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import org.gradle.api.Project;
+import org.gradle.api.artifacts.DependencyConstraint;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ComponentSelector;
@@ -38,6 +39,7 @@ import org.gradle.internal.component.model.ExcludeMetadata;
 import org.gradle.internal.component.model.IvyArtifactName;
 import org.gradle.internal.component.model.LocalComponentDependencyMetadata;
 import org.gradle.internal.component.model.LocalOriginDependencyMetadata;
+import org.gradle.internal.deprecation.DeprecationMessageBuilder;
 import org.gradle.internal.locking.DefaultDependencyLockingState;
 import org.gradle.platform.base.DependencySpec;
 import org.gradle.platform.base.LibraryBinaryDependencySpec;
@@ -48,6 +50,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static org.gradle.platform.base.internal.DefaultModuleDependencySpec.effectiveVersionFor;
@@ -92,7 +95,8 @@ public class DefaultLibraryLocalComponentMetadata extends DefaultLocalComponentM
                 true,
                 null,
                 false,
-                ImmutableCapabilities.EMPTY);
+                ImmutableCapabilities.EMPTY,
+                Collections::emptyList);
         }
         return metaData;
     }
@@ -169,9 +173,9 @@ public class DefaultLibraryLocalComponentMetadata extends DefaultLocalComponentM
     }
 
     @Override
-    public BuildableLocalConfigurationMetadata addConfiguration(String name, String description, Set<String> extendsFrom, ImmutableSet<String> hierarchy, boolean visible, boolean transitive, ImmutableAttributes attributes, boolean canBeConsumed, List<String> consumptionAlternatives, boolean canBeResolved, ImmutableCapabilities capabilities) {
+    public BuildableLocalConfigurationMetadata addConfiguration(String name, String description, Set<String> extendsFrom, ImmutableSet<String> hierarchy, boolean visible, boolean transitive, ImmutableAttributes attributes, boolean canBeConsumed, DeprecationMessageBuilder.WithDocumentation consumptionDeprecation, boolean canBeResolved, ImmutableCapabilities capabilities, Supplier<List<DependencyConstraint>> consistentResolutionConstraints) {
         assert hierarchy.contains(name);
-        DefaultLocalConfigurationMetadata conf = new LibraryLocalConfigurationMetadata(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, consumptionAlternatives, canBeResolved, capabilities);
+        DefaultLocalConfigurationMetadata conf = new LibraryLocalConfigurationMetadata(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, consumptionDeprecation, canBeResolved, capabilities);
         addToConfigurations(name, conf);
         return conf;
     }
@@ -186,10 +190,10 @@ public class DefaultLibraryLocalComponentMetadata extends DefaultLocalComponentM
                                           ImmutableSet<String> hierarchy,
                                           ImmutableAttributes attributes,
                                           boolean canBeConsumed,
-                                          List<String> consumptionAlternatives,
+                                          DeprecationMessageBuilder.WithDocumentation consumptionDeprecation,
                                           boolean canBeResolved,
                                           ImmutableCapabilities capabilities) {
-            super(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, consumptionAlternatives, canBeResolved, capabilities);
+            super(name, description, visible, transitive, extendsFrom, hierarchy, attributes, canBeConsumed, consumptionDeprecation, canBeResolved, capabilities);
         }
 
 

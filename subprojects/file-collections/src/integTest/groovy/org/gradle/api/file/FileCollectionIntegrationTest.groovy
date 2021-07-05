@@ -41,7 +41,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
 
     @Issue("https://github.com/gradle/gradle/issues/10322")
     def "can construct file collection from the elements of a source directory set"() {
-        buildFile << """
+        buildFile """
             def fileCollection = objects.fileCollection()
             def sourceDirs = objects.sourceDirectorySet('main', 'main files')
             sourceDirs.srcDirs("dir1", "dir2")
@@ -60,7 +60,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
     }
 
     def "can view the elements of file collection as a Provider"() {
-        buildFile << """
+        buildFile """
             def files = objects.fileCollection()
             def elements = files.elements
 
@@ -77,7 +77,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
     @ToBeFixedForConfigurationCache(because = "collection closure called on cache store")
     def "task @InputFiles file collection closure is called once only when task executes"() {
         taskTypeWithInputFileCollection()
-        buildFile << """
+        buildFile """
             task merge(type: InputFilesTask) {
                 outFile = file("out.txt")
                 inFiles.from {
@@ -98,7 +98,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
     @ToBeFixedForConfigurationCache(because = "collection provider called on cache store")
     def "task @InputFiles file collection provider is called once only when task executes"() {
         taskTypeWithInputFileCollection()
-        buildFile << """
+        buildFile """
             task merge(type: InputFilesTask) {
                 outFile = file("out.txt")
                 inFiles.from providers.provider {
@@ -119,7 +119,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
     def "can connect the elements of a file collection to task input ListProperty"() {
         taskTypeWithOutputFileProperty()
         taskTypeWithInputFileListProperty()
-        buildFile << """
+        buildFile """
             task produce1(type: FileProducer) {
                 output = file("out1.txt")
                 content = "one"
@@ -173,7 +173,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
     @Issue("https://github.com/gradle/gradle/issues/12832")
     def "can compose and filter a file collection that includes the collection it replaces"() {
         taskTypeLogsInputFileCollectionContent()
-        buildFile << """
+        buildFile """
             class LegacyTask extends ShowFilesTask {
                 void setInFiles(def c) {
                     inFiles.from = c
@@ -202,7 +202,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
     @Issue("https://github.com/gradle/gradle/issues/13745")
     def "can compose and filter a file collection to rearrange its elements"() {
         taskTypeLogsInputFileCollectionContent()
-        buildFile << """
+        buildFile """
             class LegacyTask extends ShowFilesTask {
                 void setInFiles(def c) {
                     inFiles.from = c
@@ -233,7 +233,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
         given:
         file('files/a/one.txt').createFile()
         file('files/b/two.txt').createFile()
-        buildFile << """
+        buildFile """
             def files = files('files/a', 'files/b').minus(files('files/b'))
             task copy(type: Copy) {
                 from files
@@ -275,7 +275,7 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
         given:
         file('files/a/one.txt').createFile()
         file('files/b/two.txt').createFile()
-        buildFile << """
+        buildFile """
             def files = files('files/a', 'files/b').filter { it.name != 'b' }
             task copy(type: Copy) {
                 from files
@@ -311,5 +311,167 @@ class FileCollectionIntegrationTest extends AbstractIntegrationSpec implements T
             'one.txt',
             'three.txt'
         )
+    }
+
+    def "can filter a file collection using a closure hitting the filesystem"() {
+        given:
+        file("files/file0.txt") << ""
+        file("files/dir1/file1.txt") << ""
+        file("files/dir2/file2.txt") << ""
+
+        and:
+        buildFile """
+            def files = files("files/file0.txt", "files/dir1", "files/dir2", "files/dir3").filter { file ->
+                file.isDirectory()
+            }
+            tasks.register("sync", Sync) {
+                from files
+                into "output"
+            }
+        """
+
+        when:
+        run "sync"
+
+        then:
+        file("output").assertHasDescendants("file1.txt", "file2.txt")
+
+        when:
+        run "sync"
+
+        then:
+        result.assertTaskSkipped(':sync')
+
+        when:
+        file("files/dir2").deleteDir()
+        file("files/dir3/file3.txt") << ""
+        run "sync"
+
+        then:
+        result.assertTaskNotSkipped(":sync")
+        file("output").assertHasDescendants("file1.txt", "file3.txt")
+    }
+
+    @ToBeFixedForConfigurationCache(because = "provider assumed to be of fixed value but hits the filesystem")
+    def "can filter the elements of a file collection using a closure hitting the filesystem"() {
+        given:
+        file("files/file0.txt") << ""
+        file("files/dir1/file1.txt") << ""
+        file("files/dir2/file2.txt") << ""
+
+        and:
+        buildFile """
+            def files = files("files/file0.txt", "files/dir1", "files/dir2", "files/dir3").elements.map {
+                it.findAll { file ->
+                    file.asFile.isDirectory()
+                }
+            }
+            tasks.register("sync", Sync) {
+                from files
+                into "output"
+            }
+        """
+
+        when:
+        run "sync"
+
+        then:
+        file("output").assertHasDescendants("file1.txt", "file2.txt")
+
+        when:
+        run "sync"
+
+        then:
+        result.assertTaskSkipped(':sync')
+
+        when:
+        file("files/dir2").deleteDir()
+        file("files/dir3/file3.txt") << ""
+        run "sync"
+
+        then:
+        result.assertTaskNotSkipped(":sync")
+        file("output").assertHasDescendants("file1.txt", "file3.txt")
+    }
+
+    @Issue("https://github.com/gradle/gradle/issues/17542")
+    def "can map task generated FC to a filtered List of Directory (#useCase)"() {
+        given:
+        buildFile """
+            import static org.gradle.util.internal.TextUtil.normaliseFileSeparators
+
+            abstract class Producer extends DefaultTask {
+                @OutputDirectory abstract DirectoryProperty getOutputClasses()
+
+                Producer() { outputs.upToDateWhen { false } } // TODO doesn't matter, remove this
+
+                @TaskAction void doStuff() {
+                    File f = outputClasses.get().asFile
+                    f.mkdirs()
+                    new File(f, "some.txt") << "some text"
+                }
+            }
+
+            TaskProvider<Producer> prod = tasks.register("prod", Producer) {
+                outputClasses = layout.buildDirectory.dir("producerOutput")
+            }
+
+            abstract class MyTask extends DefaultTask {
+                @Classpath abstract ConfigurableFileCollection getClasses()
+                @Inject abstract ProjectLayout getLayout()
+                @TaskAction void doStuff() {
+                    def root = layout.projectDirectory.asFile
+                    classes.files.each { file ->
+                        println("CONSUMING ${'$'}{normaliseFileSeparators(root.relativePath(file))}")
+                    }
+                }
+            }
+
+            Provider<List<Directory>> dirsFromFilteredFcMappedElements(FileCollection fc, Directory projectDir) {
+                def root = layout.projectDirectory.asFile
+                fc.filter { File f ->
+                    f.isDirectory()
+                }.elements.map {
+                    it.collect { fileSystemLocation ->
+                        projectDir.dir(fileSystemLocation.asFile.absolutePath)
+                    }
+                }
+            }
+
+            Provider<List<Directory>> dirsFromFcElementsSetFiltered(FileCollection fc, Directory projectDir) {
+                fc.elements.map {
+                    it.findAll { FileSystemLocation fsl ->
+                        fsl.asFile.isDirectory()
+                    }.collect { fileSystemLocation ->
+                        projectDir.dir(fileSystemLocation.asFile.absolutePath)
+                    }
+                }
+            }
+
+            FileCollection myFc = project.files(prod.map { it.outputClasses })
+
+            tasks.register("myTask", MyTask.class) {
+                classes.from(
+                    files(${methodName}(myFc, project.layout.buildDirectory.get()))
+                )
+            }
+        """
+
+        when:
+        run "myTask"
+
+        then:
+        outputContains("CONSUMING build/producerOutput")
+
+        when:
+        run "myTask"
+
+        then:
+        outputContains("CONSUMING build/producerOutput")
+
+        where:
+        methodName                         | useCase
+        "dirsFromFilteredFcMappedElements" | "dirs from filtered FC elements mapped"
+        "dirsFromFcElementsSetFiltered"    | "dirs from FC elements set filtered"
     }
 }

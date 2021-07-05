@@ -17,32 +17,36 @@
 package org.gradle.performance.regression.nativeplatform
 
 import org.apache.commons.io.FileUtils
-import org.gradle.performance.AbstractCrossVersionGradleProfilerPerformanceTest
+import org.gradle.performance.AbstractCrossVersionPerformanceTest
+import org.gradle.performance.annotations.RunFor
+import org.gradle.performance.annotations.Scenario
 import org.gradle.profiler.BuildContext
 import org.gradle.profiler.BuildMutator
-import org.gradle.util.Requires
-import org.gradle.util.TestPrecondition
 import spock.lang.Unroll
 
-@Requires(TestPrecondition.LINUX)
-class RealWorldNativePluginPerformanceTest extends AbstractCrossVersionGradleProfilerPerformanceTest {
+import static org.gradle.performance.annotations.ScenarioType.PER_COMMIT
+import static org.gradle.performance.results.OperatingSystem.LINUX
+
+@RunFor(
+    @Scenario(type = PER_COMMIT, operatingSystems = [LINUX], testProjects = ["nativeMonolithic", "nativeMonolithicOverlapping"])
+)
+class RealWorldNativePluginPerformanceTest extends AbstractCrossVersionPerformanceTest {
 
     def setup() {
-        runner.targetVersions = ["6.7-20200824220048+0000"]
+        runner.targetVersions = ["7.2-20210702002720+0000"]
         runner.minimumBaseVersion = "4.0"
     }
 
     @Unroll
-    def "build on #testProject with #parallelWorkers parallel workers"() {
+    def "build with #parallelWorkers parallel workers"() {
         given:
-        runner.testProject = testProject
         runner.tasksToRun = ['build']
-        runner.gradleOpts = ["-Xms1500m", "-Xmx2500m"]
         runner.warmUpRuns = 5
         runner.runs = 10
 
+        runner.args += ["-Dorg.gradle.parallel=${parallelWorkers ? true : false}"]
         if (parallelWorkers) {
-            runner.args += ["--parallel", "--max-workers=$parallelWorkers".toString()]
+            runner.args += ["--max-workers=$parallelWorkers".toString()]
         }
 
         when:
@@ -52,25 +56,22 @@ class RealWorldNativePluginPerformanceTest extends AbstractCrossVersionGradlePro
         result.assertCurrentVersionHasNotRegressed()
 
         where:
-        testProject                   | parallelWorkers
-        "nativeMonolithic"            | 0
-        "nativeMonolithic"            | 12
-        "nativeMonolithicOverlapping" | 0
-        "nativeMonolithicOverlapping" | 12
+        parallelWorkers << [0, 12]
     }
 
+    @RunFor([
+        @Scenario(type = PER_COMMIT, operatingSystems = [LINUX], testProjects = ["mediumNativeMonolithic"], iterationMatcher = ".*(header|source) file.*"),
+        @Scenario(type = PER_COMMIT, operatingSystems = [LINUX], testProjects = ["smallNativeMonolithic"], iterationMatcher = ".*build file.*")
+    ])
     @Unroll
-    def "build with #changeType change on #testProject"() {
+    def "build with #changeType file change"() {
         given:
-        runner.testProject = testProject
         runner.tasksToRun = ['build']
-        runner.args = ["--parallel", "--max-workers=12"]
-        runner.gradleOpts = ["-Xms512m", "-Xmx512m"]
-        runner.warmUpRuns = iterations - 1
-        runner.runs = iterations
+        runner.warmUpRuns = 39
+        runner.runs = 40
 
-        def changedFile = fileToChange
-        def changeClosure = change
+        def changedFile = getFileToChange(changeType)
+        def changeClosure = getChangeClosure(changeType)
         runner.addBuildMutator { invocationSettings ->
             new BuildMutator() {
                 String originalContent
@@ -110,13 +111,33 @@ class RealWorldNativePluginPerformanceTest extends AbstractCrossVersionGradlePro
         result.assertCurrentVersionHasNotRegressed()
 
         where:
-        // source file change causes a single project, single source set, single file to be recompiled.
-        // header file change causes a single project, two source sets, some files to be recompiled.
-        // recompile all sources causes all projects, all source sets, all files to be recompiled.
-        testProject              | changeType    | fileToChange                      | change              | iterations
-        "mediumNativeMonolithic" | 'source file' | 'modules/project5/src/src100_c.c' | this.&changeCSource | 40
-        "mediumNativeMonolithic" | 'header file' | 'modules/project1/src/src50_h.h'  | this.&changeHeader  | 40
-        "smallNativeMonolithic"  | 'build file'  | 'common.gradle'                   | this.&changeArgs    | 40
+        changeType << ['header', 'source', 'build']
+    }
+
+    static String getFileToChange(String changeType) {
+        switch (changeType) {
+            case 'source':
+                return 'modules/project5/src/src100_c.c'
+            case 'header':
+                return 'modules/project1/src/src50_h.h'
+            case 'build':
+                return 'common.gradle'
+            default:
+                throw new IllegalArgumentException("Unknown change type ${changeType}")
+        }
+    }
+
+    Closure getChangeClosure(String changeType) {
+        switch (changeType) {
+            case 'source':
+                return this.&changeCSource
+            case 'header':
+                return this.&changeHeader
+            case 'build':
+                return this.&changeArgs
+            default:
+                throw new IllegalArgumentException("Unknown change type ${changeType}")
+        }
     }
 
     void changeCSource(File file, String originalContent) {

@@ -85,14 +85,11 @@ class SourceDependencyBuildOperationIntegrationTest extends AbstractIntegrationS
         loadOps[1].details.buildPath == ":buildB"
         loadOps[1].parentId == resolve.id
 
-        def buildTreeOp = operations.only(/Prepare build tree/)
-        buildTreeOp.parentId == root.id
-
         def configureOps = operations.all(ConfigureBuildBuildOperationType)
         configureOps.size() == 2
         configureOps[0].displayName == "Configure build"
         configureOps[0].details.buildPath == ":"
-        configureOps[0].parentId == buildTreeOp.id
+        configureOps[0].parentId == root.id
         configureOps[1].displayName == "Configure build (:${buildName})"
         configureOps[1].details.buildPath == ":${buildName}"
         configureOps[1].parentId == resolve.id
@@ -107,12 +104,15 @@ class SourceDependencyBuildOperationIntegrationTest extends AbstractIntegrationS
         taskGraphOps[1].details.buildPath == ":${buildName}"
         taskGraphOps[1].parentId == taskGraphOps[0].id
 
+        def runMainTasks = operations.first(Pattern.compile("Run main tasks"))
+        runMainTasks.parentId == root.id
+
         def runTasksOps = operations.all(Pattern.compile("Run tasks.*"))
         runTasksOps.size() == 2
-        runTasksOps[0].displayName == "Run tasks"
-        runTasksOps[0].parentId == root.id
-        runTasksOps[1].displayName == "Run tasks (:${buildName})"
-        runTasksOps[1].parentId == root.id
+        // Build operations are run in parallel, so can appear in either order
+        [runTasksOps[0].displayName, runTasksOps[1].displayName].sort() == ["Run tasks", "Run tasks (:${buildName})"]
+        runTasksOps[0].parentId == runMainTasks.id
+        runTasksOps[1].parentId == runMainTasks.id
 
         def graphNotifyOps = operations.all(NotifyTaskGraphWhenReadyBuildOperationType)
         graphNotifyOps.size() == 2

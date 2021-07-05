@@ -18,10 +18,12 @@ package org.gradle.internal.session;
 
 import org.gradle.StartParameter;
 import org.gradle.api.internal.FeaturePreviews;
+import org.gradle.api.internal.StartParameterInternal;
 import org.gradle.api.internal.attributes.DefaultImmutableAttributesFactory;
 import org.gradle.api.internal.cache.StringInterner;
 import org.gradle.api.internal.changedetection.state.BuildSessionScopeFileTimeStampInspector;
 import org.gradle.api.internal.changedetection.state.CrossBuildFileHashCache;
+import org.gradle.api.internal.changedetection.state.FileHasherStatistics;
 import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.api.internal.file.FileResolver;
 import org.gradle.api.internal.model.NamedObjectInstantiator;
@@ -51,6 +53,7 @@ import org.gradle.initialization.layout.BuildLayoutFactory;
 import org.gradle.initialization.layout.ProjectCacheDir;
 import org.gradle.internal.buildevents.BuildStartedTime;
 import org.gradle.internal.classpath.ClassPath;
+import org.gradle.internal.event.DefaultListenerManager;
 import org.gradle.internal.event.ListenerManager;
 import org.gradle.internal.file.Deleter;
 import org.gradle.internal.filewatch.PendingChangesManager;
@@ -60,6 +63,7 @@ import org.gradle.internal.isolation.IsolatableFactory;
 import org.gradle.internal.jvm.JavaModuleDetector;
 import org.gradle.internal.logging.progress.ProgressLoggerFactory;
 import org.gradle.internal.logging.sink.OutputEventListenerManager;
+import org.gradle.internal.model.CalculatedValueContainerFactory;
 import org.gradle.internal.nativeintegration.filesystem.FileSystem;
 import org.gradle.internal.operations.BuildOperationExecutor;
 import org.gradle.internal.reflect.Instantiator;
@@ -86,14 +90,14 @@ import java.util.List;
  */
 public class BuildSessionScopeServices {
 
-    private final StartParameter startParameter;
+    private final StartParameterInternal startParameter;
     private final BuildRequestMetaData buildRequestMetaData;
     private final ClassPath injectedPluginClassPath;
     private final BuildCancellationToken buildCancellationToken;
     private final BuildClientMetaData buildClientMetaData;
     private final BuildEventConsumer buildEventConsumer;
 
-    public BuildSessionScopeServices(StartParameter startParameter, BuildRequestMetaData buildRequestMetaData, ClassPath injectedPluginClassPath, BuildCancellationToken buildCancellationToken, BuildClientMetaData buildClientMetaData, BuildEventConsumer buildEventConsumer) {
+    public BuildSessionScopeServices(StartParameterInternal startParameter, BuildRequestMetaData buildRequestMetaData, ClassPath injectedPluginClassPath, BuildCancellationToken buildCancellationToken, BuildClientMetaData buildClientMetaData, BuildEventConsumer buildEventConsumer) {
         this.startParameter = startParameter;
         this.buildRequestMetaData = buildRequestMetaData;
         this.injectedPluginClassPath = injectedPluginClassPath;
@@ -103,7 +107,7 @@ public class BuildSessionScopeServices {
     }
 
     void configure(ServiceRegistration registration, List<PluginServiceRegistry> pluginServiceRegistries) {
-        registration.add(StartParameter.class, startParameter);
+        registration.add(StartParameterInternal.class, startParameter);
         for (PluginServiceRegistry pluginServiceRegistry : pluginServiceRegistries) {
             pluginServiceRegistry.registerBuildSessionServices(registration);
         }
@@ -112,6 +116,7 @@ public class BuildSessionScopeServices {
         registration.add(BuildRequestMetaData.class, buildRequestMetaData);
         registration.add(BuildClientMetaData.class, buildClientMetaData);
         registration.add(BuildEventConsumer.class, buildEventConsumer);
+        registration.add(CalculatedValueContainerFactory.class);
         registration.addProvider(new CacheRepositoryServices(startParameter.getGradleUserHomeDir(), startParameter.getProjectCacheDir()));
 
         // Must be no higher than this scope as needs cache repository services.
@@ -126,7 +131,7 @@ public class BuildSessionScopeServices {
         return new DefaultDeploymentRegistry(pendingChangesManager, buildOperationExecutor, objectFactory);
     }
 
-    ListenerManager createListenerManager(ListenerManager parent) {
+    DefaultListenerManager createListenerManager(DefaultListenerManager parent) {
         return parent.createChild(Scopes.BuildSession.class);
     }
 
@@ -148,11 +153,9 @@ public class BuildSessionScopeServices {
         return new ProjectCacheDir(cacheDir, progressLoggerFactory, deleter);
     }
 
-    BuildSessionScopeFileTimeStampInspector createFileTimeStampInspector(ProjectCacheDir projectCacheDir, CacheScopeMapping cacheScopeMapping, ListenerManager listenerManager) {
+    BuildSessionScopeFileTimeStampInspector createFileTimeStampInspector(ProjectCacheDir projectCacheDir, CacheScopeMapping cacheScopeMapping) {
         File workDir = cacheScopeMapping.getBaseDirectory(projectCacheDir.getDir(), "fileChanges", VersionStrategy.CachePerVersion);
-        BuildSessionScopeFileTimeStampInspector timeStampInspector = new BuildSessionScopeFileTimeStampInspector(workDir);
-        listenerManager.addListener(timeStampInspector);
-        return timeStampInspector;
+        return new BuildSessionScopeFileTimeStampInspector(workDir);
     }
 
     ScriptSourceHasher createScriptSourceHasher() {
@@ -198,8 +201,14 @@ public class BuildSessionScopeServices {
         return new CrossBuildFileHashCacheWrapper(crossBuildCache);
     }
 
-    ChecksumService createChecksumService(StringInterner stringInterner, FileSystem fileSystem, CrossBuildFileHashCacheWrapper crossBuildCache, BuildSessionScopeFileTimeStampInspector inspector) {
-        return new DefaultChecksumService(stringInterner, crossBuildCache.delegate, fileSystem, inspector);
+    ChecksumService createChecksumService(
+        StringInterner stringInterner,
+        FileSystem fileSystem,
+        CrossBuildFileHashCacheWrapper crossBuildCache,
+        BuildSessionScopeFileTimeStampInspector inspector,
+        FileHasherStatistics.Collector statisticsCollector
+    ) {
+        return new DefaultChecksumService(stringInterner, crossBuildCache.delegate, fileSystem, inspector, statisticsCollector);
     }
 
     UserInputHandler createUserInputHandler(BuildRequestMetaData requestMetaData, OutputEventListenerManager outputEventListenerManager, Clock clock) {

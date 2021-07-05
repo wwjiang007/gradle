@@ -20,7 +20,9 @@ import org.gradle.integtests.fixtures.executer.ExecutionResult
 import org.gradle.test.fixtures.file.TestFile
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
+import spock.lang.Ignore
 
+@Ignore("Application plugin start scripts require bash shell and are not compatible with busybox and dash")
 class ApplicationPluginUnixShellsIntegrationTest extends AbstractIntegrationSpec {
     def setup() {
         createSampleProjectSetup()
@@ -245,12 +247,6 @@ task execStartScript(type: Exec) {
         buildFile << """
 application {
     mainModule.set('main.test')
-}
-compileJava {
-    modularity.inferModulePath.set(true)
-}
-startScripts {
-    modularity.inferModulePath.set(true)
 }
 """
     }

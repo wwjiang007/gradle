@@ -1,35 +1,32 @@
-import gradlebuild.integrationtests.integrationTestUsesSampleDir
-
 plugins {
     id("gradlebuild.distribution.api-java")
-    id("gradlebuild.jmh")
 }
 
 dependencies {
     implementation(project(":base-services"))
-    implementation(project(":logging"))
-    implementation(project(":file-collections"))
-    implementation(project(":execution"))
-    implementation(project(":process-services"))
-    implementation(project(":core-api"))
-    implementation(project(":model-core"))
-    implementation(project(":core"))
     implementation(project(":base-services-groovy"))
+    implementation(project(":core"))
+    implementation(project(":core-api"))
+    implementation(project(":functional"))
     implementation(project(":dependency-management"))
-    implementation(project(":platform-base"))
     implementation(project(":diagnostics"))
-    implementation(project(":normalization-java"))
-    implementation(project(":resources"))
-    implementation(project(":persistent-cache"))
+    implementation(project(":execution"))
+    implementation(project(":file-collections"))
+    implementation(project(":jvm-services"))
+    implementation(project(":logging"))
+    implementation(project(":model-core"))
     implementation(project(":native"))
+    implementation(project(":normalization-java"))
+    implementation(project(":persistent-cache"))
+    implementation(project(":platform-base"))
+    implementation(project(":process-services"))
+    implementation(project(":resources"))
 
     implementation(libs.groovy)
     implementation(libs.guava)
     implementation(libs.commonsLang)
-    implementation(libs.commonsCompress)
     implementation(libs.commonsIo)
     implementation(libs.inject)
-    implementation(libs.asm)
     implementation(libs.nativePlatform)
 
     testImplementation(project(":snapshots"))
@@ -52,11 +49,10 @@ strictCompile {
     ignoreDeprecations() // most of this project has been deprecated
 }
 
-integrationTestUsesSampleDir("subprojects/platform-jvm/src/main")
-
 classycle {
-    excludePatterns.set(listOf(
-        // Needed for the factory methods in the interface
-        "org/gradle/jvm/toolchain/JavaLanguageVersion**"
-    ))
+    // Needed for the factory methods in the interface
+    excludePatterns.add("org/gradle/jvm/toolchain/JavaLanguageVersion**")
+    excludePatterns.add("org/gradle/jvm/toolchain/internal/**")
 }
+
+integTest.usesJavadocCodeSnippets.set(true)

@@ -1,5 +1,3 @@
-import gradlebuild.cleanup.WhenNotEmpty
-
 plugins {
     id("gradlebuild.internal.java")
 }
@@ -25,6 +23,7 @@ dependencies {
         exclude(group = "org.codehaus.groovy", module = "groovy-all")
         exclude(module = "slf4j-simple")
     }
+    integTestImplementation(testFixtures(project(":model-core")))
 
     crossVersionTestImplementation(project(":base-services"))
     crossVersionTestImplementation(project(":core"))
@@ -43,11 +42,12 @@ dependencies {
     integTestImplementation(testFixtures(project(":diagnostics")))
     integTestImplementation(testFixtures(project(":platform-native")))
     integTestImplementation(libs.jgit)
+    integTestImplementation(libs.javaParser) {
+        because("The Groovy compiler inspects the dependencies at compile time")
+    }
 
     integTestDistributionRuntimeOnly(project(":distributions-full"))
     crossVersionTestDistributionRuntimeOnly(project(":distributions-full"))
 }
 
-testFilesCleanup {
-    policy.set(WhenNotEmpty.REPORT)
-}
+testFilesCleanup.reportOnly.set(true)
