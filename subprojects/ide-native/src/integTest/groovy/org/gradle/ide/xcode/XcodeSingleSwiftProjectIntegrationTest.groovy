@@ -27,7 +27,6 @@ import org.gradle.nativeplatform.fixtures.app.SwiftLib
 import org.gradle.nativeplatform.fixtures.app.SwiftLibWithXCTest
 import org.gradle.util.Requires
 import org.gradle.util.TestPrecondition
-import spock.lang.Ignore
 
 class XcodeSingleSwiftProjectIntegrationTest extends AbstractXcodeIntegrationSpec {
 
@@ -431,7 +430,6 @@ class XcodeSingleSwiftProjectIntegrationTest extends AbstractXcodeIntegrationSpe
 
     @Requires(TestPrecondition.XCODE)
     @ToBeFixedForConfigurationCache
-    @Ignore("https://github.com/gradle/gradle-native-private/issues/273")
     def "can build Swift application from xcode"() {
         useXcodebuildTool()
         def app = new SwiftApp()
@@ -476,7 +474,6 @@ class XcodeSingleSwiftProjectIntegrationTest extends AbstractXcodeIntegrationSpe
 
     @Requires(TestPrecondition.XCODE)
     @ToBeFixedForConfigurationCache
-    @Ignore("https://github.com/gradle/gradle-native-private/issues/273")
     def "can build Swift application from xcode with multiple operating systems"() {
         useXcodebuildTool()
         def app = new SwiftApp()
@@ -549,7 +546,6 @@ class XcodeSingleSwiftProjectIntegrationTest extends AbstractXcodeIntegrationSpe
 
     @Requires(TestPrecondition.XCODE)
     @ToBeFixedForConfigurationCache
-    @Ignore("https://github.com/gradle/gradle-native-private/issues/273")
     def "can clean from xcode"() {
         useXcodebuildTool()
         def app = new SwiftApp()
@@ -582,7 +578,6 @@ class XcodeSingleSwiftProjectIntegrationTest extends AbstractXcodeIntegrationSpe
 
     @Requires(TestPrecondition.XCODE)
     @ToBeFixedForConfigurationCache
-    @Ignore("https://github.com/gradle/gradle-native-private/issues/273")
     def "can build Swift library from xcode"() {
         useXcodebuildTool()
         def lib = new SwiftLib()
@@ -627,7 +622,6 @@ class XcodeSingleSwiftProjectIntegrationTest extends AbstractXcodeIntegrationSpe
 
     @Requires(TestPrecondition.XCODE)
     @ToBeFixedForConfigurationCache
-    @Ignore("https://github.com/gradle/gradle-native-private/issues/273")
     def "can build Swift library from xcode with multiple operating systems"() {
         useXcodebuildTool()
         def lib = new SwiftLib()
