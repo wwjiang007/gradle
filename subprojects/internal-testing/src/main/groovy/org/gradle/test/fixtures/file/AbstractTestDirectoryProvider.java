@@ -76,6 +76,13 @@ abstract class AbstractTestDirectoryProvider implements TestRule, TestDirectoryP
                     dir.forceDeleteDir();
                 }
             });
+            try {
+                Thread.sleep(1000);
+                if (dir.exists()) {
+                    throw new IllegalStateException("Directory was recreated after deletion: " + dir.getAbsolutePath());
+                }
+            } catch (InterruptedException ignored) {
+            }
         }
     }
 
