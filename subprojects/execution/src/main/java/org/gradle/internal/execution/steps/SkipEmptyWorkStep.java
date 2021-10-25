@@ -31,6 +31,7 @@ import org.gradle.internal.execution.history.AfterExecutionState;
 import org.gradle.internal.execution.history.ExecutionHistoryStore;
 import org.gradle.internal.execution.history.OutputsCleaner;
 import org.gradle.internal.execution.history.PreviousExecutionState;
+import org.gradle.internal.file.FileType;
 import org.gradle.internal.fingerprint.CurrentFileCollectionFingerprint;
 import org.gradle.internal.snapshot.FileSystemSnapshot;
 import org.gradle.internal.snapshot.SnapshotUtil;
@@ -75,7 +76,7 @@ public class SkipEmptyWorkStep implements Step<PreviousExecutionContext, Caching
         ImmutableSortedMap<String, CurrentFileCollectionFingerprint> sourceFileProperties = newInputs.getFileFingerprints();
         if (!sourceFileProperties.isEmpty()) {
             if (sourceFileProperties.values().stream()
-                .allMatch(CurrentFileCollectionFingerprint::isEmpty)
+                .allMatch(SkipEmptyWorkStep::isEmpty)
             ) {
                 return skipExecutionWithEmptySources(work, context);
             } else {
@@ -83,6 +84,14 @@ public class SkipEmptyWorkStep implements Step<PreviousExecutionContext, Caching
             }
         } else {
             return executeWithNoEmptySources(work, context);
+        }
+    }
+
+    private static boolean isEmpty(CurrentFileCollectionFingerprint fingerprint) {
+        if (fingerprint.isFileTree()) {
+            return fingerprint.isEmpty() || fingerprint.getFingerprints().values().stream().noneMatch(snapshot -> snapshot.getType() == FileType.RegularFile);
+        } else {
+            return fingerprint.isEmpty();
         }
     }
 
