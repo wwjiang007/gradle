@@ -300,8 +300,8 @@ class FingerprintCompareStrategyTest extends Specification {
 
     def changes(FingerprintCompareStrategy strategy, Map<String, FileSystemLocationFingerprint> current, Map<String, FileSystemLocationFingerprint> previous) {
         def strategyConfigurationHash = HashCode.fromInt(5432)
-        def currentFingerprint = new SerializableFileCollectionFingerprint(current, ImmutableMultimap.of("some", HashCode.fromInt(1234)), strategyConfigurationHash)
-        def previousFingerprint = new SerializableFileCollectionFingerprint(previous, ImmutableMultimap.of("some", HashCode.fromInt(4321)), strategyConfigurationHash)
+        def currentFingerprint = new SerializableFileCollectionFingerprint(current, false, ImmutableMultimap.of("some", HashCode.fromInt(1234)), strategyConfigurationHash)
+        def previousFingerprint = new SerializableFileCollectionFingerprint(previous, false, ImmutableMultimap.of("some", HashCode.fromInt(4321)), strategyConfigurationHash)
         changes(strategy, currentFingerprint, previousFingerprint)
     }
 

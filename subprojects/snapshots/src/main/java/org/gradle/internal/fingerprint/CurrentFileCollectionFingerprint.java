@@ -53,6 +53,6 @@ public interface CurrentFileCollectionFingerprint extends FileCollectionFingerpr
     FileCollectionFingerprint archive(ArchivedFileCollectionFingerprintFactory factory);
 
     interface ArchivedFileCollectionFingerprintFactory {
-        FileCollectionFingerprint createArchivedFileCollectionFingerprint(Map<String, FileSystemLocationFingerprint> fingerprints, ImmutableMultimap<String, HashCode> rootHashes, HashCode strategyConfigurationHash);
+        FileCollectionFingerprint createArchivedFileCollectionFingerprint(Map<String, FileSystemLocationFingerprint> fingerprints, boolean isFileTree, ImmutableMultimap<String, HashCode> rootHashes, HashCode strategyConfigurationHash);
     }
 }

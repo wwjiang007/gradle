@@ -32,6 +32,8 @@ public interface FileCollectionFingerprint {
      */
     Map<String, FileSystemLocationFingerprint> getFingerprints();
 
+    boolean isFileTree();
+
     /**
      * The Merkle hashes of the roots which make up this file collection fingerprint.
      */
@@ -43,6 +45,11 @@ public interface FileCollectionFingerprint {
         @Override
         public Map<String, FileSystemLocationFingerprint> getFingerprints() {
             return ImmutableSortedMap.of();
+        }
+
+        @Override
+        public boolean isFileTree() {
+            return false;
         }
 
         @Override

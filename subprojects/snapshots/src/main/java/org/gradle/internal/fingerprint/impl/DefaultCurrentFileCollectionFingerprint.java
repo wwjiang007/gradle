@@ -35,6 +35,7 @@ import java.util.Map;
 public class DefaultCurrentFileCollectionFingerprint implements CurrentFileCollectionFingerprint {
 
     private final Map<String, FileSystemLocationFingerprint> fingerprints;
+    private final boolean isFileTree;
     private final FingerprintHashingStrategy hashingStrategy;
     private final String identifier;
     private final FileSystemSnapshot roots;
@@ -42,7 +43,7 @@ public class DefaultCurrentFileCollectionFingerprint implements CurrentFileColle
     private final HashCode strategyConfigurationHash;
     private HashCode hash;
 
-    public static CurrentFileCollectionFingerprint from(FileSystemSnapshot roots, FingerprintingStrategy strategy, @Nullable  FileCollectionFingerprint candidate) {
+    public static CurrentFileCollectionFingerprint from(FileSystemSnapshot roots, boolean isFileTree, FingerprintingStrategy strategy, @Nullable FileCollectionFingerprint candidate) {
         if (roots == FileSystemSnapshot.EMPTY) {
             return strategy.getEmptyFingerprint();
         }
@@ -60,7 +61,7 @@ public class DefaultCurrentFileCollectionFingerprint implements CurrentFileColle
         if (fingerprints.isEmpty()) {
             return strategy.getEmptyFingerprint();
         }
-        return new DefaultCurrentFileCollectionFingerprint(fingerprints, roots, rootHashes, strategy);
+        return new DefaultCurrentFileCollectionFingerprint(fingerprints, isFileTree, roots, rootHashes, strategy);
     }
 
     private static boolean equalRootHashes(ImmutableMultimap<String, HashCode> first, ImmutableMultimap<String, HashCode> second) {
@@ -70,11 +71,13 @@ public class DefaultCurrentFileCollectionFingerprint implements CurrentFileColle
 
     private DefaultCurrentFileCollectionFingerprint(
         Map<String, FileSystemLocationFingerprint> fingerprints,
+        boolean isFileTree,
         FileSystemSnapshot roots,
         ImmutableMultimap<String, HashCode> rootHashes,
         FingerprintingStrategy strategy
     ) {
         this.fingerprints = fingerprints;
+        this.isFileTree = isFileTree;
         this.identifier = strategy.getIdentifier();
         this.hashingStrategy = strategy.getHashingStrategy();
         this.strategyConfigurationHash = strategy.getConfigurationHash();
@@ -104,6 +107,11 @@ public class DefaultCurrentFileCollectionFingerprint implements CurrentFileColle
     }
 
     @Override
+    public boolean isFileTree() {
+        return isFileTree;
+    }
+
+    @Override
     public ImmutableMultimap<String, HashCode> getRootHashes() {
         return rootHashes;
     }
@@ -125,7 +133,7 @@ public class DefaultCurrentFileCollectionFingerprint implements CurrentFileColle
 
     @Override
     public FileCollectionFingerprint archive(ArchivedFileCollectionFingerprintFactory factory) {
-        return factory.createArchivedFileCollectionFingerprint(fingerprints, rootHashes, strategyConfigurationHash);
+        return factory.createArchivedFileCollectionFingerprint(fingerprints, isFileTree, rootHashes, strategyConfigurationHash);
     }
 
     @Override

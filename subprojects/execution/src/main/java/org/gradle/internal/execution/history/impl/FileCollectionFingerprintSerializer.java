@@ -48,9 +48,10 @@ public class FileCollectionFingerprintSerializer implements Serializer<FileColle
         if (fingerprints.isEmpty()) {
             return FileCollectionFingerprint.EMPTY;
         }
+        boolean isFileTree = decoder.readBoolean();
         ImmutableMultimap<String, HashCode> rootHashes = readRootHashes(decoder);
         HashCode strategyConfigurationHash = hashCodeSerializer.read(decoder);
-        return new SerializableFileCollectionFingerprint(fingerprints, rootHashes, strategyConfigurationHash);
+        return new SerializableFileCollectionFingerprint(fingerprints, isFileTree, rootHashes, strategyConfigurationHash);
     }
 
     private ImmutableMultimap<String, HashCode> readRootHashes(Decoder decoder) throws IOException {
@@ -71,6 +72,7 @@ public class FileCollectionFingerprintSerializer implements Serializer<FileColle
     public void write(Encoder encoder, FileCollectionFingerprint value) throws Exception {
         fingerprintMapSerializer.write(encoder, value.getFingerprints());
         if (!value.getFingerprints().isEmpty()) {
+            encoder.writeBoolean(value.isFileTree());
             writeRootHashes(encoder, value.getRootHashes());
             hashCodeSerializer.write(encoder, ((SerializableFileCollectionFingerprint) value).getStrategyConfigurationHash());
         }

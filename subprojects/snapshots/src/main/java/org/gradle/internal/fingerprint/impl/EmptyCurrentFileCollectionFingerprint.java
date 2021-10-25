@@ -54,6 +54,11 @@ public class EmptyCurrentFileCollectionFingerprint implements CurrentFileCollect
     }
 
     @Override
+    public boolean isFileTree() {
+        return false;
+    }
+
+    @Override
     public FileSystemSnapshot getSnapshot() {
         return FileSystemSnapshot.EMPTY;
     }

@@ -27,11 +27,13 @@ import java.util.Map;
 public class SerializableFileCollectionFingerprint implements FileCollectionFingerprint {
 
     private final Map<String, FileSystemLocationFingerprint> fingerprints;
+    private final boolean isFileTree;
     private final ImmutableMultimap<String, HashCode> rootHashes;
     private final HashCode strategyConfigurationHash;
 
-    public SerializableFileCollectionFingerprint(Map<String, FileSystemLocationFingerprint> fingerprints, ImmutableMultimap<String, HashCode> rootHashes, HashCode strategyConfigurationHash) {
+    public SerializableFileCollectionFingerprint(Map<String, FileSystemLocationFingerprint> fingerprints, boolean isFileTree, ImmutableMultimap<String, HashCode> rootHashes, HashCode strategyConfigurationHash) {
         this.fingerprints = fingerprints;
+        this.isFileTree = isFileTree;
         this.rootHashes = rootHashes;
         this.strategyConfigurationHash = strategyConfigurationHash;
     }
@@ -53,5 +55,10 @@ public class SerializableFileCollectionFingerprint implements FileCollectionFing
 
     public HashCode getStrategyConfigurationHash() {
         return strategyConfigurationHash;
+    }
+
+    @Override
+    public boolean isFileTree() {
+        return isFileTree;
     }
 }

@@ -52,6 +52,7 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
             '/1': new DefaultFileSystemLocationFingerprint("1", FileType.Directory, FileSystemLocationFingerprint.DIR_SIGNATURE),
             '/2': IgnoredPathFileSystemLocationFingerprint.create(FileType.RegularFile, hash),
             '/3': new DefaultFileSystemLocationFingerprint("/3", FileType.Missing, FileSystemLocationFingerprint.DIR_SIGNATURE),
+            true,
             rootHashes,
             strategyConfigurationHash
         ), serializer)
@@ -74,6 +75,7 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
             normalizedContentHash == FileSystemLocationFingerprint.MISSING_FILE_SIGNATURE
         }
         out.rootHashes == rootHashes
+        out.fileTree
     }
 
     def "should retain order in serialization"() {
@@ -82,6 +84,7 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
             "/3": new DefaultFileSystemLocationFingerprint('3', FileType.RegularFile, HashCode.fromInt(1234)),
             "/2": new DefaultFileSystemLocationFingerprint('/2', FileType.RegularFile, HashCode.fromInt(5678)),
             "/1": new DefaultFileSystemLocationFingerprint('1', FileType.Missing, FileSystemLocationFingerprint.MISSING_FILE_SIGNATURE),
+            false,
             ImmutableMultimap.of(
                 "/3", HashCode.fromInt(1234),
                 "/2", HashCode.fromInt(5678),
@@ -92,5 +95,6 @@ class FileCollectionFingerprintSerializerTest extends SerializerSpec {
         then:
         out.fingerprints.keySet() as List == ["/3", "/2", "/1"]
         out.rootHashes.keySet() as List == ["/3", "/2", "/1"]
+        !out.fileTree
     }
 }
