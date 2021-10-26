@@ -153,7 +153,8 @@ public class ExecutionGradleServices {
         TimeoutHandler timeoutHandler,
         ValidateStep.ValidationWarningRecorder validationWarningRecorder,
         VirtualFileSystem virtualFileSystem,
-        DocumentationRegistry documentationRegistry
+        DocumentationRegistry documentationRegistry,
+        WorkerLeaseService workerLeaseService
     ) {
         // @formatter:off
         return new DefaultExecutionEngine(documentationRegistry,
@@ -172,7 +173,7 @@ public class ExecutionGradleServices {
             new SkipUpToDateStep<>(
             new RecordOutputsStep<>(outputFilesRepository,
             new StoreExecutionStateStep<>(
-            new BuildCacheStep(buildCacheController, buildCacheCommandFactory, deleter, outputChangeListener,
+            new BuildCacheStep(buildCacheController, buildCacheCommandFactory, deleter, outputChangeListener, workerLeaseService,
             new BroadcastChangingOutputsStep<>(outputChangeListener,
             new CaptureStateAfterExecutionStep<>(buildOperationExecutor, buildInvocationScopeId.getId(), outputSnapshotter,
             new CreateOutputsStep<>(

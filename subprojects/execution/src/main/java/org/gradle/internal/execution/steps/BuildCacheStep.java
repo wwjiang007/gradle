@@ -36,6 +36,7 @@ import org.gradle.internal.execution.history.impl.DefaultAfterExecutionState;
 import org.gradle.internal.file.Deleter;
 import org.gradle.internal.file.TreeType;
 import org.gradle.internal.snapshot.FileSystemSnapshot;
+import org.gradle.internal.work.WorkerLeaseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +53,7 @@ public class BuildCacheStep implements Step<IncrementalChangesContext, AfterExec
     private final BuildCacheCommandFactory commandFactory;
     private final Deleter deleter;
     private final OutputChangeListener outputChangeListener;
+    private final WorkerLeaseService workerLeaseService;
     private final Step<? super IncrementalChangesContext, ? extends AfterExecutionResult> delegate;
 
     public BuildCacheStep(
@@ -59,12 +61,14 @@ public class BuildCacheStep implements Step<IncrementalChangesContext, AfterExec
         BuildCacheCommandFactory commandFactory,
         Deleter deleter,
         OutputChangeListener outputChangeListener,
+        WorkerLeaseService workerLeaseService,
         Step<? super IncrementalChangesContext, ? extends AfterExecutionResult> delegate
     ) {
         this.buildCache = buildCache;
         this.commandFactory = commandFactory;
         this.deleter = deleter;
         this.outputChangeListener = outputChangeListener;
+        this.workerLeaseService = workerLeaseService;
         this.delegate = delegate;
     }
 
@@ -83,18 +87,18 @@ public class BuildCacheStep implements Step<IncrementalChangesContext, AfterExec
                 : Optional.<LoadMetadata>empty()
             )
             .map(successfulLoad -> successfulLoad
-                .map(cacheHit -> {
+                .map(cacheHit -> workerLeaseService.runAsIsolatedTask(() -> {
                     if (LOGGER.isInfoEnabled()) {
                         LOGGER.info("Loaded cache entry for {} with cache key {}",
-                            work.getDisplayName(), cacheKey.getHashCode());
+                                work.getDisplayName(), cacheKey.getHashCode());
                     }
                     cleanLocalState(context.getWorkspace(), work);
                     OriginMetadata originMetadata = cacheHit.getOriginMetadata();
                     AfterExecutionState afterExecutionState = new DefaultAfterExecutionState(
-                        beforeExecutionState,
-                        cacheHit.getResultingSnapshots(),
-                        originMetadata,
-                        true);
+                            beforeExecutionState,
+                            cacheHit.getResultingSnapshots(),
+                            originMetadata,
+                            true);
                     return (AfterExecutionResult) new AfterExecutionResult() {
                         @Override
                         public Try<ExecutionResult> getExecutionResult() {
@@ -121,8 +125,7 @@ public class BuildCacheStep implements Step<IncrementalChangesContext, AfterExec
                             return Optional.of(afterExecutionState);
                         }
                     };
-                })
-                .orElseGet(() -> executeAndStoreInCache(cacheableWork, cacheKey, context))
+                })).orElseGet(() -> executeAndStoreInCache(cacheableWork, cacheKey, context))
             )
             .getOrMapFailure(loadFailure -> {
                 throw new RuntimeException(
