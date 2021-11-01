@@ -41,7 +41,7 @@ public class DefaultInputFilePropertySpec extends AbstractFilePropertySpec imple
         DirectorySensitivity directorySensitivity,
         LineEndingSensitivity lineEndingSensitivity
     ) {
-        super(propertyName, normalizer, files);
+        super(propertyName, normalizer, files, allowVerificationFailures);
         this.skipWhenEmpty = skipWhenEmpty;
         this.incremental = incremental;
         this.directorySensitivity = directorySensitivity;

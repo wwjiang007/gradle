@@ -28,7 +28,6 @@ import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategor
 import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.NORMALIZATION;
 import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.NORMALIZE_LINE_ENDINGS;
 import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.OPTIONAL;
-import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.UNTRACKED;
 
 public class InputFilesPropertyAnnotationHandler extends AbstractInputFilePropertyAnnotationHandler {
     @Override
