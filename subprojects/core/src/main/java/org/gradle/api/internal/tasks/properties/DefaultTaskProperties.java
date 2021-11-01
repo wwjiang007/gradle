@@ -214,6 +214,13 @@ public class DefaultTaskProperties implements TaskProperties {
     }
 
     @Override
+    public boolean isAllowsVerificationFailures() {
+        return inputFileProperties
+            .stream()
+            .anyMatch(FilePropertySpec::getAllowsVerificationFailures); // TODO KM implement as lazy var in case this is checked many times
+    }
+
+    @Override
     public ImmutableSortedSet<InputPropertySpec> getInputProperties() {
         return inputProperties;
     }
@@ -275,6 +282,7 @@ public class DefaultTaskProperties implements TaskProperties {
         public void visitInputFileProperty(
             String propertyName,
             boolean optional,
+            boolean allowVerificationFailures,
             boolean skipWhenEmpty,
             DirectorySensitivity directorySensitivity,
             LineEndingSensitivity lineEndingSensitivity,

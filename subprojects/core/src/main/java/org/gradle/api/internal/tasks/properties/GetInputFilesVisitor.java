@@ -45,6 +45,7 @@ public class GetInputFilesVisitor extends PropertyVisitor.Adapter {
     public void visitInputFileProperty(
         final String propertyName,
         boolean optional,
+        boolean allowVerificationFailures,
         boolean skipWhenEmpty,
         DirectorySensitivity directorySensitivity,
         LineEndingSensitivity lineEndingSensitivity,
@@ -58,6 +59,7 @@ public class GetInputFilesVisitor extends PropertyVisitor.Adapter {
             propertyName,
             FileParameterUtils.normalizerOrDefault(fileNormalizer),
             new PropertyFileCollection(ownerDisplayName, propertyName, "input", actualValue),
+            allowVerificationFailures,
             value,
             skipWhenEmpty,
             incremental,

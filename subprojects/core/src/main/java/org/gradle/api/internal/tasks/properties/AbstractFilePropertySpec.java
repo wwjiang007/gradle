@@ -22,16 +22,23 @@ import org.gradle.api.tasks.FileNormalizer;
 public abstract class AbstractFilePropertySpec extends AbstractPropertySpec implements FilePropertySpec {
     private final Class<? extends FileNormalizer> normalizer;
     private final FileCollectionInternal files;
+    private final boolean allowsVerificationFailures;
 
-    public AbstractFilePropertySpec(String propertyName, Class<? extends FileNormalizer> normalizer, FileCollectionInternal files) {
+    public AbstractFilePropertySpec(String propertyName, Class<? extends FileNormalizer> normalizer, FileCollectionInternal files, boolean allowsVerificationFailures) {
         super(propertyName);
         this.normalizer = normalizer;
         this.files = files;
+        this.allowsVerificationFailures = allowsVerificationFailures;
     }
 
     @Override
     public Class<? extends FileNormalizer> getNormalizer() {
         return normalizer;
+    }
+
+    @Override
+    public boolean getAllowsVerificationFailures() {
+        return allowsVerificationFailures;
     }
 
     @Override

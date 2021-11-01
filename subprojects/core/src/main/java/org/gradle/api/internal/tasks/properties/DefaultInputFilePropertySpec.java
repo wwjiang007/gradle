@@ -34,6 +34,7 @@ public class DefaultInputFilePropertySpec extends AbstractFilePropertySpec imple
         String propertyName,
         Class<? extends FileNormalizer> normalizer,
         FileCollectionInternal files,
+        boolean allowVerificationFailures,
         PropertyValue value,
         boolean skipWhenEmpty,
         boolean incremental,

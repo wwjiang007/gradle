@@ -67,6 +67,7 @@ import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.CompileClasspath;
 import org.gradle.api.tasks.Console;
 import org.gradle.api.tasks.Destroys;
+import org.gradle.api.tasks.HandlesVerificationFailures;
 import org.gradle.api.tasks.IgnoreEmptyDirectories;
 import org.gradle.api.tasks.Input;
 import org.gradle.api.tasks.InputDirectory;
@@ -221,6 +222,7 @@ public class ExecutionGlobalServices {
             ImmutableSet.of(
                 Classpath.class,
                 CompileClasspath.class,
+                HandlesVerificationFailures.class,
                 Incremental.class,
                 Optional.class,
                 PathSensitive.class,

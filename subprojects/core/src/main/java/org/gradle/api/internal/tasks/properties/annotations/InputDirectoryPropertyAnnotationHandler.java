@@ -22,6 +22,7 @@ import org.gradle.internal.reflect.AnnotationCategory;
 
 import java.lang.annotation.Annotation;
 
+import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.AGGREGATION;
 import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.IGNORE_EMPTY_DIRECTORIES;
 import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.INCREMENTAL;
 import static org.gradle.api.internal.tasks.properties.ModifierAnnotationCategory.NORMALIZATION;
@@ -36,7 +37,7 @@ public class InputDirectoryPropertyAnnotationHandler extends AbstractInputFilePr
 
     @Override
     public ImmutableSet<? extends AnnotationCategory> getAllowedModifiers() {
-        return ImmutableSet.of(INCREMENTAL, NORMALIZATION, OPTIONAL, IGNORE_EMPTY_DIRECTORIES, NORMALIZE_LINE_ENDINGS);
+        return ImmutableSet.of(AGGREGATION, INCREMENTAL, NORMALIZATION, OPTIONAL, IGNORE_EMPTY_DIRECTORIES, NORMALIZE_LINE_ENDINGS);
     }
 
     @Override

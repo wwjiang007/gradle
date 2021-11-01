@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 the original author or authors.
+ * Copyright 2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,19 @@
  * limitations under the License.
  */
 
-package org.gradle.api.internal.tasks.properties;
+package org.gradle.api.tasks;
 
-import org.gradle.api.internal.file.FileCollectionInternal;
-import org.gradle.api.tasks.FileNormalizer;
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-public interface FilePropertySpec extends PropertySpec {
-    Class<? extends FileNormalizer> getNormalizer();
-    FileCollectionInternal getPropertyFiles();
-    boolean getAllowsVerificationFailures();
+/**
+ * Task inputs with this annotation will enable the task to execute, even if an upstream task produces a verification failure.
+ */
+@Documented
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.METHOD, ElementType.FIELD})
+public @interface HandlesVerificationFailures {
 }

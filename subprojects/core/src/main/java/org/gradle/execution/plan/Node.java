@@ -91,6 +91,10 @@ public abstract class Node implements Comparable<Node> {
             || state == ExecutionState.MUST_NOT_RUN;
     }
 
+    /**
+     * Whether this node executed successfully or not.
+     * @return true if executed successfully OR failed with {@link TestVerificationException}, false otherwise
+     */
     public boolean isSuccessful() {
         return (state == ExecutionState.EXECUTED && !isFailed())
             || state == ExecutionState.NOT_REQUIRED

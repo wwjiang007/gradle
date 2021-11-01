@@ -352,6 +352,7 @@ fun collectRegisteredInputsOf(task: Task): List<RegisteredProperty> {
         override fun visitInputFileProperty(
             propertyName: String,
             optional: Boolean,
+            allowVerificationFailures: Boolean,
             skipWhenEmpty: Boolean,
             directorySensitivity: DirectorySensitivity,
             lineEndingSensitivity: LineEndingSensitivity,
