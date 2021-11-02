@@ -46,6 +46,7 @@ public class DefaultTaskProperties implements TaskProperties {
     private final ImmutableSortedSet<OutputFilePropertySpec> outputFileProperties;
     private final FileCollection inputFiles;
     private final boolean hasSourceFiles;
+    private final boolean allowsVerificationFailures;
     private final FileCollection sourceFiles;
     private final boolean hasDeclaredOutputs;
     private final ReplayingTypeValidationContext validationProblems;
@@ -144,6 +145,8 @@ public class DefaultTaskProperties implements TaskProperties {
         };
         this.hasSourceFiles = inputFileProperties.stream()
             .anyMatch(InputFilePropertySpec::isSkipWhenEmpty);
+        this.allowsVerificationFailures = inputFileProperties.stream()
+            .anyMatch(FilePropertySpec::getAllowsVerificationFailures);
         this.outputFiles = new CompositeFileCollection() {
             @Override
             public String getDisplayName() {
@@ -215,9 +218,7 @@ public class DefaultTaskProperties implements TaskProperties {
 
     @Override
     public boolean isAllowsVerificationFailures() {
-        return inputFileProperties
-            .stream()
-            .anyMatch(FilePropertySpec::getAllowsVerificationFailures); // TODO KM implement as lazy var in case this is checked many times
+        return allowsVerificationFailures;
     }
 
     @Override
