@@ -60,7 +60,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task depends on Test task, no --continue; Test throws from doLast action'() {
@@ -73,7 +73,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doLast action')
+        outputContains('Test#doLast action')
     }
 
     def 'custom task depends on Test task, no --continue; Test exits VM early'() {
@@ -119,7 +119,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task depends on Test task, with --continue; Test throws from doLast action'() {
@@ -132,7 +132,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doLast action')
+        outputContains('Test#doLast action')
     }
 
     def 'custom task depends on Test task, with --continue; Test exits VM early'() {
@@ -178,7 +178,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task depends on Test task and handles verification failures, no --continue; Test throws from doLast action'() {
@@ -191,7 +191,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doLast action')
+        outputContains('Test#doLast action')
     }
 
     def 'custom task depends on Test task and handles verification failures, no --continue; Test exits VM early'() {
@@ -237,7 +237,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask') // TODO bug?
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task depends on Test task and handles verification failures, with --continue; Test throws from doLast action'() {
@@ -250,7 +250,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskExecuted(':customTask') // TODO not a bug? --continue allows customTask to execute despite doLast throws
-        result.output.contains('Test#doLast action')
+        outputContains('Test#doLast action')
     }
 
     def 'custom task depends on Test task and handles verification failures, with --continue; Test exits VM early'() {
@@ -296,7 +296,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task with dependency on Test via an input property marked with the new annotation, no --continue; Test throws from doLast action'() {
@@ -309,7 +309,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        !result.output.contains('Test#doLast action')
+        outputDoesNotContain('Test#doLast action')
     }
 
     def 'custom task with dependency on Test via an input property marked with the new annotation, no --continue; Test exits VM early'() {
@@ -355,7 +355,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask') // TODO bug?
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task with dependency on Test via an input property marked with the new annotation, with --continue; Test throws from doLast action'() {
@@ -368,7 +368,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskExecuted(':customTask') // TODO not a bug? verification failure prevents doLast from executing
-        !result.output.contains('Test#doLast action')
+        outputDoesNotContain('Test#doLast action')
     }
 
     def 'custom task with dependency on Test via an input property marked with the new annotation, with --continue; Test exits VM early'() {
@@ -414,7 +414,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, no --continue; Test throws from doLast action'() {
@@ -427,7 +427,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        !result.output.contains('Test#doLast action')
+        outputDoesNotContain('Test#doLast action')
     }
 
     def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, no --continue; Test exits VM early'() {
@@ -473,7 +473,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask') // TODO bug?
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, with --continue; Test throws from doLast action'() {
@@ -486,7 +486,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskExecuted(':customTask') // TODO not a bug? verification failure prevents doLast from executing
-        !result.output.contains('Test#doLast action')
+        outputDoesNotContain('Test#doLast action')
     }
 
     def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, with --continue; Test exits VM early'() {
@@ -532,7 +532,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task with transitive dependency on Test via another task, no --continue; Test throws from doLast action'() {
@@ -545,7 +545,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        !result.output.contains('Test#doLast action')
+        outputDoesNotContain('Test#doLast action')
     }
 
     def 'custom task with transitive dependency on Test via another task, no --continue; Test exits VM early'() {
@@ -591,7 +591,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask') // TODO bug?
-        result.output.contains('Test#doFirst action')
+        outputContains('Test#doFirst action')
     }
 
     def 'custom task with transitive dependency on Test via another task, with --continue; Test throws from doLast action'() {
@@ -604,7 +604,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskExecuted(':customTask') // TODO not a bug? verification failure prevents doLast from executing
-        !result.output.contains('Test#doLast action')
+        outputDoesNotContain('Test#doLast action')
     }
 
     def 'custom task with transitive dependency on Test via another task, with --continue; Test exits VM early'() {
