@@ -24,7 +24,7 @@ import javax.annotation.Nullable;
 /**
  * Used to indicate non-blocking task failures which allow successor tasks to continue executing
  *
- * @since 7.3
+ * @since 7.4
  */
 @Incubating
 public class TestVerificationException extends GradleException {

@@ -16,6 +16,8 @@
 
 package org.gradle.api.tasks;
 
+import org.gradle.api.Incubating;
+
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -24,7 +26,10 @@ import java.lang.annotation.Target;
 
 /**
  * Task inputs with this annotation will enable the task to execute, even if an upstream task produces a verification failure.
+ *
+ * @since 7.4
  */
+@Incubating
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.METHOD, ElementType.FIELD})
