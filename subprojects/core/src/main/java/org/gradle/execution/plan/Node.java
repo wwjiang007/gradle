@@ -97,16 +97,13 @@ public abstract class Node implements Comparable<Node> {
      * @return true if executed successfully OR failed with {@link TestVerificationException}, false otherwise
      */
     public boolean isSuccessful() {
-        if (state == ExecutionState.NOT_REQUIRED || state == ExecutionState.MUST_NOT_RUN) {
-            return true;
-        }
-        if (state == ExecutionState.EXECUTED) {
-            if (isFailed() && !(getNodeFailure().getCause() instanceof TestVerificationException)) {
-                return false;
-            }
-            return true;
-        }
-        return false;
+        return (state == ExecutionState.EXECUTED && !isFailed())
+            || state == ExecutionState.NOT_REQUIRED
+            || state == ExecutionState.MUST_NOT_RUN;
+    }
+
+    public boolean isVerificationFailure() {
+        return getNodeFailure() != null && getNodeFailure().getCause() instanceof TestVerificationException;
     }
 
     public boolean isFailed() {

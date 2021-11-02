@@ -237,20 +237,11 @@ public class LocalTaskNode extends TaskNode {
 
     @Override
     public boolean allDependenciesSuccessful() {
-        // TODO skip check if this accepts verification failures
         for (Node dependency : getDependencySuccessors()) {
-            if (!dependency.isSuccessful() && !isAllowsVerificationFailures()) {
-                // FIXME needs extra check to see type of failure
-                //  or track failure type a la getNodeFailure().getMessage()
-                //boolean isGradleException = dependency.getNodeFailure().getCause() instanceof GradleException;
-
-
-                // 1. what kind of failure was it?
-                // 2. am I OK with this kind of failure? (dependencies that must pass, or those which can fail with verificatio failures)
-                // is it a dependsOn relationship? If so always fail. Otherwise is the output something which can be a failure, and the consumer is ok with it?
-
-
-                // TODO if any "successor" (really, a producer) has a task output annotated as "allowVerifactionFailures", consider it successful ?
+            if (!dependency.isSuccessful()) {
+                if (isAllowsVerificationFailures() && dependency.isVerificationFailure()) {
+                    continue;
+                }
                 return false;
             }
         }
