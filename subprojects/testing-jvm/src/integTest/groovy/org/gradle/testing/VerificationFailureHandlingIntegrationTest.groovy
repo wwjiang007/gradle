@@ -132,6 +132,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
+        failure.assertHasCause("intentional failure")
         outputContains('Test#doLast action')
     }
 
@@ -249,7 +250,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask') // TODO not a bug? --continue allows customTask to execute despite doLast throws
+        result.assertTaskNotExecuted(':customTask') // TODO not a bug? --continue allows customTask to execute despite doLast throws
         outputContains('Test#doLast action')
     }
 
@@ -379,7 +380,8 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask') // TODO bug?
+        result.assertTaskNotExecuted(':customTask')
+        // TODO: assert the cause of failure with failure.assertHasCause(...)
     }
 
     def 'custom task with dependency on Test via an input property marked with the new annotation, with --continue; Test has failing test(s)'() {
@@ -497,7 +499,8 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask') // TODO bug?
+        result.assertTaskNotExecuted(':customTask')
+        // TODO assertHasCause
     }
 
     def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, with --continue; Test has failing test(s)'() {
@@ -603,7 +606,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask') // TODO not a bug? verification failure prevents doLast from executing
+        result.assertTaskNotExecuted(':customTask') // TODO not a bug? verification failure prevents doLast from executing
         outputDoesNotContain('Test#doLast action')
     }
 
@@ -615,7 +618,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask') // TODO bug?
+        result.assertTaskNotExecuted(':customTask') // TODO bug?
     }
 
     def 'custom task with transitive dependency on Test via another task, with --continue; Test has failing test(s)'() {
@@ -626,7 +629,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
+        result.assertTaskNotExecuted(':customTask')
     }
 
     // helpers
