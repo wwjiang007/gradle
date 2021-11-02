@@ -40,17 +40,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         """
     }
 
-    def 'custom task depends on Test task, no --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskButDoesNotHandleVerificationFailures()
-
-        expect:
-        succeeds('customTask')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
-    }
-
     def 'custom task depends on Test task, no --continue; Test throws from doFirst action'() {
         given:
         withPassingTest()
@@ -99,17 +88,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
         failure.assertTestsFailed()
-    }
-
-    def 'custom task depends on Test task, with --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskButDoesNotHandleVerificationFailures()
-
-        expect:
-        succeeds('customTask', '--continue')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
     }
 
     def 'custom task depends on Test task, with --continue; Test throws from doFirst action'() {
@@ -162,17 +140,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'custom task depends on Test task and handles verification failures, no --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskAndHandlesVerificationFailures()
-
-        expect:
-        succeeds('customTask')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
-    }
-
     def 'custom task depends on Test task and handles verification failures, no --continue; Test throws from doFirst action'() {
         given:
         withPassingTest()
@@ -221,17 +188,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
         failure.assertTestsFailed()
-    }
-
-    def 'custom task depends on Test task and handles verification failures, with --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskAndHandlesVerificationFailures()
-
-        expect:
-        succeeds('customTask', '--continue')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
     }
 
     def 'custom task depends on Test task and handles verification failures, with --continue; Test throws from doFirst action'() {
@@ -284,17 +240,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'custom task with dependency on Test via an input property marked with the new annotation, no --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaInputProperty()
-
-        expect:
-        succeeds('customTask')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
-    }
-
     def 'custom task with dependency on Test via an input property marked with the new annotation, no --continue; Test throws from doFirst action'() {
         given:
         withTestVerificationFailure()
@@ -343,17 +288,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
         failure.assertTestsFailed()
-    }
-
-    def 'custom task with dependency on Test via an input property marked with the new annotation, with --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaInputProperty()
-
-        expect:
-        succeeds('customTask', '--continue')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
     }
 
     def 'custom task with dependency on Test via an input property marked with the new annotation, with --continue; Test throws from doFirst action'() {
@@ -406,17 +340,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, no --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaUnrelatedProperty()
-
-        expect:
-        succeeds('customTask')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
-    }
-
     def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, no --continue; Test throws from doFirst action'() {
         given:
         withTestVerificationFailure()
@@ -465,17 +388,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
         failure.assertTestsFailed()
-    }
-
-    def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, with --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaUnrelatedProperty()
-
-        expect:
-        succeeds('customTask', '--continue')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
     }
 
     def 'custom task with dependency on Test via an input property that _does not_ have the new annotation, with --continue; Test throws from doFirst action'() {
@@ -528,17 +440,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'custom task with transitive dependency on Test via another task, no --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskIndirectlyDependsOnTestTaskAndHandlesVerificationFailures()
-
-        expect:
-        succeeds('customTask')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
-    }
-
     def 'custom task with transitive dependency on Test via another task, no --continue; Test throws from doFirst action'() {
         given:
         withTestVerificationFailure()
@@ -587,17 +488,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
         failure.assertTestsFailed()
-    }
-
-    def 'custom task with transitive dependency on Test via another task, with --continue; Test executes with passing test(s)'() {
-        given:
-        withPassingTest()
-        withCustomTaskIndirectlyDependsOnTestTaskAndHandlesVerificationFailures()
-
-        expect:
-        succeeds('customTask', '--continue')
-        result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
     }
 
     def 'custom task with transitive dependency on Test via another task, with --continue; Test throws from doFirst action'() {
