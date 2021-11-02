@@ -86,6 +86,7 @@ public class DefaultTestTaskPropertiesService implements TestTaskPropertiesServi
             public void visitInputFileProperty(
                 String propertyName,
                 boolean optional,
+                boolean allowVerificationFailures,
                 boolean skipWhenEmpty,
                 DirectorySensitivity directorySensitivity,
                 LineEndingSensitivity lineEndingSensitivity,
