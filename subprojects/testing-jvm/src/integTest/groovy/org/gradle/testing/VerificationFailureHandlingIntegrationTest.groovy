@@ -240,7 +240,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
+        result.assertTaskNotExecuted(':customTask')
         failure.assertTestsFailed()
     }
 
@@ -567,10 +567,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
             }
 
             abstract class IntermediateTask extends DefaultTask {
-                @InputFiles
-                //@HandlesVerificationFailures // IntermediateTask will not run without this
-                abstract ConfigurableFileCollection getIntermediateInput()
-
                 @OutputDirectory
                 abstract DirectoryProperty getOutputDir()
 
@@ -584,12 +580,12 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
             def testTask = tasks.named('test', Test)
 
             def intermediateTask = tasks.register('intermediateTask', IntermediateTask) {
-                intermediateInput.from(testTask.flatMap { it.binaryResultsDirectory }) //get().binaryResultsDirectory/*.convention('binaryResultsDir')*/)
+                dependsOn testTask
                 outputDir.set(layout.buildDirectory.dir("intermediateTaskOutput"))
             }
 
             tasks.register('customTask', CustomTask) {
-                customInput.from(intermediateTask.flatMap { it.outputDir }) //get().outputDir)
+                customInput.from(intermediateTask.flatMap { it.outputDir }) 
                 dependsOn intermediateTask
             }
         '''
