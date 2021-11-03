@@ -79,11 +79,6 @@ public class TaskInAnotherBuild extends TaskNode {
     }
 
     @Override
-    public boolean isAllowsVerificationFailures() {
-        return false;
-    }
-
-    @Override
     public void prepareForExecution() {
         target.queueForExecution();
     }

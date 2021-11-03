@@ -161,12 +161,6 @@ public abstract class TaskNode extends Node {
 
     public abstract TaskInternal getTask();
 
-    /**
-     * Indicates whether a failure of a predecessor task should prevent this task from executing.
-     * @return true if the task should execute even if a predecessor task fails, false otherwise. Defaults to false.
-     */
-    public abstract boolean isAllowsVerificationFailures();
-
     @Override
     public boolean isPublicNode() {
         return true;

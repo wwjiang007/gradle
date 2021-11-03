@@ -16,12 +16,15 @@
 
 package org.gradle.execution.plan;
 
+import com.google.common.collect.Sets;
 import org.gradle.api.Action;
 import org.gradle.api.Task;
 import org.gradle.api.internal.TaskInternal;
 import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.api.internal.project.ProjectInternal;
+import org.gradle.api.internal.tasks.DefaultTaskDependency;
 import org.gradle.api.internal.tasks.TaskContainerInternal;
+import org.gradle.api.internal.tasks.TaskResolver;
 import org.gradle.api.internal.tasks.properties.DefaultTaskProperties;
 import org.gradle.api.internal.tasks.properties.PropertyWalker;
 import org.gradle.api.internal.tasks.properties.TaskProperties;
@@ -34,6 +37,7 @@ import org.gradle.internal.service.ServiceRegistry;
 import javax.annotation.Nullable;
 import java.io.File;
 import java.util.List;
+import java.util.NavigableSet;
 import java.util.Set;
 
 /**
@@ -43,6 +47,8 @@ public class LocalTaskNode extends TaskNode {
     private final TaskInternal task;
     private final WorkValidationContext validationContext;
     private ImmutableActionSet<Task> postAction = ImmutableActionSet.empty();
+    private final NavigableSet<Node> dependsOnSuccessors = Sets.newTreeSet();
+
     private boolean isolated;
     private List<? extends ResourceLock> resourceLocks;
     private TaskProperties taskProperties;
@@ -95,11 +101,6 @@ public class LocalTaskNode extends TaskNode {
     }
 
     @Override
-    public boolean isAllowsVerificationFailures() {
-        return getTaskProperties().isAllowsVerificationFailures();
-    }
-
-    @Override
     public Action<? super Task> getPostAction() {
         return postAction;
     }
@@ -134,6 +135,11 @@ public class LocalTaskNode extends TaskNode {
             addDependencySuccessor(targetNode);
             processHardSuccessor.execute(targetNode);
         }
+
+        DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
+        dependsOns.setValues(getTask().getDependsOn());
+        dependsOnSuccessors.addAll(dependencyResolver.resolveDependenciesFor(task, dependsOns));
+
         for (Node targetNode : getFinalizedBy(dependencyResolver)) {
             if (!(targetNode instanceof TaskNode)) {
                 throw new IllegalStateException("Only tasks can be finalizers: " + targetNode);
@@ -239,12 +245,17 @@ public class LocalTaskNode extends TaskNode {
     public boolean allDependenciesSuccessful() {
         for (Node dependency : getDependencySuccessors()) {
             if (!dependency.isSuccessful()) {
-                if (isAllowsVerificationFailures() && dependency.isVerificationFailure()) {
+                if (dependency.isVerificationFailure() && !isDirectDependency(dependency)) {
                     continue;
                 }
                 return false;
             }
         }
+
         return true;
+    }
+
+    private boolean isDirectDependency(Node dependency) {
+        return dependsOnSuccessors.contains(dependency);
     }
 }
