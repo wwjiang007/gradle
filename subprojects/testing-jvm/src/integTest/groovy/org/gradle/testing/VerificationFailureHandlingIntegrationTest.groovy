@@ -68,6 +68,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it dependsOn test and VM exits unexpectedly'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskButDoesNotHandleVerificationFailures()
 
@@ -118,6 +119,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it dependsOn test and VM exits unexpectedly --continue'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskButDoesNotHandleVerificationFailures()
 
@@ -168,6 +170,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures and dependsOn test and VM exits unexpectedly'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailures()
 
@@ -218,6 +221,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures and dependsOn test and VM exits unexpectedly --continue'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailures()
 
@@ -268,6 +272,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures and VM exits unexpectedly'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaInputProperty()
 
@@ -318,6 +323,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures and VM exits unexpectedly --continue'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaInputProperty()
 
@@ -368,6 +374,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures on a different input and VM exits unexpectedly'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaUnrelatedProperty()
 
@@ -418,6 +425,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures on a different input and VM exits unexpectedly --continue'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaUnrelatedProperty()
 
@@ -468,6 +476,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures through a transitive task and VM exits unexpectedly'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskIndirectlyDependsOnTestTaskAndHandlesVerificationFailures()
 
@@ -518,6 +527,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures through a transitive task and VM exits unexpectedly --continue'() {
         given:
+        executer.withStackTraceChecksDisabled() // otherwise test distribution causes test failures when exiting the test VM
         withFatalTestExecutionError()
         withCustomTaskIndirectlyDependsOnTestTaskAndHandlesVerificationFailures()
 
