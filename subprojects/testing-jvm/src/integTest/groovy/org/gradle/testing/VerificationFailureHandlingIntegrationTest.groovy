@@ -259,7 +259,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures and test has doLast that throws'() {
         given:
-        withTestVerificationFailure()
+        withPassingTest()
         withTestDoLastActionThrows()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaInputProperty()
 
@@ -267,7 +267,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        failure.assertTestsFailed()
+        failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
     def 'task does not execute when it handles verification failures and VM exits unexpectedly'() {
@@ -310,15 +310,15 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task executes when it handles verification failures and test has doLast that throws --continue'() {
         given:
-        withTestVerificationFailure()
+        withPassingTest()
         withTestDoLastActionThrows()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailuresViaInputProperty()
 
         expect:
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
-        result.assertTaskExecuted(':customTask')
-        failure.assertTestsFailed()
+        result.assertTaskNotExecuted(':customTask')
+        failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
     def 'task does not execute when it handles verification failures and VM exits unexpectedly --continue'() {
@@ -361,7 +361,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures through a transitive task and test has doLast that throws'() {
         given:
-        withTestVerificationFailure()
+        withPassingTest()
         withTestDoLastActionThrows()
         withCustomTaskIndirectlyDependsOnTestTaskAndHandlesVerificationFailures()
 
@@ -369,7 +369,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        failure.assertTestsFailed()
+        failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
     def 'task does not execute when it handles verification failures through a transitive task and VM exits unexpectedly'() {
@@ -412,7 +412,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
     def 'task does not execute when it handles verification failures through a transitive task and test has doLast that throws --continue'() {
         given:
-        withTestVerificationFailure()
+        withPassingTest()
         withTestDoLastActionThrows()
         withCustomTaskIndirectlyDependsOnTestTaskAndHandlesVerificationFailures()
 
@@ -420,7 +420,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         fails('customTask', '--continue')
         result.assertTaskExecuted(':test')
         result.assertTaskNotExecuted(':customTask')
-        failure.assertTestsFailed()
+        failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
     def 'task does not execute when it handles verification failures through a transitive task and VM exits unexpectedly --continue'() {
