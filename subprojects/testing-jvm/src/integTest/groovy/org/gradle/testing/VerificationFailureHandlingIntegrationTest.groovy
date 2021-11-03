@@ -569,23 +569,20 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         '''
     }
 
+    /**
+     * Cause the test VM to fail at startup by providing an invalid JVM argument.
+     */
     def withFatalTestExecutionError() {
-        file('src/test/java/example/UnitTestWithFatalExecutionError.java').java '''
-            package example;
-
-            import org.junit.jupiter.api.Test;
-
-            public class UnitTestWithFatalExecutionError {
-                @Test
-                public void unitTest() {
-                    System.exit(42); // prematurely exit the testing VM
-                }
+        withPassingTest()
+        buildFile << '''
+            tasks.named('test', Test).configure {
+                jvmArgs '-XX:UnknownArgument'
             }
         '''
     }
 
     void assertFatalTestExecutionError() {
-        failure.assertThatCause(Matchers.matchesRegexp("Process 'Gradle Test Executor \\d+' finished with non-zero exit value.*"))
+        failure.assertThatCause(Matchers.matchesRegexp("Process 'Gradle Test Executor \\d+' finished with non-zero exit value \\d+"))
     }
 
     def withTestVerificationFailure() {
