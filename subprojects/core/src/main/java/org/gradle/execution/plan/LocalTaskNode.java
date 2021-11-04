@@ -137,7 +137,11 @@ public class LocalTaskNode extends TaskNode {
             processHardSuccessor.execute(targetNode);
         }
 
-        dependsOnSuccessorsSupplier = generateTaskDependsOnSupplier(dependencyResolver);
+        dependsOnSuccessorsSupplier = () -> {
+            DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
+            dependsOns.setValues(getTask().getDependsOn());
+            return new HashSet<>(dependencyResolver.resolveDependenciesFor(task, dependsOns));
+        };
 
         for (Node targetNode : getFinalizedBy(dependencyResolver)) {
             if (!(targetNode instanceof TaskNode)) {
@@ -260,14 +264,6 @@ public class LocalTaskNode extends TaskNode {
         }
 
         return dependsOnSuccessors;
-    }
-
-    private Supplier<Set<Node>> generateTaskDependsOnSupplier(TaskDependencyResolver dependencyResolver) {
-        return () -> {
-            DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
-            dependsOns.setValues(getTask().getDependsOn());
-            return new HashSet<>(dependencyResolver.resolveDependenciesFor(task, dependsOns));
-        };
     }
 
     private boolean isDirectDependency(Node dependency) {
