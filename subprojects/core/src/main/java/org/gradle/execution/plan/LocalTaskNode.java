@@ -38,6 +38,7 @@ import java.io.File;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * A {@link TaskNode} implementation for a task in the current build.
@@ -46,8 +47,8 @@ public class LocalTaskNode extends TaskNode {
     private final TaskInternal task;
     private final WorkValidationContext validationContext;
     private ImmutableActionSet<Task> postAction = ImmutableActionSet.empty();
-    private TaskDependencyResolver dependencyResolver;
     private Set<Node> dependsOnSuccessors;
+    private Supplier<Set<Node>> dependsOnSuccessorsSupplier;
 
     private boolean isolated;
     private List<? extends ResourceLock> resourceLocks;
@@ -131,11 +132,12 @@ public class LocalTaskNode extends TaskNode {
 
     @Override
     public void resolveDependencies(TaskDependencyResolver dependencyResolver, Action<Node> processHardSuccessor) {
-        this.dependencyResolver = dependencyResolver;
         for (Node targetNode : getDependencies(dependencyResolver)) {
             addDependencySuccessor(targetNode);
             processHardSuccessor.execute(targetNode);
         }
+
+        dependsOnSuccessorsSupplier = generateTaskDependsOnSupplier(dependencyResolver);
 
         for (Node targetNode : getFinalizedBy(dependencyResolver)) {
             if (!(targetNode instanceof TaskNode)) {
@@ -253,20 +255,19 @@ public class LocalTaskNode extends TaskNode {
     }
 
     private Set<Node> getDirectDependsOnSuccessors() {
-        if (dependsOnSuccessors != null) {
-            return dependsOnSuccessors;
+        if (dependsOnSuccessors == null) {
+            dependsOnSuccessors = dependsOnSuccessorsSupplier.get();
         }
-
-        if (dependencyResolver == null) {
-            throw new IllegalStateException("Node#resolveDependencies must be invoked first");
-        }
-
-        dependsOnSuccessors  = new HashSet<>();
-        DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
-        dependsOns.setValues(getTask().getDependsOn());
-        dependsOnSuccessors.addAll(dependencyResolver.resolveDependenciesFor(task, dependsOns));
 
         return dependsOnSuccessors;
+    }
+
+    private Supplier<Set<Node>> generateTaskDependsOnSupplier(TaskDependencyResolver dependencyResolver) {
+        return () -> {
+            DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
+            dependsOns.setValues(getTask().getDependsOn());
+            return new HashSet<>(dependencyResolver.resolveDependenciesFor(task, dependsOns));
+        };
     }
 
     private boolean isDirectDependency(Node dependency) {
