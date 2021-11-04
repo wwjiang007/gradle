@@ -232,7 +232,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         assertFatalTestExecutionError()
     }
 
-    def 'task executes when it handles verification failures and dependsOn test with failing test(s) --continue'() {
+    def 'task does not execute when it handles verification failures and dependsOn test with failing test(s) --continue'() {
         given:
         withTestVerificationFailure()
         withCustomTaskDependsOnTestTaskAndHandlesVerificationFailures()
@@ -308,7 +308,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doFirst action')
     }
 
-    def 'task executes when it handles verification failures and test has doLast that throws --continue'() {
+    def 'task does not execute when it handles verification failures and test has doLast that throws --continue'() {
         given:
         withPassingTest()
         withTestDoLastActionThrows()
@@ -534,7 +534,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
             abstract class CustomTask extends DefaultTask {
 
                 @InputFiles
-                @HandlesVerificationFailures
+                //@HandlesVerificationFailures
                 abstract ConfigurableFileCollection getCustomInput()
 
                 @TaskAction
@@ -585,7 +585,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
             }
 
             tasks.register('customTask', CustomTask) {
-                customInput.from(intermediateTask.flatMap { it.outputDir }) 
+                customInput.from(intermediateTask.flatMap { it.outputDir })
                 dependsOn intermediateTask
             }
         '''
