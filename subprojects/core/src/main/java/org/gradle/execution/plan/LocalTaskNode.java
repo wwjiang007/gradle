@@ -46,7 +46,8 @@ public class LocalTaskNode extends TaskNode {
     private final TaskInternal task;
     private final WorkValidationContext validationContext;
     private ImmutableActionSet<Task> postAction = ImmutableActionSet.empty();
-    private final Set<Node> dependsOnSuccessors = new HashSet<>();
+    private TaskDependencyResolver dependencyResolver;
+    private Set<Node> dependsOnSuccessors;
 
     private boolean isolated;
     private List<? extends ResourceLock> resourceLocks;
@@ -130,14 +131,11 @@ public class LocalTaskNode extends TaskNode {
 
     @Override
     public void resolveDependencies(TaskDependencyResolver dependencyResolver, Action<Node> processHardSuccessor) {
+        this.dependencyResolver = dependencyResolver;
         for (Node targetNode : getDependencies(dependencyResolver)) {
             addDependencySuccessor(targetNode);
             processHardSuccessor.execute(targetNode);
         }
-
-        DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
-        dependsOns.setValues(getTask().getDependsOn());
-        dependsOnSuccessors.addAll(dependencyResolver.resolveDependenciesFor(task, dependsOns));
 
         for (Node targetNode : getFinalizedBy(dependencyResolver)) {
             if (!(targetNode instanceof TaskNode)) {
@@ -254,7 +252,24 @@ public class LocalTaskNode extends TaskNode {
         return true;
     }
 
+    private Set<Node> getDirectDependsOnSuccessors() {
+        if (dependsOnSuccessors != null) {
+            return dependsOnSuccessors;
+        }
+
+        if (dependencyResolver == null) {
+            throw new IllegalStateException("Node#resolveDependencies must be invoked first");
+        }
+
+        dependsOnSuccessors  = new HashSet<>();
+        DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
+        dependsOns.setValues(getTask().getDependsOn());
+        dependsOnSuccessors.addAll(dependencyResolver.resolveDependenciesFor(task, dependsOns));
+
+        return dependsOnSuccessors;
+    }
+
     private boolean isDirectDependency(Node dependency) {
-        return dependsOnSuccessors.contains(dependency);
+        return getDirectDependsOnSuccessors().contains(dependency);
     }
 }
