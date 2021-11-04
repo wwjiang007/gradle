@@ -140,7 +140,107 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'task does not execute when it handles verification failures and test has doFirst that throws'() {
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test with doFirst that throws'() {
+        given:
+        withPassingTest()
+        withTestDoFirstActionThrows()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        failure.assertHasCause('intentional failure in Test#doFirst action')
+    }
+
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test and with doLast that throws'() {
+        given:
+        withPassingTest()
+        withTestDoLastActionThrows()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        failure.assertHasCause('intentional failure in Test#doLast action')
+    }
+
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test and VM exits unexpectedly'() {
+        given:
+        withFatalTestExecutionError()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        assertFatalTestExecutionError()
+    }
+
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test with failing test(s)'() {
+        given:
+        withTestVerificationFailure()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        failure.assertTestsFailed()
+    }
+
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test with doFirst that throws --continue'() {
+        given:
+        withPassingTest()
+        withTestDoFirstActionThrows()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask', '--continue')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        failure.assertHasCause('intentional failure in Test#doFirst action')
+    }
+
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test and with doLast that throws --continue'() {
+        given:
+        withPassingTest()
+        withTestDoLastActionThrows()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask', '--continue')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        failure.assertHasCause('intentional failure in Test#doLast action')
+    }
+
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test and VM exits unexpectedly --continue'() {
+        given:
+        withFatalTestExecutionError()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask', '--continue')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        assertFatalTestExecutionError()
+    }
+
+    def 'task does not execute when it has a test task output dependency and redundant dependsOn test with failing test(s) --continue'() {
+        given:
+        withTestVerificationFailure()
+        withCustomTaskDependsOnTestTaskAndTestTaskOutput()
+
+        expect:
+        fails('customTask', '--continue')
+        result.assertTaskExecuted(':test')
+        result.assertTaskNotExecuted(':customTask')
+        failure.assertTestsFailed()
+    }
+
+    def 'task does not execute when it has a test task output dependency and test has doFirst that throws'() {
         given:
         withTestVerificationFailure()
         withTestDoFirstActionThrows()
@@ -153,7 +253,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doFirst action')
     }
 
-    def 'task does not execute when it handles verification failures and test has doLast that throws'() {
+    def 'task does not execute when it has a test task output dependency and test has doLast that throws'() {
         given:
         withPassingTest()
         withTestDoLastActionThrows()
@@ -166,7 +266,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
-    def 'task does not execute when it handles verification failures and VM exits unexpectedly'() {
+    def 'task does not execute when it has a test task output dependency and VM exits unexpectedly'() {
         given:
         withFatalTestExecutionError()
         withCustomTaskInputFromTestTaskOutput()
@@ -178,7 +278,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         assertFatalTestExecutionError()
     }
 
-    def 'task does not execute when it handles verification failures with failing test(s)'() {
+    def 'task does not execute when it has a test task output dependency with failing test(s)'() {
         given:
         withTestVerificationFailure()
         withCustomTaskInputFromTestTaskOutput()
@@ -190,7 +290,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'task does not execute when it handles verification failures and test has doFirst that throws --continue'() {
+    def 'task does not execute when it has a test task output dependency and test has doFirst that throws --continue'() {
         given:
         withTestVerificationFailure()
         withTestDoFirstActionThrows()
@@ -203,7 +303,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doFirst action')
     }
 
-    def 'task does not execute when it handles verification failures and test has doLast that throws --continue'() {
+    def 'task does not execute when it has a test task output dependency and test has doLast that throws --continue'() {
         given:
         withPassingTest()
         withTestDoLastActionThrows()
@@ -216,7 +316,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
-    def 'task does not execute when it handles verification failures and VM exits unexpectedly --continue'() {
+    def 'task does not execute when it has a test task output dependency and VM exits unexpectedly --continue'() {
         given:
         withFatalTestExecutionError()
         withCustomTaskInputFromTestTaskOutput()
@@ -228,7 +328,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         assertFatalTestExecutionError()
     }
 
-    def 'task executes when it handles verification failures with failing test(s) --continue'() {
+    def 'task executes when it has a test task output dependency with failing test(s) --continue'() {
         given:
         withTestVerificationFailure()
         withCustomTaskInputFromTestTaskOutput()
@@ -240,7 +340,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task and test has doFirst that throws'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task and test has doFirst that throws'() {
         given:
         withTestVerificationFailure()
         withTestDoFirstActionThrows()
@@ -253,7 +353,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doFirst action')
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task and test has doLast that throws'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task and test has doLast that throws'() {
         given:
         withPassingTest()
         withTestDoLastActionThrows()
@@ -266,7 +366,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task and VM exits unexpectedly'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task and VM exits unexpectedly'() {
         given:
         withFatalTestExecutionError()
         withCustomTaskInputIndirectlyDependsOnTestTaskOutput()
@@ -278,7 +378,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         assertFatalTestExecutionError()
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task with failing test(s)'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task with failing test(s)'() {
         given:
         withTestVerificationFailure()
         withCustomTaskInputIndirectlyDependsOnTestTaskOutput()
@@ -290,7 +390,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertTestsFailed()
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task and test has doFirst that throws --continue'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task and test has doFirst that throws --continue'() {
         given:
         withTestVerificationFailure()
         withTestDoFirstActionThrows()
@@ -303,7 +403,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doFirst action')
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task and test has doLast that throws --continue'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task and test has doLast that throws --continue'() {
         given:
         withPassingTest()
         withTestDoLastActionThrows()
@@ -316,7 +416,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         failure.assertHasCause('intentional failure in Test#doLast action')
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task and VM exits unexpectedly --continue'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task and VM exits unexpectedly --continue'() {
         given:
         withFatalTestExecutionError()
         withCustomTaskInputIndirectlyDependsOnTestTaskOutput()
@@ -328,7 +428,7 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
         assertFatalTestExecutionError()
     }
 
-    def 'task does not execute when it handles verification failures through a transitive task with failing test(s) --continue'() {
+    def 'task does not execute when it has a test task output dependency through a transitive task with failing test(s) --continue'() {
         given:
         withTestVerificationFailure()
         withCustomTaskInputIndirectlyDependsOnTestTaskOutput()
@@ -417,6 +517,24 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
 
             tasks.register('customTask', CustomTask) {
                 customInput.from(testTask.flatMap { it.binaryResultsDirectory })
+            }
+        '''
+    }
+
+    /**
+     * Helper method to setup a custom task wired to the test in two ways:
+     * <ol>
+     *     <li>A direct dependency via dependsOn declarartion</li>
+     *     <li>Via Test#binaryResultsDirectory output wired to customTask#customInput</li>
+     * </ol>
+     *
+     * This intentional redundancy is to test automatic exclusion of direct dependsOn relationships.
+     */
+    def withCustomTaskDependsOnTestTaskAndTestTaskOutput() {
+        withCustomTaskInputFromTestTaskOutput()
+        buildFile << '''
+            tasks.named('customTask', CustomTask).configure {
+                dependsOn tasks.named('test', Test)
             }
         '''
     }
