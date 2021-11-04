@@ -16,7 +16,6 @@
 
 package org.gradle.execution.plan;
 
-import com.google.common.collect.Sets;
 import org.gradle.api.Action;
 import org.gradle.api.Task;
 import org.gradle.api.internal.TaskInternal;
@@ -36,8 +35,8 @@ import org.gradle.internal.service.ServiceRegistry;
 
 import javax.annotation.Nullable;
 import java.io.File;
+import java.util.HashSet;
 import java.util.List;
-import java.util.NavigableSet;
 import java.util.Set;
 
 /**
@@ -47,7 +46,7 @@ public class LocalTaskNode extends TaskNode {
     private final TaskInternal task;
     private final WorkValidationContext validationContext;
     private ImmutableActionSet<Task> postAction = ImmutableActionSet.empty();
-    private final NavigableSet<Node> dependsOnSuccessors = Sets.newTreeSet();
+    private final Set<Node> dependsOnSuccessors = new HashSet<>();
 
     private boolean isolated;
     private List<? extends ResourceLock> resourceLocks;
