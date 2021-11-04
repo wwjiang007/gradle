@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.gradle.api.tasks.Classpath;
 import org.gradle.api.tasks.CompileClasspath;
-import org.gradle.api.tasks.HandlesVerificationFailures;
 import org.gradle.api.tasks.IgnoreEmptyDirectories;
 import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.PathSensitive;
@@ -34,9 +33,6 @@ import java.util.Collection;
 import java.util.Map;
 
 public enum ModifierAnnotationCategory implements AnnotationCategory {
-    AGGREGATION("aggregation",
-        HandlesVerificationFailures.class
-    ),
     INCREMENTAL("incremental",
         Incremental.class,
         SkipWhenEmpty.class

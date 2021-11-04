@@ -84,7 +84,6 @@ public class DefaultTaskInputs implements TaskInputsInternal {
             visitor.visitInputFileProperty(
                 registration.getPropertyName(),
                 registration.isOptional(),
-                false,
                 registration.isSkipWhenEmpty(),
                 registration.getDirectorySensitivity(),
                 registration.getLineEndingNormalization(),
@@ -198,7 +197,6 @@ public class DefaultTaskInputs implements TaskInputsInternal {
             public void visitInputFileProperty(
                 final String propertyName,
                 boolean optional,
-                boolean allowVerificationFailures,
                 boolean skipWhenEmpty,
                 DirectorySensitivity directorySensitivity,
                 LineEndingSensitivity lineEndingSensitivity,
@@ -242,7 +240,6 @@ public class DefaultTaskInputs implements TaskInputsInternal {
                 public void visitInputFileProperty(
                     final String propertyName,
                     boolean optional,
-                    boolean allowVerificationFailures,
                     boolean skipWhenEmpty,
                     DirectorySensitivity directorySensitivity,
                     LineEndingSensitivity lineEndingSensitivity,
@@ -270,7 +267,6 @@ public class DefaultTaskInputs implements TaskInputsInternal {
         public void visitInputFileProperty(
             String propertyName,
             boolean optional,
-            boolean allowVerificationFailures,
             boolean skipWhenEmpty,
             DirectorySensitivity directorySensitivity,
             LineEndingSensitivity lineEndingSensitivity,

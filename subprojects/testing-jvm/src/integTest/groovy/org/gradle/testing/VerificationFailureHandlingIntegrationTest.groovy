@@ -513,7 +513,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
             abstract class CustomTask extends DefaultTask {
 
                 @InputFiles
-                @HandlesVerificationFailures
                 abstract ConfigurableFileCollection getCustomInput()
 
                 @TaskAction
@@ -534,7 +533,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
             abstract class CustomTask extends DefaultTask {
 
                 @InputFiles
-                //@HandlesVerificationFailures
                 abstract ConfigurableFileCollection getCustomInput()
 
                 @TaskAction
@@ -556,7 +554,6 @@ class VerificationFailureHandlingIntegrationTest extends AbstractIntegrationSpec
             abstract class CustomTask extends DefaultTask {
 
                 @InputFiles
-                @HandlesVerificationFailures
                 abstract ConfigurableFileCollection getCustomInput()
 
                 @TaskAction

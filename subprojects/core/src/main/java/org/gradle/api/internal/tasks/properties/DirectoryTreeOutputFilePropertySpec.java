@@ -29,7 +29,7 @@ public class DirectoryTreeOutputFilePropertySpec extends AbstractFilePropertySpe
     private final File root;
 
     public DirectoryTreeOutputFilePropertySpec(String propertyName, FileCollectionInternal files, File root) {
-        super(propertyName, OutputNormalizer.class, files, false);
+        super(propertyName, OutputNormalizer.class, files);
         this.root = root;
     }
 

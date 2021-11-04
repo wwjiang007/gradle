@@ -87,11 +87,6 @@ public interface TaskProperties {
     boolean hasDeclaredOutputs();
 
     /**
-     * Whether any of the input properties declares it can continue execution despite an upstream verification error.
-     */
-    boolean isAllowsVerificationFailures();
-
-    /**
      * The files that represent the local state.
      */
     FileCollection getLocalStateFiles();

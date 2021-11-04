@@ -33,7 +33,6 @@ public class CompositePropertyVisitor implements PropertyVisitor {
     public void visitInputFileProperty(
         String propertyName,
         boolean optional,
-        boolean allowVerificationFailures,
         boolean skipWhenEmpty,
         DirectorySensitivity directorySensitivity,
         LineEndingSensitivity lineEndingSensitivity,
@@ -46,7 +45,6 @@ public class CompositePropertyVisitor implements PropertyVisitor {
             visitor.visitInputFileProperty(
                 propertyName,
                 optional,
-                allowVerificationFailures,
                 skipWhenEmpty,
                 directorySensitivity,
                 lineEndingSensitivity,

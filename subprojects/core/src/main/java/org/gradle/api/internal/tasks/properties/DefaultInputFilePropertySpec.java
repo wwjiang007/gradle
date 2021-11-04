@@ -34,14 +34,13 @@ public class DefaultInputFilePropertySpec extends AbstractFilePropertySpec imple
         String propertyName,
         Class<? extends FileNormalizer> normalizer,
         FileCollectionInternal files,
-        boolean allowVerificationFailures,
         PropertyValue value,
         boolean skipWhenEmpty,
         boolean incremental,
         DirectorySensitivity directorySensitivity,
         LineEndingSensitivity lineEndingSensitivity
     ) {
-        super(propertyName, normalizer, files, allowVerificationFailures);
+        super(propertyName, normalizer, files);
         this.skipWhenEmpty = skipWhenEmpty;
         this.incremental = incremental;
         this.directorySensitivity = directorySensitivity;

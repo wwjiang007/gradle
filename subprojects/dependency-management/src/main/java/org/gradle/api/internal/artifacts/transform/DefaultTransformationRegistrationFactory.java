@@ -222,7 +222,6 @@ public class DefaultTransformationRegistrationFactory implements TransformationR
         public void visitInputFileProperty(
             String propertyName,
             boolean optional,
-            boolean allowVerificationFailures,
             boolean skipWhenEmpty,
             DirectorySensitivity directorySensitivity,
             LineEndingSensitivity lineEndingSensitivity,

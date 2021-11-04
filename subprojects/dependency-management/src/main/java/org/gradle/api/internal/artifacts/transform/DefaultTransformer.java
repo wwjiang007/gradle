@@ -317,7 +317,6 @@ public class DefaultTransformer extends AbstractTransformer<TransformAction<?>> 
                 public void visitInputFileProperty(
                     String propertyName,
                     boolean optional,
-                    boolean allowVerificationFailures,
                     boolean skipWhenEmpty,
                     DirectorySensitivity directorySensitivity,
                     LineEndingSensitivity lineEndingNormalization,
@@ -595,7 +594,6 @@ public class DefaultTransformer extends AbstractTransformer<TransformAction<?>> 
                     public void visitInputFileProperty(
                         String propertyName,
                         boolean optional,
-                        boolean allowVerificationFailures,
                         boolean skipWhenEmpty,
                         DirectorySensitivity directorySensitivity,
                         LineEndingSensitivity lineEndingSensitivity,

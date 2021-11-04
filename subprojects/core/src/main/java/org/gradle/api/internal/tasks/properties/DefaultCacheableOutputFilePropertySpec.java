@@ -39,7 +39,7 @@ public class DefaultCacheableOutputFilePropertySpec extends AbstractFileProperty
         FileCollectionInternal outputFiles,
         TreeType outputType
     ) {
-        super(propertyName, OutputNormalizer.class, outputFiles, false);
+        super(propertyName, OutputNormalizer.class, outputFiles);
         this.propertySuffix = propertySuffix;
         this.outputType = outputType;
     }

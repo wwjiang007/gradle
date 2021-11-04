@@ -317,7 +317,7 @@ class DefaultTaskInputsTest extends Specification {
         when:
         inputs.visitRegisteredProperties(new PropertyVisitor.Adapter() {
             @Override
-            void visitInputFileProperty(String propertyName, boolean optional, boolean allowVerificationFailures, boolean skipWhenEmpty, DirectorySensitivity emptyDirectorySensitivity, LineEndingSensitivity lineEndingNormalization, boolean incremental, @Nullable Class<? extends FileNormalizer> fileNormalizer, PropertyValue value, InputFilePropertyType filePropertyType) {
+            void visitInputFileProperty(String propertyName, boolean optional, boolean skipWhenEmpty, DirectorySensitivity emptyDirectorySensitivity, LineEndingSensitivity lineEndingNormalization, boolean incremental, @Nullable Class<? extends FileNormalizer> fileNormalizer, PropertyValue value, InputFilePropertyType filePropertyType) {
                 names += propertyName
             }
         })
@@ -349,7 +349,6 @@ class DefaultTaskInputsTest extends Specification {
             void visitInputFileProperty(
                 String propertyName,
                 boolean optional,
-                boolean allowVerificationFailures,
                 boolean skipWhenEmpty,
                 DirectorySensitivity emptyDirectorySensitivity,
                 LineEndingSensitivity lineEndingNormalization,

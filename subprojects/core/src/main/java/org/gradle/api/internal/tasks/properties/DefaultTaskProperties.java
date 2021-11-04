@@ -46,7 +46,6 @@ public class DefaultTaskProperties implements TaskProperties {
     private final ImmutableSortedSet<OutputFilePropertySpec> outputFileProperties;
     private final FileCollection inputFiles;
     private final boolean hasSourceFiles;
-    private final boolean allowsVerificationFailures;
     private final FileCollection sourceFiles;
     private final boolean hasDeclaredOutputs;
     private final ReplayingTypeValidationContext validationProblems;
@@ -145,8 +144,6 @@ public class DefaultTaskProperties implements TaskProperties {
         };
         this.hasSourceFiles = inputFileProperties.stream()
             .anyMatch(InputFilePropertySpec::isSkipWhenEmpty);
-        this.allowsVerificationFailures = inputFileProperties.stream()
-            .anyMatch(FilePropertySpec::getAllowsVerificationFailures);
         this.outputFiles = new CompositeFileCollection() {
             @Override
             public String getDisplayName() {
@@ -217,11 +214,6 @@ public class DefaultTaskProperties implements TaskProperties {
     }
 
     @Override
-    public boolean isAllowsVerificationFailures() {
-        return allowsVerificationFailures;
-    }
-
-    @Override
     public ImmutableSortedSet<InputPropertySpec> getInputProperties() {
         return inputProperties;
     }
@@ -283,7 +275,6 @@ public class DefaultTaskProperties implements TaskProperties {
         public void visitInputFileProperty(
             String propertyName,
             boolean optional,
-            boolean allowVerificationFailures,
             boolean skipWhenEmpty,
             DirectorySensitivity directorySensitivity,
             LineEndingSensitivity lineEndingSensitivity,
