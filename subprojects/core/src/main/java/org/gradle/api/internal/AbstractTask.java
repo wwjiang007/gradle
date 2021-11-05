@@ -121,6 +121,8 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
 
     private final DefaultTaskDependency dependencies;
 
+    private final DefaultTaskDependency explicitDependsOns;
+
     private final DefaultTaskDependency mustRunAfter;
 
     private final DefaultTaskDependency finalizedBy;
@@ -191,6 +193,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         taskLocalState = new DefaultTaskLocalState(taskMutator, fileCollectionFactory);
 
         this.dependencies = new DefaultTaskDependency(tasks, ImmutableSet.of(taskInputs));
+        this.explicitDependsOns = new DefaultTaskDependency(tasks, ImmutableSet.of((Callable<Set<Object>>) this::getDependsOn));
 
         this.timeout = project.getObjects().property(Duration.class);
     }
@@ -286,6 +289,12 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
     public TaskDependencyInternal getTaskDependencies() {
         notifyTaskDependenciesAccess("Task.taskDependencies");
         return dependencies;
+    }
+
+    @Internal
+    @Override
+    public TaskDependencyInternal getExplicitTaskDependencies() {
+        return explicitDependsOns;
     }
 
     @Internal

@@ -21,9 +21,7 @@ import org.gradle.api.Task;
 import org.gradle.api.internal.TaskInternal;
 import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.api.internal.project.ProjectInternal;
-import org.gradle.api.internal.tasks.DefaultTaskDependency;
 import org.gradle.api.internal.tasks.TaskContainerInternal;
-import org.gradle.api.internal.tasks.TaskResolver;
 import org.gradle.api.internal.tasks.properties.DefaultTaskProperties;
 import org.gradle.api.internal.tasks.properties.PropertyWalker;
 import org.gradle.api.internal.tasks.properties.TaskProperties;
@@ -35,10 +33,8 @@ import org.gradle.internal.service.ServiceRegistry;
 
 import javax.annotation.Nullable;
 import java.io.File;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Supplier;
 
 /**
  * A {@link TaskNode} implementation for a task in the current build.
@@ -48,7 +44,6 @@ public class LocalTaskNode extends TaskNode {
     private final WorkValidationContext validationContext;
     private ImmutableActionSet<Task> postAction = ImmutableActionSet.empty();
     private Set<Node> dependsOnSuccessors;
-    private Supplier<Set<Node>> dependsOnSuccessorsSupplier;
 
     private boolean isolated;
     private List<? extends ResourceLock> resourceLocks;
@@ -137,11 +132,7 @@ public class LocalTaskNode extends TaskNode {
             processHardSuccessor.execute(targetNode);
         }
 
-        dependsOnSuccessorsSupplier = () -> {
-            DefaultTaskDependency dependsOns = new DefaultTaskDependency((TaskResolver) getTask().getProject().getTasks());
-            dependsOns.setValues(getTask().getDependsOn());
-            return new HashSet<>(dependencyResolver.resolveDependenciesFor(task, dependsOns));
-        };
+        dependsOnSuccessors = dependencyResolver.resolveDependenciesFor(task, task.getExplicitTaskDependencies());
 
         for (Node targetNode : getFinalizedBy(dependencyResolver)) {
             if (!(targetNode instanceof TaskNode)) {
@@ -258,15 +249,7 @@ public class LocalTaskNode extends TaskNode {
         return true;
     }
 
-    private Set<Node> getDirectDependsOnSuccessors() {
-        if (dependsOnSuccessors == null) {
-            dependsOnSuccessors = dependsOnSuccessorsSupplier.get();
-        }
-
-        return dependsOnSuccessors;
-    }
-
     private boolean isDirectDependency(Node dependency) {
-        return getDirectDependsOnSuccessors().contains(dependency);
+        return dependsOnSuccessors.contains(dependency);
     }
 }

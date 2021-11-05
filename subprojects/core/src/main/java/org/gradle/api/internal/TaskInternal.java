@@ -25,6 +25,8 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.services.BuildService;
 import org.gradle.api.specs.Spec;
 import org.gradle.api.tasks.Internal;
+import org.gradle.api.tasks.TaskDependency;
+import org.gradle.execution.plan.TaskDependencyResolver;
 import org.gradle.internal.Factory;
 import org.gradle.internal.logging.StandardOutputCapture;
 import org.gradle.internal.resources.ResourceLock;
@@ -109,4 +111,11 @@ public interface TaskInternal extends Task, Configurable<Task> {
      */
     @Internal
     List<? extends ResourceLock> getSharedResources();
+
+
+    /**
+     * @return the dependencies of this task declared via an explicit {@link Task#dependsOn(Object...)}
+     */
+    @Internal
+    TaskDependency getExplicitTaskDependencies();
 }
