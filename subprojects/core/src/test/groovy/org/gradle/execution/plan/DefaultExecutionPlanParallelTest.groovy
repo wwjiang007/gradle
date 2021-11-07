@@ -61,6 +61,7 @@ class DefaultExecutionPlanParallelTest extends AbstractExecutionPlanSpec {
     TaskInternal task(Map<String, ?> options = [:], String name) {
         def task = createTask(name, options.project ?: this.project, options.type ?: TaskInternal)
         _ * task.taskDependencies >> taskDependencyResolvingTo(task, options.dependsOn ?: [])
+        _ * task.explicitTaskDependencies >> taskDependencyResolvingTo(task, options.dependsOn ?: [])
         _ * task.finalizedBy >> taskDependencyResolvingTo(task, options.finalizedBy ?: [])
         _ * task.shouldRunAfter >> taskDependencyResolvingTo(task, [])
         _ * task.mustRunAfter >> taskDependencyResolvingTo(task, options.mustRunAfter ?: [])
