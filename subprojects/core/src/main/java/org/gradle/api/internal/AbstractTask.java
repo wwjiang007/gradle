@@ -182,6 +182,8 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         this.mustRunAfter = new DefaultTaskDependency(tasks);
         this.finalizedBy = new DefaultTaskDependency(tasks);
         this.shouldRunAfter = new DefaultTaskDependency(tasks);
+        this.explicitDependsOns = new DefaultTaskDependency(tasks);
+
         this.services = project.getServices();
 
         PropertyWalker propertyWalker = services.get(PropertyWalker.class);
@@ -192,8 +194,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         taskDestroyables = new DefaultTaskDestroyables(taskMutator, fileCollectionFactory);
         taskLocalState = new DefaultTaskLocalState(taskMutator, fileCollectionFactory);
 
-        this.dependencies = new DefaultTaskDependency(tasks, ImmutableSet.of(taskInputs));
-        this.explicitDependsOns = new DefaultTaskDependency(tasks, ImmutableSet.of((Callable<Set<Object>>) this::getDependsOn));
+        this.dependencies = new DefaultTaskDependency(tasks, ImmutableSet.of(taskInputs, explicitDependsOns));
 
         this.timeout = project.getObjects().property(Duration.class);
     }
@@ -301,7 +302,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
     @Override
     public Set<Object> getDependsOn() {
         notifyTaskDependenciesAccess("Task.dependsOn");
-        return dependencies.getMutableValues();
+        return explicitDependsOns.getMutableValues();
     }
 
     @Override
@@ -309,7 +310,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         taskMutator.mutate("Task.setDependsOn(Iterable)", new Runnable() {
             @Override
             public void run() {
-                dependencies.setValues(dependsOn);
+                explicitDependsOns.setValues(dependsOn);
             }
         });
     }
@@ -441,7 +442,7 @@ public abstract class AbstractTask implements TaskInternal, DynamicObjectAware {
         taskMutator.mutate("Task.dependsOn(Object...)", new Runnable() {
             @Override
             public void run() {
-                dependencies.add(paths);
+                explicitDependsOns.add(paths);
             }
         });
         return this;
