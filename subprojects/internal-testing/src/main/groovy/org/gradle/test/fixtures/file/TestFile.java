@@ -69,9 +69,11 @@ import static org.junit.Assume.assumeTrue;
 
 public class TestFile extends File {
     private boolean useNativeTools;
+    private final File relativeBase;
 
     public TestFile(File file, Object... path) {
         super(join(file, path).getAbsolutePath());
+        this.relativeBase = file;
     }
 
     public TestFile(URI uri) {
@@ -859,6 +861,19 @@ public class TestFile extends File {
      */
     public URI relativizeFrom(TestFile baseDir) {
         return baseDir.toURI().relativize(toURI());
+    }
+
+    /**
+     * Returns a human readable relative path based on the base directory passed to create this TestFile.
+     *
+     * Fails if this TestFile was created in a way that did not provide a relative base.
+     *
+     * @see #relativizeFrom(TestFile)
+     * @see java.nio.file.Path#relativize(Path)
+     */
+    public String getRelativeToBase() {
+        assert !relativeBase.toPath().equals(this.toPath());
+        return relativeBase.toPath().relativize(this.toPath()).toString();
     }
 
     public static class Snapshot {

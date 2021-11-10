@@ -56,7 +56,7 @@ class JvmTestSuitePluginIntegrationTest extends AbstractIntegrationSpec {
                 - org.gradle.usage         = verification
 
             Artifacts
-                - build${File.separator}test-results${File.separator}test${File.separator}binary${File.separator}results.bin (artifactType = binary)
+                - ${file("build/test-results/test/binary/results.bin").relativeToBase} (artifactType = binary)
             """.stripIndent())
     }
 
@@ -99,7 +99,7 @@ class JvmTestSuitePluginIntegrationTest extends AbstractIntegrationSpec {
                 - org.gradle.usage         = verification
 
             Artifacts
-                - build${File.separator}test-results${File.separator}integrationTest${File.separator}binary${File.separator}results.bin (artifactType = binary)
+                - ${file("build/test-results/integrationTest/binary/results.bin").relativeToBase} (artifactType = binary)
             """.stripIndent())
     }
 
