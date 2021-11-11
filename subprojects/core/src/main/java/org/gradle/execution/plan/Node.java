@@ -237,7 +237,7 @@ public abstract class Node implements Comparable<Node> {
     }
 
     public boolean allDependenciesSuccessful() {
-        return dependencySuccessors.stream().allMatch(this::shouldContinueExecution);
+        return dependencySuccessors.stream().allMatch(this::onErrorResumeNext);
     }
 
     /**
@@ -251,7 +251,7 @@ public abstract class Node implements Comparable<Node> {
      * @return true if the successor task was successful, or failed but a "recoverable" verification failure and this Node may continue execution; false otherwise
      * @see <a href="https://github.com/gradle/gradle/issues/18912">gradle/gradle#18912</a>
      */
-    protected boolean shouldContinueExecution(Node dependency) {
+    protected boolean onErrorResumeNext(Node dependency) {
         return dependency.isSuccessful() || (dependency.isVerificationFailure() && !dependsOnOutcome(dependency));
     }
 
