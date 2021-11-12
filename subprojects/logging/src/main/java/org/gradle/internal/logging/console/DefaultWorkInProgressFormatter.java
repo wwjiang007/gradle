@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 public class DefaultWorkInProgressFormatter {
-    private final static List<StyledTextOutputEvent.Span> IDLE_SPANS = Collections.singletonList(new StyledTextOutputEvent.Span("> IDLE"));
+    private final static List<StyledTextOutputEvent.Span> IDLE_SPANS = Collections.singletonList(new StyledTextOutputEvent.Span("> READY"));
     private final ConsoleMetaData consoleMetaData;
 
     public DefaultWorkInProgressFormatter(ConsoleMetaData consoleMetaData) {

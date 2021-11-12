@@ -152,7 +152,7 @@ class WorkInProgressRendererTest extends OutputSpecification {
 
         then:
         // there should be no more copies of task 2 claiming to be running
-        progressArea.display == ["> IDLE"]
+        progressArea.display == ["> READY"]
     }
 
 

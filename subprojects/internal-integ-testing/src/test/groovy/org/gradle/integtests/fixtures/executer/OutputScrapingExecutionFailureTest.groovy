@@ -366,7 +366,7 @@ Some.Failure
 
         and:
         !failure.mainContent.withNormalizedEol().contains("INITIALIZING")
-        !failure.mainContent.withNormalizedEol().contains("IDLE")
+        !failure.mainContent.withNormalizedEol().contains("READY")
 
         and:
         !failure.mainContent.withNormalizedEol().contains("DEBUG")

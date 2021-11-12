@@ -54,7 +54,7 @@ class DefaultWorkInProgressFormatterTest extends Specification {
         def operation = new ProgressOperation(null, null, new OperationIdentifier(1), null)
 
         expect:
-        statusBarFormatter.format(operation).first().text == "> IDLE"
+        statusBarFormatter.format(operation).first().text == "> READY"
         statusBarFormatter.format(operation).first().style == StyledTextOutput.Style.Normal
     }
 }
