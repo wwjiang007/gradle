@@ -138,7 +138,7 @@ public class FileSystemChangeListener implements FileChangeListener, TaskInputsL
     }
 
     @Override
-    public synchronized void onExecute(TaskInternal task, FileCollectionInternal fileSystemInputs) {
+    public void onExecute(TaskInternal task, FileCollectionInternal fileSystemInputs) {
         Set<String> taskInputs = new LinkedHashSet<>();
         Set<FilteredTree> filteredFileTreeTaskInputs = new LinkedHashSet<>();
         fileSystemInputs.visitStructure(new FileCollectionStructureVisitor() {
