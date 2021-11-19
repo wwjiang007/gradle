@@ -20,13 +20,14 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.gradle.api.Action;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.internal.ExternalProcessStartedListener;
 import org.gradle.api.internal.file.DefaultFileCollectionFactory;
 import org.gradle.api.internal.file.DefaultFileLookup;
 import org.gradle.api.internal.file.FileCollectionFactory;
 import org.gradle.api.internal.file.FileResolver;
+import org.gradle.api.internal.file.collections.DefaultDirectoryFileTreeFactory;
 import org.gradle.api.internal.file.temp.GradleUserHomeTemporaryFileProvider;
 import org.gradle.api.internal.file.temp.TemporaryFileProvider;
-import org.gradle.api.internal.file.collections.DefaultDirectoryFileTreeFactory;
 import org.gradle.api.internal.model.InstantiatorBackedObjectFactory;
 import org.gradle.api.internal.provider.PropertyHost;
 import org.gradle.api.internal.tasks.DefaultTaskDependencyFactory;
@@ -41,6 +42,7 @@ import org.gradle.internal.concurrent.CompositeStoppable;
 import org.gradle.internal.concurrent.DefaultExecutorFactory;
 import org.gradle.internal.concurrent.ExecutorFactory;
 import org.gradle.internal.concurrent.Stoppable;
+import org.gradle.internal.file.PathToFileResolver;
 import org.gradle.internal.jvm.JavaModuleDetector;
 import org.gradle.internal.jvm.Jvm;
 import org.gradle.internal.nativeintegration.services.FileSystems;
@@ -62,7 +64,7 @@ import java.util.concurrent.Executor;
 
 import static java.util.Objects.requireNonNull;
 
-public class DefaultExecActionFactory implements ExecFactory {
+public abstract class DefaultExecActionFactory implements ExecFactory {
     protected final FileResolver fileResolver;
     protected final Executor executor;
     protected final FileCollectionFactory fileCollectionFactory;
@@ -135,6 +137,11 @@ public class DefaultExecActionFactory implements ExecFactory {
     @Override
     public ExecFactory forContext(FileResolver fileResolver, FileCollectionFactory fileCollectionFactory, Instantiator instantiator, BuildCancellationToken buildCancellationToken, ObjectFactory objectFactory, JavaModuleDetector javaModuleDetector) {
         return new DecoratingExecActionFactory(fileResolver, fileCollectionFactory, instantiator, executor, temporaryFileProvider, buildCancellationToken, objectFactory, javaModuleDetector);
+    }
+
+    @Override
+    public ExecFactory withListener(ExternalProcessStartedListener listener) {
+        throw new UnsupportedOperationException();
     }
 
     public ExecAction newDecoratedExecAction() {
@@ -223,11 +230,33 @@ public class DefaultExecActionFactory implements ExecFactory {
         }
     }
 
+    public static class ListeningExecAction extends DefaultExecAction {
+        private final ExternalProcessStartedListener listener;
+
+        public ListeningExecAction(PathToFileResolver fileResolver, Executor executor, BuildCancellationToken buildCancellationToken, ExternalProcessStartedListener listener) {
+            super(fileResolver, executor, buildCancellationToken);
+            this.listener = listener;
+        }
+
+        @Override
+        public ExecResult execute() {
+            listener.onExternalProcessStarted(String.join(" ", getCommandLine()));
+            return super.execute();
+        }
+
+        @Override
+        public ExecHandle build() {
+            listener.onExternalProcessStarted(String.join(" ", getCommandLine()));
+            return super.build();
+        }
+    }
+
     private static class DecoratingExecActionFactory extends DefaultExecActionFactory {
         private final Instantiator instantiator;
         private final ObjectFactory objectFactory;
+        private final ExternalProcessStartedListener listener;
 
-        DecoratingExecActionFactory(
+        public DecoratingExecActionFactory(
             FileResolver fileResolver,
             FileCollectionFactory fileCollectionFactory,
             Instantiator instantiator,
@@ -237,14 +266,30 @@ public class DefaultExecActionFactory implements ExecFactory {
             ObjectFactory objectFactory,
             JavaModuleDetector javaModuleDetector
         ) {
+            this(fileResolver, fileCollectionFactory, instantiator, executor, temporaryFileProvider, buildCancellationToken, objectFactory, javaModuleDetector, cmd -> {
+            });
+        }
+
+        DecoratingExecActionFactory(
+            FileResolver fileResolver,
+            FileCollectionFactory fileCollectionFactory,
+            Instantiator instantiator,
+            Executor executor,
+            TemporaryFileProvider temporaryFileProvider,
+            BuildCancellationToken buildCancellationToken,
+            ObjectFactory objectFactory,
+            JavaModuleDetector javaModuleDetector,
+            ExternalProcessStartedListener listener
+        ) {
             super(fileResolver, fileCollectionFactory, objectFactory, executor, temporaryFileProvider, javaModuleDetector, buildCancellationToken);
             this.instantiator = instantiator;
             this.objectFactory = objectFactory;
+            this.listener = listener;
         }
 
         @Override
         public ExecAction newDecoratedExecAction() {
-            return instantiator.newInstance(DefaultExecAction.class, fileResolver, executor, buildCancellationToken);
+            return instantiator.newInstance(ListeningExecAction.class, fileResolver, executor, buildCancellationToken, listener);
         }
 
         @Override
@@ -270,6 +315,11 @@ public class DefaultExecActionFactory implements ExecFactory {
             final DefaultJavaForkOptions forkOptions = instantiator.newInstance(DefaultJavaForkOptions.class, fileResolver, fileCollectionFactory, javaDebugOptions);
             forkOptions.setExecutable(Jvm.current().getJavaExecutable());
             return forkOptions;
+        }
+
+        @Override
+        public ExecFactory withListener(ExternalProcessStartedListener listener) {
+            return new DecoratingExecActionFactory(fileResolver, fileCollectionFactory, instantiator, executor, temporaryFileProvider, buildCancellationToken, objectFactory, javaModuleDetector, listener);
         }
     }
 

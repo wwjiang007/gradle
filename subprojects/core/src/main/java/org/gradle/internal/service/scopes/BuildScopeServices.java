@@ -24,6 +24,7 @@ import org.gradle.api.internal.DefaultClassPathProvider;
 import org.gradle.api.internal.DefaultClassPathRegistry;
 import org.gradle.api.internal.DependencyClassPathProvider;
 import org.gradle.api.internal.DocumentationRegistry;
+import org.gradle.api.internal.ExternalProcessStartedListener;
 import org.gradle.api.internal.GradleInternal;
 import org.gradle.api.internal.StartParameterInternal;
 import org.gradle.api.internal.artifacts.DefaultModule;
@@ -194,6 +195,7 @@ import org.gradle.internal.snapshot.CaseSensitivity;
 import org.gradle.model.internal.inspect.ModelRuleSourceDetector;
 import org.gradle.plugin.management.internal.autoapply.AutoAppliedPluginHandler;
 import org.gradle.plugin.use.internal.PluginRequestApplicator;
+import org.gradle.process.ExecOperations;
 import org.gradle.process.internal.DefaultExecOperations;
 import org.gradle.process.internal.ExecFactory;
 import org.gradle.tooling.provider.model.internal.BuildScopeToolingModelBuilderRegistryAction;
@@ -277,8 +279,10 @@ public class BuildScopeServices extends DefaultServiceRegistry {
         return fileCollectionFactory.withResolver(fileResolver);
     }
 
-    protected ExecFactory decorateExecFactory(ExecFactory parent, FileResolver fileResolver, FileCollectionFactory fileCollectionFactory, Instantiator instantiator, ObjectFactory objectFactory, JavaModuleDetector javaModuleDetector) {
-        return parent.forContext(fileResolver, fileCollectionFactory, instantiator, objectFactory, javaModuleDetector);
+    protected ExecFactory decorateExecFactory(ExecFactory parent, FileResolver fileResolver, FileCollectionFactory fileCollectionFactory, Instantiator instantiator, ObjectFactory objectFactory, JavaModuleDetector javaModuleDetector, ListenerManager listenerManager) {
+        ExecFactory factory = parent.forContext(fileResolver, fileCollectionFactory, instantiator, objectFactory, javaModuleDetector);
+        factory = factory.withListener(listenerManager.getBroadcaster(ExternalProcessStartedListener.class));
+        return factory;
     }
 
     protected PublicBuildPath createPublicBuildPath(BuildState buildState) {
@@ -342,13 +346,16 @@ public class BuildScopeServices extends DefaultServiceRegistry {
         IsolatableFactory isolatableFactory,
         ServiceRegistry services,
         GradleProperties gradleProperties,
+        ExecFactory execFactory,
         ListenerManager listenerManager
     ) {
+        ExecOperations valueSourceOperations = new DefaultExecOperations(execFactory.withListener(cmd ->{}));
         return new DefaultValueSourceProviderFactory(
             listenerManager,
             instantiatorFactory,
             isolatableFactory,
             gradleProperties,
+            valueSourceOperations,
             services
         );
     }
