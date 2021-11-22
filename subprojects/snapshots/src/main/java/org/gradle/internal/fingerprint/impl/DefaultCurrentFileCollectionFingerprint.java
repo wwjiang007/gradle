@@ -57,6 +57,9 @@ public class DefaultCurrentFileCollectionFingerprint implements CurrentFileColle
         } else {
             fingerprints = strategy.collectFingerprints(roots);
         }
+        if (fingerprints.isEmpty()) {
+            return strategy.getEmptyFingerprint();
+        }
         return new DefaultCurrentFileCollectionFingerprint(fingerprints, roots, rootHashes, strategy);
     }
 
