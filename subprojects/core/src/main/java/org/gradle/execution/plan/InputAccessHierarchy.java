@@ -105,7 +105,6 @@ public class InputAccessHierarchy {
 
         @Override
         public void visitChildren(PersistentList<ChildAccess> values, Supplier<String> relativePathSupplier) {
-            this.input = true;
         }
 
         public boolean isInput() {
