@@ -275,7 +275,7 @@ public class Instrumented {
         }
     }
 
-    private static void notifyExternalCommandStarted(Object commandArg, String consumer) {
+    private static boolean notifyExternalCommandStarted(Object commandArg, String consumer) {
         final String command;
         commandArg = unwrap(commandArg);
         if (commandArg instanceof CharSequence) {
@@ -285,9 +285,10 @@ public class Instrumented {
         } else if (commandArg instanceof List) {
             command = joinCommand((List<?>) commandArg);
         } else {
-            return;
+            return false;
         }
         LISTENER.get().externalProcessStarted(command, consumer);
+        return true;
     }
 
     private static Object unwrap(Object obj) {
@@ -471,26 +472,33 @@ public class Instrumented {
 
         @Override
         public Object call(Object receiver, Object arg1) throws Throwable {
-            if (receiver instanceof Runtime) {
-                notifyExternalCommandStarted(arg1, array.owner.getName());
+            if (receiver instanceof Runtime && notifyExternalCommandStarted(arg1, array.owner.getName())) {
+                return returnWithRestore(super.call(receiver, arg1));
             }
             return super.call(receiver, arg1);
         }
 
         @Override
         public Object call(Object receiver, Object arg1, Object arg2) throws Throwable {
-            if (receiver instanceof Runtime) {
-                notifyExternalCommandStarted(arg1, array.owner.getName());
+            if (receiver instanceof Runtime && notifyExternalCommandStarted(arg1, array.owner.getName())) {
+                return returnWithRestore(super.call(receiver, arg1, arg2));
             }
             return super.call(receiver, arg1, arg2);
         }
 
         @Override
         public Object call(Object receiver, Object arg1, Object arg2, Object arg3) throws Throwable {
-            if (receiver instanceof Runtime) {
-                notifyExternalCommandStarted(arg1, array.owner.getName());
+            if (receiver instanceof Runtime && notifyExternalCommandStarted(arg1, array.owner.getName())) {
+                return returnWithRestore(super.call(receiver, arg1, arg2, arg3));
             }
             return super.call(receiver, arg1, arg2, arg3);
+        }
+
+        private Object returnWithRestore(Object retVal) {
+            if (array.array[index] != this) {
+                array.array[index] = new ExecCallSite(this);
+            }
+            return retVal;
         }
     }
 
@@ -505,15 +513,17 @@ public class Instrumented {
         // String|String[]|List.execute()
         @Override
         public Object call(Object receiver) throws Throwable {
-            notifyExternalCommandStarted(receiver, array.owner.getName());
+            if (notifyExternalCommandStarted(receiver, array.owner.getName())) {
+                return returnWithRestore(super.call(receiver));
+            }
             return super.call(receiver);
         }
 
         // ProcessGroovyMethod.execute(String|String[]|List)
         @Override
         public Object call(Object receiver, Object arg1) throws Throwable {
-            if (receiver.equals(ProcessGroovyMethods.class)) {
-                notifyExternalCommandStarted(arg1, array.owner.getName());
+            if (receiver.equals(ProcessGroovyMethods.class) && notifyExternalCommandStarted(arg1, array.owner.getName())) {
+                return returnWithRestore(super.call(receiver, arg1));
             }
             return super.call(receiver, arg1);
         }
@@ -521,8 +531,8 @@ public class Instrumented {
         // static import execute(String|String[]|List)
         @Override
         public Object callStatic(Class receiver, Object arg1) throws Throwable {
-            if (receiver.equals(ProcessGroovyMethods.class)) {
-                notifyExternalCommandStarted(arg1, array.owner.getName());
+            if (receiver.equals(ProcessGroovyMethods.class) && notifyExternalCommandStarted(arg1, array.owner.getName())) {
+                return returnWithRestore(super.callStatic(receiver, arg1));
             }
             return super.callStatic(receiver, arg1);
         }
@@ -530,15 +540,17 @@ public class Instrumented {
         // String|String[]|List.execute(String[]|List, File)
         @Override
         public Object call(Object receiver, @Nullable Object arg1, @Nullable Object arg2) throws Throwable {
-            notifyExternalCommandStarted(receiver, array.owner.getName());
+            if (notifyExternalCommandStarted(receiver, array.owner.getName())) {
+                return returnWithRestore(super.call(receiver, arg1, arg2));
+            }
             return super.call(receiver, arg1, arg2);
         }
 
         // ProcessGroovyMethod.execute(String|String[]|List, String[]|List, File)
         @Override
         public Object call(Object receiver, Object arg1, @Nullable Object arg2, @Nullable Object arg3) throws Throwable {
-            if (receiver.equals(ProcessGroovyMethods.class)) {
-                notifyExternalCommandStarted(arg1, array.owner.getName());
+            if (receiver.equals(ProcessGroovyMethods.class) && notifyExternalCommandStarted(arg1, array.owner.getName())) {
+                return returnWithRestore(super.call(receiver, arg1, arg2, arg3));
             }
             return super.call(receiver, arg1, arg2, arg3);
         }
@@ -546,10 +558,17 @@ public class Instrumented {
         // static import execute(String|String[]|List, String[]|List, File)
         @Override
         public Object callStatic(Class receiver, Object arg1, @Nullable Object arg2, @Nullable Object arg3) throws Throwable {
-            if (receiver.equals(ProcessGroovyMethods.class)) {
-                notifyExternalCommandStarted(arg1, array.owner.getName());
+            if (receiver.equals(ProcessGroovyMethods.class) && notifyExternalCommandStarted(arg1, array.owner.getName())) {
+                return returnWithRestore(super.callStatic(receiver, arg1, arg2, arg3));
             }
             return super.callStatic(receiver, arg1, arg2, arg3);
+        }
+
+        private Object returnWithRestore(Object retVal) {
+            if (array.array[index] != this) {
+                array.array[index] = new ExecuteCallSite(this);
+            }
+            return retVal;
         }
     }
 
