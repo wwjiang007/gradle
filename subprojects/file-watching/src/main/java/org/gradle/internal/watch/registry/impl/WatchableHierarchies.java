@@ -34,7 +34,9 @@ import javax.annotation.CheckReturnValue;
 import javax.annotation.Nonnull;
 import java.io.File;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -67,6 +69,7 @@ public class WatchableHierarchies {
      * Hierarchies in usage order, most recent first.
      */
     private final Deque<File> hierarchies = new ArrayDeque<>();
+    private final List<File> ignoredHierarchies = new ArrayList<>();
 
     public WatchableHierarchies(
         FileWatcherProbeRegistry probeRegistry,
@@ -88,6 +91,7 @@ public class WatchableHierarchies {
         }
         if (unwatchableFiles.contains(watchableHierarchyPath)) {
             LOGGER.info("Not watching {} since the file system is not supported", watchableHierarchy);
+            ignoredHierarchies.add(watchableHierarchy);
             return;
         }
         if (!watchableFiles.contains(watchableHierarchyPath)) {
@@ -110,6 +114,7 @@ public class WatchableHierarchies {
         if (!shouldWatchUnsupportedFileSystems(watchMode)) {
             newRoot = removeUnwatchableFileSystems(newRoot, invalidator);
         }
+        ignoredHierarchies.clear();
         return newRoot;
     }
 
@@ -153,6 +158,12 @@ public class WatchableHierarchies {
     public SnapshotHierarchy removeUnwatchableContentOnBuildStart(SnapshotHierarchy root, Invalidator invalidator, WatchMode watchMode) {
         SnapshotHierarchy newRoot = root;
         newRoot = removeUnprovenHierarchies(newRoot, invalidator, watchMode);
+        if (watchMode == WatchMode.ENABLED) {
+            for (File ignoredHierarchy : ignoredHierarchies) {
+                registerWatchableHierarchy(ignoredHierarchy, newRoot);
+            }
+        }
+        ignoredHierarchies.clear();
         return newRoot;
     }
 
