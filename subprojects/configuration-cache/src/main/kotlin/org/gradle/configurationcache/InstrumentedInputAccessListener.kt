@@ -26,8 +26,11 @@ import org.gradle.configurationcache.problems.location
 import org.gradle.configurationcache.serialization.Workarounds
 import org.gradle.internal.classpath.Instrumented
 import org.gradle.internal.event.ListenerManager
+import org.gradle.internal.operations.BuildOperationAncestryTracker
+import org.gradle.internal.operations.CurrentBuildOperationRef
 import org.gradle.internal.service.scopes.Scopes
 import org.gradle.internal.service.scopes.ServiceScope
+import java.util.Objects
 
 
 private
@@ -69,11 +72,16 @@ val allowedProperties = setOf(
 class InstrumentedInputAccessListener(
     private val problems: ProblemsListener,
     private val userCodeContext: UserCodeApplicationContext,
+    private val taskExecutionTracker: TaskExecutionTracker,
+    private val buildOperationAncestryTracker: BuildOperationAncestryTracker,
     listenerManager: ListenerManager,
 ) : Instrumented.Listener {
 
     private
     val broadcast = listenerManager.getBroadcaster(UndeclaredBuildInputListener::class.java)
+
+    private
+    val currentBuildOperationRef = CurrentBuildOperationRef.instance()
 
     override fun systemPropertyQueried(key: String, value: Any?, consumer: String) {
         if (allowedProperties.contains(key) || Workarounds.canReadSystemProperty(consumer)) {
@@ -90,6 +98,22 @@ class InstrumentedInputAccessListener(
     }
 
     override fun externalProcessStarted(command: String, consumer: String?) {
+        if (taskExecutionTracker.isCurrentThreadExecutingTask()) {
+            logger.info("Skip $command because it is invoked in a task")
+            return
+        }
+        val currentBuildOperation = currentBuildOperationRef.get()
+        if (currentBuildOperation != null) {
+            val taskAncestorId = buildOperationAncestryTracker.findClosestMatchingAncestor(currentBuildOperation.id) { id ->
+                taskExecutionTracker.currentRunningTaskOperations.find { ref -> Objects.equals(ref.id, id) } != null
+            }
+            if (taskAncestorId.isPresent) {
+                val taskAncestor = taskExecutionTracker.currentRunningTaskOperations.find { ref -> Objects.equals(ref.id, taskAncestorId.get()) }
+                logger.info("Skip $command because it is invoked in a child operation $currentBuildOperation of task $taskAncestor")
+                return
+            }
+        }
+
         // Starting external process is always an error because the configuration cache cannot fingerprint it in general.
         val message = StructuredMessage.build {
             text("external process started ")
