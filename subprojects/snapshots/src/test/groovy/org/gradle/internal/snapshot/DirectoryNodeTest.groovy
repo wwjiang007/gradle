@@ -42,7 +42,7 @@ class DirectoryNodeTest extends AbstractFileSystemNodeWithChildrenTest<FileSyste
         resultRoot instanceof PartialDirectoryNode
         resultRoot.children == children
         removedNodes == [initialRoot.getSnapshot().get()]
-        addedNodes == children.stream().map(ChildMap.Entry::getValue).toList()
+        addedNodes == children.stream().stream().map(ChildMap.Entry::getValue).toList()
         interaction { noMoreInteractions() }
 
         where:
@@ -58,7 +58,7 @@ class DirectoryNodeTest extends AbstractFileSystemNodeWithChildrenTest<FileSyste
         resultRoot instanceof PartialDirectoryNode
         resultRoot.children == childrenWithSelectedChildRemoved()
         removedNodes == [initialRoot.getSnapshot().get()]
-        addedNodes == childrenWithSelectedChildRemoved().stream().map(ChildMap.Entry::getValue).toList()
+        addedNodes == childrenWithSelectedChildRemoved().stream().stream().map(ChildMap.Entry::getValue).toList()
         interaction { noMoreInteractions() }
 
         where:
@@ -75,7 +75,7 @@ class DirectoryNodeTest extends AbstractFileSystemNodeWithChildrenTest<FileSyste
         resultRoot instanceof PartialDirectoryNode
         resultRoot.children == childrenWithSelectedChildReplacedBy(invalidatedChild)
         removedNodes == [initialRoot.getSnapshot().get()]
-        addedNodes == childrenWithSelectedChildRemoved().stream().map(ChildMap.Entry::getValue).toList()
+        addedNodes == childrenWithSelectedChildRemoved().stream().stream().map(ChildMap.Entry::getValue).toList()
 
         interaction {
             invalidateDescendantOfSelectedChild(invalidatedChild)
@@ -95,7 +95,7 @@ class DirectoryNodeTest extends AbstractFileSystemNodeWithChildrenTest<FileSyste
         resultRoot instanceof PartialDirectoryNode
         resultRoot.children == childrenWithSelectedChildRemoved()
         removedNodes == [initialRoot.getSnapshot().get()]
-        addedNodes == childrenWithSelectedChildRemoved().stream().map(ChildMap.Entry::getValue).toList()
+        addedNodes == childrenWithSelectedChildRemoved().stream().stream().map(ChildMap.Entry::getValue).toList()
 
         interaction {
             invalidateDescendantOfSelectedChild(null)

@@ -17,8 +17,8 @@
 package org.gradle.internal.snapshot;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.stream.Stream;
 
 public abstract class AbstractListChildMap<T> implements ChildMap<T> {
     protected final List<Entry<T>> entries;
@@ -33,8 +33,8 @@ public abstract class AbstractListChildMap<T> implements ChildMap<T> {
     }
 
     @Override
-    public Stream<Entry<T>> stream() {
-        return entries.stream();
+    public Collection<Entry<T>> stream() {
+        return entries;
     }
 
     protected int findChildIndexWithCommonPrefix(VfsRelativePath targetPath, CaseSensitivity caseSensitivity) {

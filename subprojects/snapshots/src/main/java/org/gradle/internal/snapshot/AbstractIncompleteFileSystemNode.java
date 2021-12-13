@@ -144,7 +144,7 @@ public abstract class AbstractIncompleteFileSystemNode implements FileSystemNode
 
     @Override
     public Stream<FileSystemLocationSnapshot> rootSnapshots() {
-        return children.stream()
+        return children.stream().stream()
             .map(ChildMap.Entry::getValue)
             .flatMap(ReadOnlyFileSystemNode::rootSnapshots);
     }
@@ -155,8 +155,11 @@ public abstract class AbstractIncompleteFileSystemNode implements FileSystemNode
     }
 
     private static boolean anyChildMatches(ChildMap<FileSystemNode> children, Predicate<FileSystemNode> predicate) {
-        return children.stream()
-            .map(ChildMap.Entry::getValue)
-            .anyMatch(predicate);
+        for (ChildMap.Entry<FileSystemNode> entry : children.stream()) {
+            if (predicate.test(entry.getValue())) {
+                return true;
+            }
+        }
+        return false;
     }
 }

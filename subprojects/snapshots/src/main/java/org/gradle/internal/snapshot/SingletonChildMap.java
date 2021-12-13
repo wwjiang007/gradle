@@ -16,7 +16,8 @@
 
 package org.gradle.internal.snapshot;
 
-import java.util.stream.Stream;
+import java.util.Collection;
+import java.util.Collections;
 
 import static org.gradle.internal.snapshot.ChildMapFactory.childMap;
 
@@ -37,8 +38,8 @@ public class SingletonChildMap<T> implements ChildMap<T> {
     }
 
     @Override
-    public Stream<Entry<T>> stream() {
-        return Stream.of(entry);
+    public Collection<Entry<T>> stream() {
+        return Collections.singletonList(entry);
     }
 
     @Override

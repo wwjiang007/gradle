@@ -16,7 +16,8 @@
 
 package org.gradle.internal.snapshot;
 
-import java.util.stream.Stream;
+import java.util.Collection;
+import java.util.Collections;
 
 public class EmptyChildMap<T> implements ChildMap<T> {
     private static final EmptyChildMap<Object> INSTANCE = new EmptyChildMap<>();
@@ -51,8 +52,8 @@ public class EmptyChildMap<T> implements ChildMap<T> {
     }
 
     @Override
-    public Stream<Entry<T>> stream() {
-        return Stream.empty();
+    public Collection<Entry<T>> stream() {
+        return Collections.emptyList();
     }
 
     @Override

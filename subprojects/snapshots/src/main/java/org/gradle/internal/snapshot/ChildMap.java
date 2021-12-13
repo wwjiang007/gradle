@@ -16,14 +16,14 @@
 
 package org.gradle.internal.snapshot;
 
+import java.util.Collection;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 public interface ChildMap<T> {
 
     boolean isEmpty();
 
-    Stream<Entry<T>> stream();
+    Collection<Entry<T>> stream();
 
     <RESULT> RESULT withNode(VfsRelativePath targetPath, CaseSensitivity caseSensitivity, NodeHandler<T, RESULT> handler);
 

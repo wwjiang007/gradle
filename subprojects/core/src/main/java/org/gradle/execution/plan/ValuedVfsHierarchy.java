@@ -161,18 +161,17 @@ public final class ValuedVfsHierarchy<T> {
     }
 
     private void visitAllChildren(BiConsumer<PersistentList<T>, Supplier<String>> childConsumer) {
-        children.stream()
-            .forEach(entry -> {
-                ValuedVfsHierarchy<T> child = entry.getValue();
-                childConsumer.accept(
-                    child.getValues(),
-                    entry::getPath
-                );
-                child.visitAllChildren((grandChildren, relativePath) -> childConsumer.accept(grandChildren, () -> joinRelativePaths(
-                    entry.getPath(),
-                    relativePath.get())
-                ));
-            });
+        for (ChildMap.Entry<ValuedVfsHierarchy<T>> entry : children.stream()) {
+            ValuedVfsHierarchy<T> child = entry.getValue();
+            childConsumer.accept(
+                child.getValues(),
+                entry::getPath
+            );
+            child.visitAllChildren((grandChildren, relativePath) -> childConsumer.accept(grandChildren, () -> joinRelativePaths(
+                entry.getPath(),
+                relativePath.get())
+            ));
+        }
     }
 
     private ChildMap<ValuedVfsHierarchy<T>> getChildren() {

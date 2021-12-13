@@ -247,7 +247,7 @@ abstract class AbstractFileSystemNodeWithChildrenTest<NODE extends FileSystemNod
     }
 
     private static <T> List<ChildMap.Entry<T>> childEntries(ChildMap<T> children) {
-        children.stream()
+        children.stream().stream()
             .collect(Collectors.toList())
     }
 }

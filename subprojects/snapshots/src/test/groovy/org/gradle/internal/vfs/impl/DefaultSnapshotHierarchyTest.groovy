@@ -821,7 +821,7 @@ class DefaultSnapshotHierarchyTest extends Specification {
             }
         } else if (unpackedNode instanceof AbstractIncompleteFileSystemNode) {
             def children = unpackedNode.children
-            children.stream()
+            children.stream().stream()
                 .forEach(child -> collectPrefixes(child.path, child.value, 0, prefixes))
         }
         return prefixes
@@ -843,7 +843,7 @@ class DefaultSnapshotHierarchyTest extends Specification {
             }
         } else if (unpackedNode instanceof AbstractIncompleteFileSystemNode) {
             def children = unpackedNode.children
-            children.stream()
+            children.stream().stream()
                 .forEach(child -> collectPrefixes(child.path, child.value, depth + 1, prefixes))
         }
     }

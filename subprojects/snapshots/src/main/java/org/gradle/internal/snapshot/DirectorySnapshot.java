@@ -76,9 +76,9 @@ public class DirectorySnapshot extends AbstractFileSystemLocationSnapshot {
         switch (result) {
             case CONTINUE:
                 visitor.enterDirectory(this);
-                children.stream()
-                    .map(ChildMap.Entry::getValue)
-                    .forEach(child -> child.accept(visitor));
+                for (ChildMap.Entry<FileSystemLocationSnapshot> entry : children.stream()) {
+                    entry.getValue().accept(visitor);
+                }
                 visitor.leaveDirectory(this);
                 return CONTINUE;
             case SKIP_SUBTREE:
@@ -98,9 +98,9 @@ public class DirectorySnapshot extends AbstractFileSystemLocationSnapshot {
             switch (result) {
                 case CONTINUE:
                     visitor.enterDirectory(this, pathTracker);
-                    children.stream()
-                        .map(ChildMap.Entry::getValue)
-                        .forEach(child -> child.accept(pathTracker, visitor));
+                    for (ChildMap.Entry<FileSystemLocationSnapshot> entry : children.stream()) {
+                        entry.getValue().accept(pathTracker, visitor);
+                    }
                     visitor.leaveDirectory(this, pathTracker);
                     return CONTINUE;
                 case SKIP_SUBTREE:
@@ -127,7 +127,7 @@ public class DirectorySnapshot extends AbstractFileSystemLocationSnapshot {
 
     @VisibleForTesting
     public ImmutableList<FileSystemLocationSnapshot> getChildren() {
-        return children.stream()
+        return children.stream().stream()
             .map(ChildMap.Entry::getValue)
             .collect(ImmutableList.toImmutableList());
     }
@@ -165,10 +165,12 @@ public class DirectorySnapshot extends AbstractFileSystemLocationSnapshot {
                         diffListener.nodeAdded(node);
                     }
                 });
-                children.stream()
-                    .map(ChildMap.Entry::getValue)
-                    .filter(existingChild -> existingChild != child)
-                    .forEach(diffListener::nodeAdded);
+                for (ChildMap.Entry<FileSystemLocationSnapshot> entry : children.stream()) {
+                    FileSystemLocationSnapshot existingChild = entry.getValue();
+                    if (existingChild != child) {
+                        diffListener.nodeAdded(existingChild);
+                    }
+                }
                 return invalidated;
             }
 
@@ -180,18 +182,20 @@ public class DirectorySnapshot extends AbstractFileSystemLocationSnapshot {
             @Override
             public void handleExactMatchWithChild(FileSystemLocationSnapshot child) {
                 diffListener.nodeRemoved(DirectorySnapshot.this);
-                children.stream()
-                    .map(ChildMap.Entry::getValue)
-                    .filter(existingChild -> existingChild != child)
-                    .forEach(diffListener::nodeAdded);
+                for (ChildMap.Entry<FileSystemLocationSnapshot> entry : children.stream()) {
+                    FileSystemLocationSnapshot existingChild = entry.getValue();
+                    if (existingChild != child) {
+                        diffListener.nodeAdded(existingChild);
+                    }
+                }
             }
 
             @Override
             public void handleUnrelatedToAnyChild() {
                 diffListener.nodeRemoved(DirectorySnapshot.this);
-                children.stream()
-                    .map(ChildMap.Entry::getValue)
-                    .forEach(diffListener::nodeAdded);
+                for (ChildMap.Entry<FileSystemLocationSnapshot> entry : children.stream()) {
+                    diffListener.nodeAdded(entry.getValue());
+                }
             }
         });
         return Optional.of(new PartialDirectoryNode(newChildren));
