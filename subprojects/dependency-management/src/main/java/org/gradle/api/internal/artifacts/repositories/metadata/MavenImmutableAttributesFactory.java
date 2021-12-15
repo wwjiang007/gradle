@@ -36,4 +36,5 @@ public interface MavenImmutableAttributesFactory extends ImmutableAttributesFact
 
     ImmutableAttributes libraryWithUsage(ImmutableAttributes original, String usage);
     ImmutableAttributes platformWithUsage(ImmutableAttributes original, String usage, boolean enforced);
+    ImmutableAttributes sourcesVariant(ImmutableAttributes original);
 }
