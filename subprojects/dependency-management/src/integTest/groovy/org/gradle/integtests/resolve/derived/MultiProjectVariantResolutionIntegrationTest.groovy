@@ -27,96 +27,104 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
             '''
 
             def producerBuildFile = file('producer/build.gradle')
-            def consumerBuildFile = file('consumer/build.gradle')
+            file("producer/jar.txt").text = "jar file"
+            file("producer/javadoc.txt").text = "javadoc file"
+            file("producer/other.txt").text = "other file"
 
             producerBuildFile << '''
-                plugins {
-                    id 'java'
-                }
-
-                java {
-                    withJavadocJar()
-                }
-
-                def otherAttribute = Attribute.of('other', String)
-
-                //dependencies.attributesSchema {
-                //    attribute(otherAttribute)
-                //}
-
                 configurations {
-                    other {
+                    jarElements {
                         canBeResolved = false
+                        canBeConsumed = true
                         attributes {
-                            attribute(otherAttribute, 'foobar')
+                            attribute(Attribute.of('shared', String), 'shared-value')
+                            attribute(Attribute.of('unique', String), 'jar-value')
                         }
 
                         outgoing {
-                            //capability('org.test:producer-other:1.0')
-                            artifact(layout.buildDirectory.file('other.txt'))
+                            artifact(layout.projectDirectory.file('jar.txt'))
+                        }
+                    }
+                    javadocElements {
+                        canBeResolved = false
+                        canBeConsumed = true
+                        attributes {
+                            attribute(Attribute.of('shared', String), 'shared-value')
+                            attribute(Attribute.of('unique', String), 'javadoc-value')
+                        }
+
+                        outgoing {
+                            artifact(layout.projectDirectory.file('javadoc.txt'))
+                        }
+                    }
+                    otherElements {
+                        canBeResolved = false
+                        canBeConsumed = true
+                        attributes {
+                            attribute(Attribute.of('other', String), 'foobar')
+                        }
+
+                        outgoing {
+                            artifact(layout.projectDirectory.file('other.txt'))
                         }
                     }
                 }
             '''
 
+            def consumerBuildFile = file('consumer/build.gradle')
             consumerBuildFile << '''
                 configurations {
                     producerArtifacts {
                         canBeConsumed = false
+                        canBeResolved = true
+                        
                         attributes {
-                            attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.LIBRARY))
-                            attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME))
+                            attribute(Attribute.of('shared', String), 'shared-value')
+                            attribute(Attribute.of('unique', String), 'jar-value')
                         }
                     }
                 }
-
-                def otherAttribute = Attribute.of('other', String)
-
-                //dependencies.attributesSchema {
-                //    attribute(otherAttribute)
-                //}
 
                 dependencies {
                     producerArtifacts project(':producer')
                 }
-
-                tasks.register('resolve') {
-                    dependsOn configurations.producerArtifacts
-                    doLast {
-                        logger.lifecycle 'Found files: {}', configurations.producerArtifacts.files*.name
+                
+                abstract class Resolve extends DefaultTask {
+                    @InputFiles
+                    abstract ConfigurableFileCollection getArtifacts()
+                    
+                    @Internal
+                    List<String> expectations = []
+                    
+                    @TaskAction
+                    void assertThat() {
+                        logger.lifecycle 'Found files: {}', artifacts.files*.name
+                        assert artifacts.files*.name == expectations 
                     }
                 }
 
-                tasks.register('resolveOther') {
-                    dependsOn configurations.producerArtifacts
-                    doLast {
-                        def view = configurations.producerArtifacts.incoming.artifactView {
-                            lenient = true
+                tasks.register('resolve', Resolve) {
+                    artifacts.from(configurations.producerArtifacts)
+                    expectations = [ 'jar.txt' ]
+                }
 
-                            attributes {
-                                attribute(otherAttribute, 'foobar')
-                            }
+                tasks.register('resolveJavadoc', Resolve) {
+                    artifacts.from(configurations.producerArtifacts.incoming.artifactView {
+                        attributes {
+                            attribute(Attribute.of('unique', String), 'javadoc-value')
                         }
-                        logger.lifecycle 'Found files: {}', view.files*.name
-                        //logger.lifecycle 'Found files: {}', view.artifacts.artifactFiles.files*.name
-                    }
+                    }.files)
+                    expectations = [ 'javadoc.txt' ]
                 }
-
-                tasks.register('resolveDocumentation') {
-                    dependsOn configurations.producerArtifacts
-                    doLast {
-                        def view = configurations.producerArtifacts.incoming.artifactView {
-                            lenient = true
-
-                            attributes {
-                                attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.DOCUMENTATION))
-                            }
+                
+                tasks.register('resolveOther', Resolve) {
+                    artifacts.from(configurations.producerArtifacts.incoming.artifactView {
+                        attributes {
+                            attribute(Attribute.of('other', String), 'foobar')
                         }
-                        logger.lifecycle 'Found files: {}', view.files*.name
-                        //logger.lifecycle 'Found files: {}', view.artifacts.artifactFiles.files*.name
-                    }
+                    }.files)
+                    expectations = [ 'other.txt' ]
                 }
-
             '''
         }
     }
@@ -128,7 +136,31 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
         then:
         outputContains '''
 --------------------------------------------------
-Variant other
+Variant jarElements
+--------------------------------------------------
+Capabilities
+    - org.test:producer:1.0 (default capability)
+Attributes
+    - shared = shared-value
+    - unique = jar-value
+
+Artifacts
+    - jar.txt
+
+--------------------------------------------------
+Variant javadocElements
+--------------------------------------------------
+Capabilities
+    - org.test:producer:1.0 (default capability)
+Attributes
+    - shared = shared-value
+    - unique = javadoc-value
+
+Artifacts
+    - javadoc.txt
+
+--------------------------------------------------
+Variant otherElements
 --------------------------------------------------
 Capabilities
     - org.test:producer:1.0 (default capability)
@@ -136,26 +168,23 @@ Attributes
     - other = foobar
 
 Artifacts
-    - build/other.txt (artifactType = txt)'''
+    - other.txt
+'''
     }
 
     def 'consumer resolves runtimeElements variant of producer'() {
         expect:
         succeeds(':consumer:resolve')
-        outputContains('Found files: [producer-1.0.jar]')
+        succeeds(':consumer:dependencyInsight', '--configuration', 'producerArtifacts', '--dependency', 'producer')
     }
 
     def 'consumer resolves other variant of producer'() {
         expect:
         succeeds(':consumer:resolveOther')
-        succeeds(':consumer:dependencyInsight', '--configuration', 'producerArtifacts', '--dependency', 'producer')
-        outputContains('Found files: [other.txt]')
     }
 
     def 'consumer resolves javadocElements variant of producer'() {
         expect:
-        succeeds(':consumer:resolveDocumentation')
-        //succeeds(':consumer:dependencyInsight', '--configuration', 'producerArtifacts', '--dependency', 'producer')
-        outputContains('Found files: [producer-1.0-javadoc.jar]')
+        succeeds(':consumer:resolveJavadoc')
     }
 }
