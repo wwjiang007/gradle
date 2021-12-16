@@ -123,18 +123,11 @@ public class DefaultFileSystemAccess implements FileSystemAccess {
 
     @Override
     public void read(String location, SnapshottingFilter filter, Consumer<FileSystemLocationSnapshot> visitor) {
+        FileSystemLocationSnapshot snapshot = readLocation(location);
         if (filter.isEmpty()) {
-            visitor.accept(readLocation(location));
+            visitor.accept(snapshot);
         } else {
-            FileSystemSnapshot filteredSnapshot = readSnapshotFromLocation(location,
-                snapshot -> FileSystemSnapshotFilter.filterSnapshot(filter.getAsSnapshotPredicate(), snapshot),
-                () -> {
-                    FileSystemLocationSnapshot snapshot = snapshot(location, filter);
-                    return snapshot.getType() == FileType.Directory
-                        // Directory snapshots have been filtered while walking the file system
-                        ? snapshot
-                        : FileSystemSnapshotFilter.filterSnapshot(filter.getAsSnapshotPredicate(), snapshot);
-                });
+            FileSystemSnapshot filteredSnapshot = FileSystemSnapshotFilter.filterSnapshot(filter.getAsSnapshotPredicate(), snapshot);
 
             if (filteredSnapshot instanceof FileSystemLocationSnapshot) {
                 visitor.accept((FileSystemLocationSnapshot) filteredSnapshot);
@@ -175,24 +168,10 @@ public class DefaultFileSystemAccess implements FileSystemAccess {
         String location,
         Supplier<FileSystemLocationSnapshot> readFromDisk
     ) {
-        return readSnapshotFromLocation(
-            location,
-            Function.identity(),
-            readFromDisk
-        );
-    }
-
-    private <T> T readSnapshotFromLocation(
-        String location,
-        Function<FileSystemLocationSnapshot, T> snapshotProcessor,
-        Supplier<T> readFromDisk
-    ) {
         return virtualFileSystem.findSnapshot(location)
-            .map(snapshotProcessor)
             // Avoid snapshotting the same location at the same time
             .orElseGet(() -> producingSnapshots.guardByKey(location,
                 () -> virtualFileSystem.findSnapshot(location)
-                    .map(snapshotProcessor)
                     .orElseGet(readFromDisk)
             ));
     }
