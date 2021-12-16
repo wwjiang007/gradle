@@ -77,7 +77,7 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
                     producerArtifacts {
                         canBeConsumed = false
                         canBeResolved = true
-                        
+
                         attributes {
                             attribute(Attribute.of('shared', String), 'shared-value')
                             attribute(Attribute.of('unique', String), 'jar-value')
@@ -88,18 +88,18 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
                 dependencies {
                     producerArtifacts project(':producer')
                 }
-                
+
                 abstract class Resolve extends DefaultTask {
                     @InputFiles
                     abstract ConfigurableFileCollection getArtifacts()
-                    
+
                     @Internal
                     List<String> expectations = []
-                    
+
                     @TaskAction
                     void assertThat() {
                         logger.lifecycle 'Found files: {}', artifacts.files*.name
-                        assert artifacts.files*.name == expectations 
+                        assert artifacts.files*.name == expectations
                     }
                 }
 
@@ -109,16 +109,16 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
                 }
 
                 tasks.register('resolveJavadoc', Resolve) {
-                    artifacts.from(configurations.producerArtifacts.incoming.artifactView {
+                    artifacts.from(configurations.producerArtifacts.incoming.variantView {
                         attributes {
                             attribute(Attribute.of('unique', String), 'javadoc-value')
                         }
                     }.files)
                     expectations = [ 'javadoc.txt' ]
                 }
-                
+
                 tasks.register('resolveOther', Resolve) {
-                    artifacts.from(configurations.producerArtifacts.incoming.artifactView {
+                    artifacts.from(configurations.producerArtifacts.incoming.variantView {
                         attributes {
                             attribute(Attribute.of('other', String), 'foobar')
                         }

@@ -45,8 +45,10 @@ import org.gradle.api.artifacts.ResolutionStrategy;
 import org.gradle.api.artifacts.ResolvableDependencies;
 import org.gradle.api.artifacts.ResolveException;
 import org.gradle.api.artifacts.ResolvedConfiguration;
+import org.gradle.api.artifacts.VariantView;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.artifacts.result.ComponentResult;
 import org.gradle.api.artifacts.result.DependencyResult;
 import org.gradle.api.artifacts.result.ResolutionResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
@@ -1826,6 +1828,29 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         }
 
         @Override
+        public VariantView variantView(Action<? super VariantView.ViewConfiguration> configAction) {
+            VariantViewConfiguration config = createVariantViewConfiguration();
+            configAction.execute(config);
+            return createVariantView(config);
+        }
+
+        private VariantView createVariantView(VariantViewConfiguration config) {
+            ImmutableAttributes viewAttributes = config.lockViewAttributes();
+            // This is a little coincidental: if view attributes have not been accessed, don't allow no matching variants
+            boolean allowNoMatchingVariants = config.attributesUsed;
+            List<ModuleComponentIdentifier> componentIds = this.getResolutionResult().getAllComponents().stream()
+                .map(ComponentResult::getId)
+                .filter(it -> it instanceof ModuleComponentIdentifier)
+                .map(ModuleComponentIdentifier.class::cast)
+                .collect(Collectors.toList());
+            return new ConfigurationVariantView(componentIds, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants); // TODO instead of ConfigurationVariantView here, do a detached
+        }
+
+        private DefaultConfiguration.VariantViewConfiguration createVariantViewConfiguration() {
+            return instantiator.newInstance(VariantViewConfiguration.class, attributesFactory, configurationAttributes);
+        }
+
+        @Override
         public AttributeContainer getAttributes() {
             return configurationAttributes;
         }
@@ -1861,6 +1886,47 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             @Override
             public FileCollection getFiles() {
                 return new ConfigurationFileCollection(new SelectedArtifactsProvider(), Specs.satisfyAll(), viewAttributes, componentFilter, lenient, allowNoMatchingVariants, new DefaultResolutionHost());
+            }
+        }
+
+        private class ConfigurationVariantView implements VariantView {
+            private final List<ModuleComponentIdentifier> componentIds;
+            private final ImmutableAttributes viewAttributes;
+            private final Spec<? super ComponentIdentifier> componentFilter;
+            private final boolean lenient;
+            private final boolean allowNoMatchingVariants;
+
+            ConfigurationVariantView(List<ModuleComponentIdentifier> componentIds, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
+                this.componentIds = componentIds;
+                this.viewAttributes = viewAttributes;
+                this.componentFilter = componentFilter;
+                this.lenient = lenient;
+                this.allowNoMatchingVariants = allowNoMatchingVariants;
+            }
+
+            @Override
+            public AttributeContainer getAttributes() {
+                return viewAttributes;
+            }
+
+//            @Override
+//            public ArtifactCollection getArtifacts() {
+//                return artifactCollection(viewAttributes, componentFilter, lenient, allowNoMatchingVariants);
+//            }
+
+            @Override
+            public FileCollection getFiles() {
+                ProjectInternal project = domainObjectContext.getProject();
+                Dependency[] dependencies = componentIds.stream().map(ModuleComponentIdentifier::toString).map(gav -> project.getDependencies().create(gav)).toArray(Dependency[]::new);
+                Configuration detached = project.getConfigurations().detachedConfiguration(dependencies);
+                detached.setTransitive(false);
+                for (Attribute attribute: getAttributes().keySet()) {
+                    @SuppressWarnings("unchecked") Attribute<Object> key = (Attribute<Object>) attribute;
+                    Object value = getAttributes().getAttribute(key);
+                    detached.getAttributes().attribute(key, value);
+                }
+                return detached;
+//                return new ConfigurationFileCollection(new SelectedArtifactsProvider(), Specs.satisfyAll(), viewAttributes, componentFilter, lenient, allowNoMatchingVariants, new DefaultResolutionHost());
             }
         }
 
@@ -2008,6 +2074,80 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
         @Override
         public ArtifactViewConfiguration lenient(boolean lenient) {
+            this.lenient = lenient;
+            return this;
+        }
+
+        private void assertComponentFilterUnset() {
+            if (componentFilter != null) {
+                throw new IllegalStateException("The component filter can only be set once before the view was computed");
+            }
+        }
+
+        private Spec<? super ComponentIdentifier> lockComponentFilter() {
+            if (componentFilter == null) {
+                componentFilter = Specs.satisfyAll();
+            }
+            return componentFilter;
+        }
+
+        private ImmutableAttributes lockViewAttributes() {
+            if (viewAttributes == null) {
+                viewAttributes = configurationAttributes.asImmutable();
+            } else {
+                viewAttributes = viewAttributes.asImmutable();
+            }
+            return viewAttributes.asImmutable();
+        }
+    }
+
+    public static class VariantViewConfiguration implements VariantView.ViewConfiguration {
+        private final ImmutableAttributesFactory attributesFactory;
+        private final AttributeContainerInternal configurationAttributes;
+        private AttributeContainerInternal viewAttributes;
+        private Spec<? super ComponentIdentifier> componentFilter;
+        private boolean lenient;
+        private boolean attributesUsed;
+
+        public VariantViewConfiguration(ImmutableAttributesFactory attributesFactory, AttributeContainerInternal configurationAttributes) {
+            this.attributesFactory = attributesFactory;
+            this.configurationAttributes = configurationAttributes;
+        }
+
+        @Override
+        public AttributeContainer getAttributes() {
+            if (viewAttributes == null) {
+                viewAttributes = attributesFactory.mutable(configurationAttributes);
+                attributesUsed = true;
+            }
+            return viewAttributes;
+        }
+
+        @Override
+        public VariantViewConfiguration attributes(Action<? super AttributeContainer> action) {
+            action.execute(getAttributes());
+            return this;
+        }
+
+        @Override
+        public VariantViewConfiguration componentFilter(Spec<? super ComponentIdentifier> componentFilter) {
+            assertComponentFilterUnset();
+            this.componentFilter = componentFilter;
+            return this;
+        }
+
+        @Override
+        public boolean isLenient() {
+            return lenient;
+        }
+
+        @Override
+        public void setLenient(boolean lenient) {
+            this.lenient = lenient;
+        }
+
+        @Override
+        public VariantViewConfiguration lenient(boolean lenient) {
             this.lenient = lenient;
             return this;
         }
