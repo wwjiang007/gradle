@@ -85,5 +85,7 @@ public interface ArtifactView extends HasAttributes {
          */
         ViewConfiguration lenient(boolean lenient);
 
+        void enableNewBehavior();
+
     }
 }

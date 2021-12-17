@@ -17,62 +17,19 @@
 package org.gradle.integtests.resolve.derived
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.test.fixtures.file.TestFile
 
 class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSpec {
 
     def setup() {
-        multiProjectBuild('root', ['producer', 'consumer']) {
+        multiProjectBuild('root', ['producer', 'direct', 'transitive', 'consumer']) {
             buildFile << '''
 
             '''
 
-            def producerBuildFile = file('producer/build.gradle')
-            file("producer/jar.txt").text = "jar file"
-            file("producer/javadoc.txt").text = "javadoc file"
-            file("producer/other.txt").text = "other file"
+            defineVariants(file('producer'))
 
-            producerBuildFile << '''
-                configurations {
-                    jarElements {
-                        canBeResolved = false
-                        canBeConsumed = true
-                        attributes {
-                            attribute(Attribute.of('shared', String), 'shared-value')
-                            attribute(Attribute.of('unique', String), 'jar-value')
-                        }
-
-                        outgoing {
-                            artifact(layout.projectDirectory.file('jar.txt'))
-                        }
-                    }
-                    javadocElements {
-                        canBeResolved = false
-                        canBeConsumed = true
-                        attributes {
-                            attribute(Attribute.of('shared', String), 'shared-value')
-                            attribute(Attribute.of('unique', String), 'javadoc-value')
-                        }
-
-                        outgoing {
-                            artifact(layout.projectDirectory.file('javadoc.txt'))
-                        }
-                    }
-                    otherElements {
-                        canBeResolved = false
-                        canBeConsumed = true
-                        attributes {
-                            attribute(Attribute.of('other', String), 'foobar')
-                        }
-
-                        outgoing {
-                            artifact(layout.projectDirectory.file('other.txt'))
-                        }
-                    }
-                }
-            '''
-
-            def consumerBuildFile = file('consumer/build.gradle')
-            consumerBuildFile << '''
+            file('consumer/build.gradle') << '''
                 configurations {
                     producerArtifacts {
                         canBeConsumed = false
@@ -105,28 +62,74 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
 
                 tasks.register('resolve', Resolve) {
                     artifacts.from(configurations.producerArtifacts)
-                    expectations = [ 'jar.txt' ]
                 }
 
                 tasks.register('resolveJavadoc', Resolve) {
                     artifacts.from(configurations.producerArtifacts.incoming.artifactView {
                         attributes {
-                            attribute(Attribute.of('unique', String), 'javadoc-value')
+                            // enableNewBehavior()
+                            attribute(Attribute.of('another', String), 'javadoc-value')
                         }
                     }.files)
-                    expectations = [ 'javadoc.txt' ]
                 }
                 
                 tasks.register('resolveOther', Resolve) {
                     artifacts.from(configurations.producerArtifacts.incoming.artifactView {
                         attributes {
+                            enableNewBehavior()
                             attribute(Attribute.of('other', String), 'foobar')
                         }
                     }.files)
-                    expectations = [ 'other.txt' ]
                 }
             '''
         }
+    }
+
+    void defineVariants(TestFile projectDir) {
+        projectDir.file(projectDir.name + "-jar.txt").text = "jar file"
+        projectDir.file(projectDir.name + "-javadoc.txt").text = "javadoc file"
+        projectDir.file(projectDir.name + "-producer/other.txt").text = "other file"
+
+        projectDir.file('build.gradle') << '''
+            configurations {
+                jarElements {
+                    canBeResolved = false
+                    canBeConsumed = true
+                    attributes {
+                        attribute(Attribute.of('shared', String), 'shared-value')
+                        attribute(Attribute.of('unique', String), 'jar-value')
+                    }
+
+                    outgoing {
+                        artifact(layout.projectDirectory.file(project.name + '-jar.txt'))
+                    }
+                }
+                javadocElements {
+                    canBeResolved = false
+                    canBeConsumed = true
+                    attributes {
+                        attribute(Attribute.of('shared', String), 'shared-value')
+                        attribute(Attribute.of('unique', String), 'jar-value')
+                        attribute(Attribute.of('another', String), 'javadoc-value')
+                    }
+
+                    outgoing {
+                        artifact(layout.projectDirectory.file(project.name + '-javadoc.txt'))
+                    }
+                }
+                otherElements {
+                    canBeResolved = false
+                    canBeConsumed = true
+                    attributes {
+                        attribute(Attribute.of('other', String), 'foobar')
+                    }
+
+                    outgoing {
+                        artifact(layout.projectDirectory.file(project.name + '-other.txt'))
+                    }
+                }
+            }
+        '''
     }
 
     def 'producer has expected outgoingVariants'() {
@@ -145,7 +148,7 @@ Attributes
     - unique = jar-value
 
 Artifacts
-    - jar.txt
+    - producer-jar.txt
 
 --------------------------------------------------
 Variant javadocElements
@@ -157,7 +160,7 @@ Attributes
     - unique = javadoc-value
 
 Artifacts
-    - javadoc.txt
+    - producer-javadoc.txt
 
 --------------------------------------------------
 Variant otherElements
@@ -168,23 +171,133 @@ Attributes
     - other = foobar
 
 Artifacts
-    - other.txt
+    - producer-other.txt
 '''
     }
 
-    def 'consumer resolves runtimeElements variant of producer'() {
+    def 'consumer resolves jar variant of producer'() {
+        file('consumer/build.gradle') << '''
+            resolve {
+                expectations = [ 'producer-jar.txt' ]
+            }
+        '''
         expect:
         succeeds(':consumer:resolve')
-        succeeds(':consumer:dependencyInsight', '--configuration', 'producerArtifacts', '--dependency', 'producer')
+    }
+
+    def 'consumer resolves javadoc variant of producer'() {
+        file('consumer/build.gradle') << '''
+            resolveJavadoc {
+                expectations = [ 'producer-javadoc.txt' ]
+            }
+        '''
+        expect:
+        succeeds(':consumer:resolveJavadoc')
     }
 
     def 'consumer resolves other variant of producer'() {
+        file('consumer/build.gradle') << '''
+            resolveOther {
+                expectations = [ 'producer-other.txt' ]
+            }
+        '''
         expect:
         succeeds(':consumer:resolveOther')
     }
 
-    def 'consumer resolves javadocElements variant of producer'() {
+    def 'consumer resolves jar variant of producer with dependencies'() {
+        defineVariants(file('transitive'))
+
+        defineVariants(file('direct'))
+        file('direct/build.gradle') << '''
+            dependencies {
+                jarElements project(":transitive")
+            }
+        '''
+
+        file('producer/build.gradle') << '''
+            dependencies {
+                jarElements project(":direct")
+            }
+        '''
+        file('consumer/build.gradle') << '''
+            resolve {
+                expectations = ['producer-jar.txt', 'direct-jar.txt', 'transitive-jar.txt']
+            }
+        '''
+        expect:
+        succeeds(':consumer:resolve')
+    }
+
+    def 'consumer resolves javadoc variant of producer with dependencies on jarElements'() {
+        defineVariants(file('transitive'))
+
+        defineVariants(file('direct'))
+        file('direct/build.gradle') << '''
+            dependencies {
+                jarElements project(":transitive")
+            }
+        '''
+
+        file('producer/build.gradle') << '''
+            dependencies {
+                jarElements project(":direct")
+            }
+        '''
+        file('consumer/build.gradle') << '''
+            resolveJavadoc {
+                expectations = ['producer-javadoc.txt', 'direct-javadoc.txt', 'transitive-javadoc.txt']
+            }
+        '''
         expect:
         succeeds(':consumer:resolveJavadoc')
+    }
+
+    def 'consumer resolves other variant of producer with dependencies on jarElements'() {
+        defineVariants(file('transitive'))
+
+        defineVariants(file('direct'))
+        file('direct/build.gradle') << '''
+            dependencies {
+                jarElements project(":transitive")
+            }
+        '''
+
+        file('producer/build.gradle') << '''
+            dependencies {
+                jarElements project(":direct")
+            }
+        '''
+        file('consumer/build.gradle') << '''
+            resolveOther {
+                expectations = ['producer-other.txt', 'direct-other.txt', 'transitive-other.txt']
+            }
+        '''
+        expect:
+        succeeds(':consumer:resolveOther')
+    }
+
+    def 'consumer resolves other variant of producer with dependencies on otherElements'() {
+        defineVariants(file('transitive'))
+
+        defineVariants(file('direct'))
+        file('direct/build.gradle') << '''
+            dependencies {
+                otherElements project(":transitive")
+            }
+        '''
+
+        file('producer/build.gradle') << '''
+            dependencies {
+                otherElements project(":direct")
+            }
+        '''
+        file('consumer/build.gradle') << '''
+            resolveOther {
+                expectations = ['producer-other.txt']
+            }
+        '''
+        expect:
+        succeeds(':consumer:resolveOther')
     }
 }

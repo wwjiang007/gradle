@@ -1962,6 +1962,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         private Spec<? super ComponentIdentifier> componentFilter;
         private boolean lenient;
         private boolean attributesUsed;
+        private boolean newBehavior = false;
 
         public ArtifactViewConfiguration(ImmutableAttributesFactory attributesFactory, AttributeContainerInternal configurationAttributes) {
             this.attributesFactory = attributesFactory;
@@ -1971,7 +1972,11 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         @Override
         public AttributeContainer getAttributes() {
             if (viewAttributes == null) {
-                viewAttributes = attributesFactory.mutable(configurationAttributes);
+                if (newBehavior) {
+                    viewAttributes = attributesFactory.mutable();
+                } else {
+                    viewAttributes = attributesFactory.mutable(configurationAttributes);
+                }
                 attributesUsed = true;
             }
             return viewAttributes;
@@ -2006,6 +2011,11 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             return this;
         }
 
+        @Override
+        public void enableNewBehavior() {
+            newBehavior = true;
+        }
+
         private void assertComponentFilterUnset() {
             if (componentFilter != null) {
                 throw new IllegalStateException("The component filter can only be set once before the view was computed");
@@ -2021,7 +2031,11 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
         private ImmutableAttributes lockViewAttributes() {
             if (viewAttributes == null) {
-                viewAttributes = configurationAttributes.asImmutable();
+                if (newBehavior) {
+                    throw new IllegalStateException("boom!");
+                } else {
+                    viewAttributes = configurationAttributes.asImmutable();
+                }
             } else {
                 viewAttributes = viewAttributes.asImmutable();
             }
