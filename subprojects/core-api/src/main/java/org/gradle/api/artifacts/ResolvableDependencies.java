@@ -128,6 +128,4 @@ public interface ResolvableDependencies extends ArtifactView {
      * @since 3.4
      */
     ArtifactView artifactView(Action<? super ArtifactView.ViewConfiguration> configAction);
-
-    VariantView variantView(Action<? super VariantView.ViewConfiguration> configAction);
 }
