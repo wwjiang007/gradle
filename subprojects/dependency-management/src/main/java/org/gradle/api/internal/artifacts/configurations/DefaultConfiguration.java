@@ -45,7 +45,6 @@ import org.gradle.api.artifacts.ResolutionStrategy;
 import org.gradle.api.artifacts.ResolvableDependencies;
 import org.gradle.api.artifacts.ResolveException;
 import org.gradle.api.artifacts.ResolvedConfiguration;
-import org.gradle.api.artifacts.VariantView;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.result.ComponentResult;
@@ -1811,7 +1810,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
         @Override
         public ArtifactView artifactView(Action<? super ArtifactView.ViewConfiguration> configAction) {
-            ArtifactViewConfiguration config = createArtifactViewConfiguration();
+            ArtifactViewConfiguration config = createArtifactViewConfiguration(); // TODO danger; order might matter when invoking withVariantReselection
             configAction.execute(config);
             return createArtifactView(config);
         }
@@ -1820,34 +1819,20 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             ImmutableAttributes viewAttributes = config.lockViewAttributes();
             // This is a little coincidental: if view attributes have not been accessed, don't allow no matching variants
             boolean allowNoMatchingVariants = config.attributesUsed;
-            return new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
+            if (config.reselectVariant) {
+                List<ModuleComponentIdentifier> componentIds = this.getResolutionResult().getAllComponents().stream()
+                    .map(ComponentResult::getId)
+                    .filter(it -> it instanceof ModuleComponentIdentifier)
+                    .map(ModuleComponentIdentifier.class::cast)
+                    .collect(Collectors.toList());
+                return new ReselectingArtifactView(componentIds, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
+            } else {
+                return new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
+            }
         }
 
         private DefaultConfiguration.ArtifactViewConfiguration createArtifactViewConfiguration() {
             return instantiator.newInstance(ArtifactViewConfiguration.class, attributesFactory, configurationAttributes);
-        }
-
-        @Override
-        public VariantView variantView(Action<? super VariantView.ViewConfiguration> configAction) {
-            VariantViewConfiguration config = createVariantViewConfiguration();
-            configAction.execute(config);
-            return createVariantView(config);
-        }
-
-        private VariantView createVariantView(VariantViewConfiguration config) {
-            ImmutableAttributes viewAttributes = config.lockViewAttributes();
-            // This is a little coincidental: if view attributes have not been accessed, don't allow no matching variants
-            boolean allowNoMatchingVariants = config.attributesUsed;
-            List<ModuleComponentIdentifier> componentIds = this.getResolutionResult().getAllComponents().stream()
-                .map(ComponentResult::getId)
-                .filter(it -> it instanceof ModuleComponentIdentifier)
-                .map(ModuleComponentIdentifier.class::cast)
-                .collect(Collectors.toList());
-            return new ConfigurationVariantView(componentIds, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants); // TODO instead of ConfigurationVariantView here, do a detached
-        }
-
-        private DefaultConfiguration.VariantViewConfiguration createVariantViewConfiguration() {
-            return instantiator.newInstance(VariantViewConfiguration.class, attributesFactory, configurationAttributes);
         }
 
         @Override
@@ -1885,18 +1870,19 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
             @Override
             public FileCollection getFiles() {
+                // TODO maybe make detached configuration is flag is true
                 return new ConfigurationFileCollection(new SelectedArtifactsProvider(), Specs.satisfyAll(), viewAttributes, componentFilter, lenient, allowNoMatchingVariants, new DefaultResolutionHost());
             }
         }
 
-        private class ConfigurationVariantView implements VariantView {
+        private class ReselectingArtifactView implements ArtifactView {
             private final List<ModuleComponentIdentifier> componentIds;
             private final ImmutableAttributes viewAttributes;
             private final Spec<? super ComponentIdentifier> componentFilter;
             private final boolean lenient;
             private final boolean allowNoMatchingVariants;
 
-            ConfigurationVariantView(List<ModuleComponentIdentifier> componentIds, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
+            ReselectingArtifactView(List<ModuleComponentIdentifier> componentIds, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
                 this.componentIds = componentIds;
                 this.viewAttributes = viewAttributes;
                 this.componentFilter = componentFilter;
@@ -1909,10 +1895,10 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 return viewAttributes;
             }
 
-//            @Override
-//            public ArtifactCollection getArtifacts() {
-//                return artifactCollection(viewAttributes, componentFilter, lenient, allowNoMatchingVariants);
-//            }
+            @Override
+            public ArtifactCollection getArtifacts() {
+                return artifactCollection(viewAttributes, componentFilter, lenient, allowNoMatchingVariants);
+            }
 
             @Override
             public FileCollection getFiles() {
@@ -1926,6 +1912,16 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                     detached.getAttributes().attribute(key, value);
                 }
                 return detached;
+
+                // FIXME try to create an ArtifactView on top of the detached configuration having no attributes; doesn't work
+//                ArtifactView av = detached.getIncoming().artifactView(view -> {
+//                    for (Attribute attribute: getAttributes().keySet()) {
+//                        @SuppressWarnings("unchecked") Attribute<Object> key = (Attribute<Object>) attribute;
+//                        Object value = getAttributes().getAttribute(key);
+//                        view.getAttributes().attribute(key, value);
+//                    }
+//                });
+//                return av.getFiles();
 //                return new ConfigurationFileCollection(new SelectedArtifactsProvider(), Specs.satisfyAll(), viewAttributes, componentFilter, lenient, allowNoMatchingVariants, new DefaultResolutionHost());
             }
         }
@@ -2033,6 +2029,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         private AttributeContainerInternal viewAttributes;
         private Spec<? super ComponentIdentifier> componentFilter;
         private boolean lenient;
+        private boolean reselectVariant;
         private boolean attributesUsed;
 
         public ArtifactViewConfiguration(ImmutableAttributesFactory attributesFactory, AttributeContainerInternal configurationAttributes) {
@@ -2043,7 +2040,11 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         @Override
         public AttributeContainer getAttributes() {
             if (viewAttributes == null) {
-                viewAttributes = attributesFactory.mutable(configurationAttributes);
+                if (reselectVariant) {
+                    viewAttributes = attributesFactory.mutable();
+                } else {
+                    viewAttributes = attributesFactory.mutable(configurationAttributes);
+                }
                 attributesUsed = true;
             }
             return viewAttributes;
@@ -2078,77 +2079,9 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             return this;
         }
 
-        private void assertComponentFilterUnset() {
-            if (componentFilter != null) {
-                throw new IllegalStateException("The component filter can only be set once before the view was computed");
-            }
-        }
-
-        private Spec<? super ComponentIdentifier> lockComponentFilter() {
-            if (componentFilter == null) {
-                componentFilter = Specs.satisfyAll();
-            }
-            return componentFilter;
-        }
-
-        private ImmutableAttributes lockViewAttributes() {
-            if (viewAttributes == null) {
-                viewAttributes = configurationAttributes.asImmutable();
-            } else {
-                viewAttributes = viewAttributes.asImmutable();
-            }
-            return viewAttributes.asImmutable();
-        }
-    }
-
-    public static class VariantViewConfiguration implements VariantView.ViewConfiguration {
-        private final ImmutableAttributesFactory attributesFactory;
-        private final AttributeContainerInternal configurationAttributes;
-        private AttributeContainerInternal viewAttributes;
-        private Spec<? super ComponentIdentifier> componentFilter;
-        private boolean lenient;
-        private boolean attributesUsed;
-
-        public VariantViewConfiguration(ImmutableAttributesFactory attributesFactory, AttributeContainerInternal configurationAttributes) {
-            this.attributesFactory = attributesFactory;
-            this.configurationAttributes = configurationAttributes;
-        }
-
         @Override
-        public AttributeContainer getAttributes() {
-            if (viewAttributes == null) {
-                viewAttributes = attributesFactory.mutable(configurationAttributes);
-                attributesUsed = true;
-            }
-            return viewAttributes;
-        }
-
-        @Override
-        public VariantViewConfiguration attributes(Action<? super AttributeContainer> action) {
-            action.execute(getAttributes());
-            return this;
-        }
-
-        @Override
-        public VariantViewConfiguration componentFilter(Spec<? super ComponentIdentifier> componentFilter) {
-            assertComponentFilterUnset();
-            this.componentFilter = componentFilter;
-            return this;
-        }
-
-        @Override
-        public boolean isLenient() {
-            return lenient;
-        }
-
-        @Override
-        public void setLenient(boolean lenient) {
-            this.lenient = lenient;
-        }
-
-        @Override
-        public VariantViewConfiguration lenient(boolean lenient) {
-            this.lenient = lenient;
+        public ArtifactViewConfiguration withVariantReselection() {
+            this.reselectVariant = true;
             return this;
         }
 

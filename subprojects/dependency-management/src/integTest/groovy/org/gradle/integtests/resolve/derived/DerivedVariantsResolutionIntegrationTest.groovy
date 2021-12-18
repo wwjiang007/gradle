@@ -52,9 +52,9 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
             }
 
             task resolve(type: Resolve) {
-                def variantView = configurations.runtimeClasspath.incoming.variantView {
+                def artifactView = configurations.runtimeClasspath.incoming.artifactView {
                     lenient = true
-
+                    withVariantReselection()
                     attributes {
                         attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME))
                         attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.DOCUMENTATION))
@@ -62,7 +62,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
                         attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objects.named(DocsType, DocsType.SOURCES))
                     }
                 }
-                artifacts.from(variantView.getFiles())
+                artifacts.from(artifactView.getFiles())
             }
         """
         transitive = mavenHttpRepo.module("test", "transitive", "1.0")
