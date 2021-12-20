@@ -143,6 +143,7 @@ class DefaultMavenModuleResolveMetadataTest extends AbstractLazyModuleComponentR
         variantsForGraphTraversal[1].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
         variantsForGraphTraversal[2].name == "sources"
         variantsForGraphTraversal[2].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
+        variantsForGraphTraversal[2].attributes.getAttribute(componentTypeAttribute) == "documentation"
         variantsForGraphTraversal[3].name == "platform-compile"
         variantsForGraphTraversal[3].attributes.getAttribute(stringUsageAttribute) == "java-api"
         variantsForGraphTraversal[3].attributes.getAttribute(componentTypeAttribute) == "platform"
