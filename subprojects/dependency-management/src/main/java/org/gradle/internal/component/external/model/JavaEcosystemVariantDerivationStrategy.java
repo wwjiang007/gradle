@@ -60,7 +60,7 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
                     // component we cannot mix precise usages with more generic ones)
                 libraryWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API),
                 libraryWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME),
-                    sourcesVariant(attributesFactory, attributes, runtimeConfiguration),
+                    sourcesVariant(metadata, attributesFactory, attributes, runtimeConfiguration),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, true, shadowedEnforcedPlatformCapability),
@@ -69,8 +69,10 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
         return null;
     }
 
-    private DefaultConfigurationMetadata sourcesVariant(MavenImmutableAttributesFactory attributesFactory, ImmutableAttributes originAttributes, DefaultConfigurationMetadata runtimeConfiguration) {
-        return runtimeConfiguration.mutate().withAttributes(attributesFactory.sourcesVariant(originAttributes)).withoutConstraints().build();
+    private DefaultConfigurationMetadata sourcesVariant(ModuleComponentResolveMetadata metadata, MavenImmutableAttributesFactory attributesFactory, ImmutableAttributes originAttributes, DefaultConfigurationMetadata runtimeConfiguration) {
+        // TODO: does the metadata already have sources listed?
+        // TODO: requiresMavenArtifactDiscovery
+        return runtimeConfiguration.mutate().withAttributes(attributesFactory.sourcesVariant(originAttributes)).withArtifacts(ImmutableList.of(metadata.artifact("source", "jar", "sources"))).withoutConstraints().withName("sources").requiresMavenArtifactDiscovery().build();
     }
 
     private ImmutableCapabilities buildShadowPlatformCapability(ModuleComponentIdentifier componentId, boolean enforced) {
