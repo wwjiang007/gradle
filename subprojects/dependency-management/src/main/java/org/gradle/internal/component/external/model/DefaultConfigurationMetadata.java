@@ -22,6 +22,7 @@ import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.capabilities.CapabilitiesMetadata;
 import org.gradle.api.internal.attributes.ImmutableAttributes;
 import org.gradle.internal.Factory;
+import org.gradle.internal.component.model.ConfigurationMetadata;
 import org.gradle.internal.component.model.ExcludeMetadata;
 import org.gradle.internal.component.model.ForcingDependencyMetadata;
 
@@ -292,6 +293,13 @@ public class DefaultConfigurationMetadata extends AbstractConfigurationMetadata 
             return this;
         }
 
+        /**
+         * When synthesizing variants, invoking this method prevents "fallback" to the default artifact of a maven dependency.
+         *
+         * <p>See {@link ConfigurationMetadata#requiresMavenArtifactDiscovery()}</p>
+         *
+         * @return this
+         */
         Builder requiresMavenArtifactDiscovery() {
             this.requiresMavenArtifactDiscovery = false;
             return this;

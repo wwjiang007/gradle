@@ -68,9 +68,6 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         transitive = mavenHttpRepo.module("test", "transitive", "1.0")
         direct = mavenHttpRepo.module("test", "direct", "1.0")
         direct.dependsOn(transitive)
-
-        //         transitive.withSourceAndJavadoc()
-        //         transitive.withModuleMetadata()
     }
 
     // region With Gradle Module Metadata
@@ -145,6 +142,41 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         transitive.artifact(classifier: "sources").expectGet()
 
         succeeds( "resolve")
+    }
+
+    def "does not derive sources variant for GMM-backed module already declaring a variant with same attributes"() {
+        direct.adhocVariants().variant("jar", [
+            "org.gradle.category": "library",
+            "org.gradle.dependency.bundling": "external",
+            "org.gradle.usage": "java-runtime"
+        ]) {
+            artifact("direct-1.0.jar")
+        }
+            .variant("sources", [
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "sources",
+                "org.gradle.usage": "java-runtime"
+            ]) {
+                artifact("direct-1.0-sources.jar")
+            }
+        direct.withModuleMetadata()
+        direct.publish()
+
+        buildFile << """
+            resolve {
+                expectations = ['direct-1.0-sources.jar']
+            }
+        """
+        expect:
+        direct.pom.expectGet()
+        direct.moduleMetadata.expectGet()
+        transitive.pom.expectGet()
+        //transitive.moduleMetadata.expectGet()
+        direct.artifact(classifier: "sources").expectGet()
+
+        succeeds( "resolve")
+//        succeeds("dependencyInsight", "--configuration")
     }
 
     def "direct has GMM and no sources jar and transitive has GMM and has sources jar"() {

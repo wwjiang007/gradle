@@ -1812,7 +1812,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
         @Override
         public ArtifactView artifactView(Action<? super ArtifactView.ViewConfiguration> configAction) {
-            ArtifactViewConfiguration config = createArtifactViewConfiguration(); // TODO danger; order might matter when invoking withVariantReselection
+            ArtifactViewConfiguration config = createArtifactViewConfiguration();
             configAction.execute(config);
             return createArtifactView(config);
         }
@@ -1821,14 +1821,16 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             ImmutableAttributes viewAttributes = config.lockViewAttributes();
             // This is a little coincidental: if view attributes have not been accessed, don't allow no matching variants
             boolean allowNoMatchingVariants = config.attributesUsed;
+            ArtifactView view;
             if (config.reselectVariant) {
                 List<ComponentIdentifier> componentIds = this.getResolutionResult().getAllComponents().stream()
                     .map(ComponentResult::getId)
                     .collect(Collectors.toList());
-                return new ReselectingArtifactView(componentIds, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
+                view = new ReselectingArtifactView(componentIds, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
             } else {
-                return new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
+                view = new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
             }
+            return view;
         }
 
         private DefaultConfiguration.ArtifactViewConfiguration createArtifactViewConfiguration() {
@@ -1905,7 +1907,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 ProjectInternal project = domainObjectContext.getProject();
                 List<Dependency> dependencies = new ArrayList<>();
                 for (ComponentIdentifier componentIdentifier : componentIds) {
-                    // TODO this is wrong
+                    // TODO are the two implementations (ProjectComponentIdentifier, ModuleComponentIdentifier) sufficient?
                     if (componentIdentifier instanceof ProjectComponentIdentifier) {
                         dependencies.add(project.getDependencies().project(Collections.singletonMap("path", ((ProjectComponentIdentifier) componentIdentifier).getProjectPath())));
                     } else if (componentIdentifier instanceof ModuleComponentIdentifier) {
@@ -1914,6 +1916,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                 }
                 Configuration detached = project.getConfigurations().detachedConfiguration(dependencies.toArray(new Dependency[0]));
                 detached.setTransitive(false);
+                detached.setVisible(false);
                 for (Attribute attribute: getAttributes().keySet()) {
                     @SuppressWarnings("unchecked") Attribute<Object> key = (Attribute<Object>) attribute;
                     Object value = getAttributes().getAttribute(key);
