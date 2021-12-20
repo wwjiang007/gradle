@@ -1920,17 +1920,6 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                     detached.getAttributes().attribute(key, value);
                 }
                 return detached.getIncoming().artifactView(view -> view.lenient(true)).getFiles();
-
-                // FIXME try to create an ArtifactView on top of the detached configuration having no attributes; doesn't work
-//                ArtifactView av = detached.getIncoming().artifactView(view -> {
-//                    for (Attribute attribute: getAttributes().keySet()) {
-//                        @SuppressWarnings("unchecked") Attribute<Object> key = (Attribute<Object>) attribute;
-//                        Object value = getAttributes().getAttribute(key);
-//                        view.getAttributes().attribute(key, value);
-//                    }
-//                });
-//                return av.getFiles();
-//                return new ConfigurationFileCollection(new SelectedArtifactsProvider(), Specs.satisfyAll(), viewAttributes, componentFilter, lenient, allowNoMatchingVariants, new DefaultResolutionHost());
             }
         }
 

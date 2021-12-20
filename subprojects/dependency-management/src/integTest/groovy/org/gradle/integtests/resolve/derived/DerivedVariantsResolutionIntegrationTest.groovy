@@ -90,8 +90,6 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.moduleMetadata.expectGet()
         transitive.pom.expectGet()
         transitive.moduleMetadata.expectGet()
-        direct.artifact(classifier: "sources").expectGetMissing()
-        transitive.artifact(classifier: "sources").expectGetMissing()
 
         succeeds( "resolve")
     }
@@ -149,8 +147,14 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         succeeds( "resolve")
     }
 
-    def "direct has GMM and no sources jar and transitive has sources jar"() {
-        transitive.adhocVariants().variant("sources", [
+    def "direct has GMM and no sources jar and transitive has GMM and has sources jar"() {
+        transitive.adhocVariants().variant("jar", [
+                "org.gradle.category": "library",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.usage": "java-runtime"
+        ]) {
+            artifact("transitive-1.0.jar")
+        }.variant("sources", [
             "org.gradle.category": "documentation",
             "org.gradle.dependency.bundling": "external",
             "org.gradle.docstype": "sources",
@@ -166,7 +170,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
 
         buildFile << """
             resolve {
-                expectations = []
+                expectations = ['transitive-1.0-sources.jar']
             }
         """
         expect:
@@ -220,14 +224,14 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         succeeds("resolve")
     }
 
-    def "direct has no GMM and no sources jar and transitive has sources jar"() {
+    def "direct has no GMM and no sources jar and transitive has no GMM and has sources jar"() {
         transitive.withSourceAndJavadoc()
         transitive.publish()
         direct.publish()
 
         buildFile << """
             resolve {
-                expectations = []
+                expectations = ["transitive-1.0-sources.jar"]
             }
         """
         expect:
