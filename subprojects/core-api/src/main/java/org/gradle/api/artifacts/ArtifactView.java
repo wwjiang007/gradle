@@ -92,7 +92,7 @@ public interface ArtifactView extends HasAttributes {
          *
          * <p>This behavior cannot be unset on a particular view once this method is invoked.
          *
-         * @since 7.5
+         * @since 7.4
          */
         @Incubating
         ViewConfiguration withVariantReselection();
