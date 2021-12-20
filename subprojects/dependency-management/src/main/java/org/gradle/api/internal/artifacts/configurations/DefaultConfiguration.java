@@ -47,6 +47,7 @@ import org.gradle.api.artifacts.ResolveException;
 import org.gradle.api.artifacts.ResolvedConfiguration;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.artifacts.result.ComponentResult;
 import org.gradle.api.artifacts.result.DependencyResult;
 import org.gradle.api.artifacts.result.ResolutionResult;
@@ -136,6 +137,7 @@ import org.gradle.util.internal.WrapUtil;
 
 import javax.annotation.Nullable;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -1820,10 +1822,8 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             // This is a little coincidental: if view attributes have not been accessed, don't allow no matching variants
             boolean allowNoMatchingVariants = config.attributesUsed;
             if (config.reselectVariant) {
-                List<ModuleComponentIdentifier> componentIds = this.getResolutionResult().getAllComponents().stream()
+                List<ComponentIdentifier> componentIds = this.getResolutionResult().getAllComponents().stream()
                     .map(ComponentResult::getId)
-                    .filter(it -> it instanceof ModuleComponentIdentifier)
-                    .map(ModuleComponentIdentifier.class::cast)
                     .collect(Collectors.toList());
                 return new ReselectingArtifactView(componentIds, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
             } else {
@@ -1876,13 +1876,13 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         }
 
         private class ReselectingArtifactView implements ArtifactView {
-            private final List<ModuleComponentIdentifier> componentIds;
+            private final List<ComponentIdentifier> componentIds;
             private final ImmutableAttributes viewAttributes;
             private final Spec<? super ComponentIdentifier> componentFilter;
             private final boolean lenient;
             private final boolean allowNoMatchingVariants;
 
-            ReselectingArtifactView(List<ModuleComponentIdentifier> componentIds, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
+            ReselectingArtifactView(List<ComponentIdentifier> componentIds, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
                 this.componentIds = componentIds;
                 this.viewAttributes = viewAttributes;
                 this.componentFilter = componentFilter;
@@ -1903,15 +1903,23 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             @Override
             public FileCollection getFiles() {
                 ProjectInternal project = domainObjectContext.getProject();
-                Dependency[] dependencies = componentIds.stream().map(ModuleComponentIdentifier::toString).map(gav -> project.getDependencies().create(gav)).toArray(Dependency[]::new);
-                Configuration detached = project.getConfigurations().detachedConfiguration(dependencies);
+                List<Dependency> dependencies = new ArrayList<>();
+                for (ComponentIdentifier componentIdentifier : componentIds) {
+                    // TODO this is wrong
+                    if (componentIdentifier instanceof ProjectComponentIdentifier) {
+                        dependencies.add(project.getDependencies().project(Collections.singletonMap("path", ((ProjectComponentIdentifier) componentIdentifier).getProjectPath())));
+                    } else if (componentIdentifier instanceof ModuleComponentIdentifier) {
+                        dependencies.add(project.getDependencies().create(componentIdentifier.toString()));
+                    }
+                }
+                Configuration detached = project.getConfigurations().detachedConfiguration(dependencies.toArray(new Dependency[0]));
                 detached.setTransitive(false);
                 for (Attribute attribute: getAttributes().keySet()) {
                     @SuppressWarnings("unchecked") Attribute<Object> key = (Attribute<Object>) attribute;
                     Object value = getAttributes().getAttribute(key);
                     detached.getAttributes().attribute(key, value);
                 }
-                return detached;
+                return detached.getIncoming().artifactView(view -> view.lenient(true)).getFiles();
 
                 // FIXME try to create an ArtifactView on top of the detached configuration having no attributes; doesn't work
 //                ArtifactView av = detached.getIncoming().artifactView(view -> {
