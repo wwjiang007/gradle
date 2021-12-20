@@ -60,7 +60,7 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
                     // component we cannot mix precise usages with more generic ones)
                 libraryWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API),
                 libraryWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME),
-                    //sourcesVariant(attributesFactory, attributes, runtimeConfiguration),
+                    sourcesVariant(attributesFactory, attributes, runtimeConfiguration),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, true, shadowedEnforcedPlatformCapability),
