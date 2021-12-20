@@ -67,8 +67,9 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
                 tasks.register('resolveJavadoc', Resolve) {
                     artifacts.from(configurations.producerArtifacts.incoming.artifactView {
                         attributes {
-                            // enableNewBehavior()
-                            attribute(Attribute.of('another', String), 'javadoc-value')
+                            enableNewBehavior()
+                            attribute(Attribute.of('shared', String), 'shared-value')
+                            attribute(Attribute.of('unique', String), 'javadoc-value')
                         }
                     }.files)
                 }
@@ -109,8 +110,7 @@ class MultiProjectVariantResolutionIntegrationTest extends AbstractIntegrationSp
                     canBeConsumed = true
                     attributes {
                         attribute(Attribute.of('shared', String), 'shared-value')
-                        attribute(Attribute.of('unique', String), 'jar-value')
-                        attribute(Attribute.of('another', String), 'javadoc-value')
+                        attribute(Attribute.of('unique', String), 'javadoc-value')
                     }
 
                     outgoing {

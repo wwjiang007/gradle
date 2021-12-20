@@ -79,8 +79,9 @@ class PublishedVariantResolutionIntegrationTest extends AbstractHttpDependencyRe
                 tasks.register('resolveJavadoc', Resolve) {
                     artifacts.from(configurations.producerArtifacts.incoming.artifactView {
                         attributes {
-                            // enableNewBehavior()
-                            attribute(Attribute.of('another', String), 'javadoc-value')
+                            enableNewBehavior()
+                            attribute(Attribute.of('shared', String), 'shared-value')
+                            attribute(Attribute.of('unique', String), 'javadoc-value')
                         }
                     }.files)
                 }
@@ -88,7 +89,7 @@ class PublishedVariantResolutionIntegrationTest extends AbstractHttpDependencyRe
                 tasks.register('resolveOther', Resolve) {
                     artifacts.from(configurations.producerArtifacts.incoming.artifactView {
                         attributes {
-                            // enableNewBehavior()
+                            enableNewBehavior()
                             attribute(Attribute.of('other', String), 'foobar')
                         }
                     }.files)
@@ -104,7 +105,7 @@ class PublishedVariantResolutionIntegrationTest extends AbstractHttpDependencyRe
                 variant("jarElements", [shared: 'shared-value', unique: 'jar-value']) {
                     artifact("${module.artifactId}-jar.txt")
                 }.
-                variant("javadocElements", [shared: 'shared-value', unique: 'jar-value', another: 'javadoc-value']) {
+                variant("javadocElements", [shared: 'shared-value', unique: 'javadoc-value']) {
                     artifact("${module.artifactId}-javadoc.txt")
                 }.
                 variant("otherElements", [other: 'foobar']) {
