@@ -60,7 +60,7 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
                     // component we cannot mix precise usages with more generic ones)
                 libraryWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API),
                 libraryWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME),
-                    sourcesVariant(metadata, attributesFactory, attributes, runtimeConfiguration),
+                libraryWithSourcesVariant(runtimeConfiguration, attributes, attributesFactory, metadata),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, true, shadowedEnforcedPlatformCapability),
@@ -69,10 +69,19 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
         return null;
     }
 
-    private DefaultConfigurationMetadata sourcesVariant(ModuleComponentResolveMetadata metadata, MavenImmutableAttributesFactory attributesFactory, ImmutableAttributes originAttributes, DefaultConfigurationMetadata runtimeConfiguration) {
-        // TODO: does the metadata already have sources listed?
-        // TODO: requiresMavenArtifactDiscovery
-        return runtimeConfiguration.mutate().withAttributes(attributesFactory.sourcesVariant(originAttributes)).withArtifacts(ImmutableList.of(metadata.artifact("source", "jar", "sources"))).withoutConstraints().withName("sources").requiresMavenArtifactDiscovery().build();
+    /**
+     * Synthesizes a "sources" variant since maven metadata cannot represent it
+     *
+     * @return synthetic metadata for the sources-classifier jar
+     */
+    private static DefaultConfigurationMetadata libraryWithSourcesVariant(DefaultConfigurationMetadata runtimeConfiguration, ImmutableAttributes originAttributes, MavenImmutableAttributesFactory attributesFactory, ModuleComponentResolveMetadata metadata) {
+        return runtimeConfiguration.mutate()
+            .withName("sources")
+            .withAttributes(attributesFactory.sourcesVariant(originAttributes))
+            .withArtifacts(ImmutableList.of(metadata.artifact("source", "jar", "sources")))
+            .withoutConstraints()
+            .requiresMavenArtifactDiscovery()
+            .build();
     }
 
     private ImmutableCapabilities buildShadowPlatformCapability(ModuleComponentIdentifier componentId, boolean enforced) {
