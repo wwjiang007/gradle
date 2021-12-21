@@ -1744,6 +1744,8 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         return new ConfigurationArtifactCollection(files, lenient, failureHandler, calculatedValueContainerFactory);
     }
 
+    //TODO implement alternative for reselecting?
+
     public class ConfigurationResolvableDependencies implements ResolvableDependenciesInternal {
 
         @Override
@@ -1823,10 +1825,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             boolean allowNoMatchingVariants = config.attributesUsed;
             ArtifactView view;
             if (config.reselectVariant) {
-                List<ComponentIdentifier> componentIds = this.getResolutionResult().getAllComponents().stream()
-                    .map(ComponentResult::getId)
-                    .collect(Collectors.toList());
-                view = new ReselectingArtifactView(componentIds, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
+                view = new ReselectingArtifactView(this, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
             } else {
                 view = new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
             }
@@ -1878,14 +1877,14 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         }
 
         private class ReselectingArtifactView implements ArtifactView {
-            private final List<ComponentIdentifier> componentIds;
+            private final ConfigurationResolvableDependencies underlyingConfiguration;
             private final ImmutableAttributes viewAttributes;
             private final Spec<? super ComponentIdentifier> componentFilter;
             private final boolean lenient;
             private final boolean allowNoMatchingVariants;
 
-            ReselectingArtifactView(List<ComponentIdentifier> componentIds, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
-                this.componentIds = componentIds;
+            ReselectingArtifactView(ConfigurationResolvableDependencies underlyingConfiguration, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
+                this.underlyingConfiguration = underlyingConfiguration;
                 this.viewAttributes = viewAttributes;
                 this.componentFilter = componentFilter;
                 this.lenient = lenient;
@@ -1905,18 +1904,26 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             @Override
             public FileCollection getFiles() {
                 ProjectInternal project = domainObjectContext.getProject();
-                List<Dependency> dependencies = new ArrayList<>();
-                for (ComponentIdentifier componentIdentifier : componentIds) {
-                    // TODO are the two implementations (ProjectComponentIdentifier, ModuleComponentIdentifier) sufficient?
-                    if (componentIdentifier instanceof ProjectComponentIdentifier) {
-                        dependencies.add(project.getDependencies().project(Collections.singletonMap("path", ((ProjectComponentIdentifier) componentIdentifier).getProjectPath())));
-                    } else if (componentIdentifier instanceof ModuleComponentIdentifier) {
-                        dependencies.add(project.getDependencies().create(componentIdentifier.toString()));
-                    }
-                }
-                Configuration detached = project.getConfigurations().detachedConfiguration(dependencies.toArray(new Dependency[0]));
+                Configuration detached = project.getConfigurations().detachedConfiguration();
                 detached.setTransitive(false);
                 detached.setVisible(false);
+
+                detached.withDependencies(d -> {
+                    List<ComponentIdentifier> componentIds = underlyingConfiguration.getResolutionResult().getAllComponents().stream()
+                        .map(ComponentResult::getId)
+                        .collect(Collectors.toList());
+                    List<Dependency> dependencies = new ArrayList<>();
+                    for (ComponentIdentifier componentIdentifier : componentIds) {
+                        // TODO are the two implementations (ProjectComponentIdentifier, ModuleComponentIdentifier) sufficient?
+                        if (componentIdentifier instanceof ProjectComponentIdentifier) {
+                            dependencies.add(project.getDependencies().project(Collections.singletonMap("path", ((ProjectComponentIdentifier) componentIdentifier).getProjectPath())));
+                        } else if (componentIdentifier instanceof ModuleComponentIdentifier) {
+                            dependencies.add(project.getDependencies().create(componentIdentifier.toString()));
+                        }
+                    }
+                    d.addAll(dependencies);
+                });
+
                 for (Attribute attribute: getAttributes().keySet()) {
                     @SuppressWarnings("unchecked") Attribute<Object> key = (Attribute<Object>) attribute;
                     Object value = getAttributes().getAttribute(key);
