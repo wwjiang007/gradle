@@ -1742,8 +1742,6 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         return new ConfigurationArtifactCollection(files, lenient, failureHandler, calculatedValueContainerFactory);
     }
 
-    //TODO implement alternative for reselecting?
-
     public class ConfigurationResolvableDependencies implements ResolvableDependenciesInternal {
 
         @Override
