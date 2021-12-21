@@ -81,7 +81,6 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
             .withAttributes(attributesFactory.sourcesVariant(originAttributes))
             .withArtifacts(ImmutableList.of(metadata.artifact("source", "jar", "sources")))
             .withoutConstraints()
-            .requiresMavenArtifactDiscovery()
             .build();
     }
 
@@ -96,7 +95,6 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
             .withAttributes(attributesFactory.javadocVariant(originAttributes))
             .withArtifacts(ImmutableList.of(metadata.artifact("javadoc", "jar", "javadoc")))
             .withoutConstraints()
-            .requiresMavenArtifactDiscovery()
             .build();
     }
 
