@@ -62,7 +62,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
                 }
             }
 
-            task resolve(type: Resolve) {
+            task resolveSources(type: Resolve) {
                 def artifactView = configurations.runtimeClasspath.incoming.artifactView {
                     lenient = true
                     withVariantReselection()
@@ -77,6 +77,22 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
                 artifactCollection.from(artifactView.artifacts.artifactFiles)
                 resolvedArtifacts.set(artifactView.artifacts.resolvedArtifacts)
             }
+
+            task resolveJavadoc(type: Resolve) {
+                def artifactView = configurations.runtimeClasspath.incoming.artifactView {
+                    lenient = true
+                    withVariantReselection()
+                    attributes {
+                        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category, Category.DOCUMENTATION))
+                        attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.EXTERNAL))
+                        attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objects.named(DocsType, DocsType.JAVADOC))
+                        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME))
+                    }
+                }
+                artifacts.from(artifactView.files)
+                artifactCollection.from(artifactView.artifacts.artifactFiles)
+                resolvedArtifacts.set(artifactView.artifacts.resolvedArtifacts)
+            }
         """
         transitive = mavenHttpRepo.module("test", "transitive", "1.0")
         direct = mavenHttpRepo.module("test", "direct", "1.0")
@@ -84,14 +100,18 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
     }
 
     // region With Gradle Module Metadata
-    def "direct has GMM and no sources jar"() {
+    def "direct has GMM and no sources or javadoc jars"() {
         transitive.withModuleMetadata()
         transitive.publish()
         direct.withModuleMetadata()
         direct.publish()
 
         buildFile << """
-            resolve {
+            resolveSources {
+                expectedFiles = []
+                expectedVariants = []
+            }
+            resolveJavadoc {
                 expectedFiles = []
                 expectedVariants = []
             }
@@ -102,7 +122,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         transitive.pom.expectGet()
         transitive.moduleMetadata.expectGet()
 
-        succeeds( "resolve")
+        succeeds( 'resolveSources', 'resolveJavadoc')
     }
 
     def "direct has GMM and has sources jar"() {
@@ -143,7 +163,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.publish()
 
         buildFile << """
-            resolve {
+            resolveSources {
                 expectedFiles = ['direct-1.0-sources.jar', 'transitive-1.0-sources.jar']
                 expectedVariants = ['test:direct:1.0 variant sources', 'test:transitive:1.0 variant sources']
             }
@@ -156,7 +176,145 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.artifact(classifier: "sources").expectGet()
         transitive.artifact(classifier: "sources").expectGet()
 
-        succeeds( "resolve")
+        succeeds( "resolveSources")
+    }
+
+    def "direct has GMM and has javadoc jar"() {
+        transitive.adhocVariants().variant("jar", [
+            "org.gradle.category": "library",
+            "org.gradle.dependency.bundling": "external",
+            "org.gradle.usage": "java-runtime"
+        ]) {
+            artifact("transitive-1.0.jar")
+        }
+            .variant("javadoc", [
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "javadoc",
+                "org.gradle.usage": "java-runtime"
+            ]) {
+                artifact("transitive-1.0-javadoc.jar")
+            }
+        transitive.withModuleMetadata()
+        transitive.publish()
+
+        direct.adhocVariants().variant("jar", [
+            "org.gradle.category": "library",
+            "org.gradle.dependency.bundling": "external",
+            "org.gradle.usage": "java-runtime"
+        ]) {
+            artifact("direct-1.0.jar")
+        }
+            .variant("javadoc", [
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "javadoc",
+                "org.gradle.usage": "java-runtime"
+            ]) {
+                artifact("direct-1.0-javadoc.jar")
+            }
+        direct.withModuleMetadata()
+        direct.publish()
+
+        buildFile << """
+            resolveJavadoc {
+                expectedFiles = ['direct-1.0-javadoc.jar', 'transitive-1.0-javadoc.jar']
+                expectedVariants = ['test:direct:1.0 variant javadoc', 'test:transitive:1.0 variant javadoc']
+            }
+        """
+        expect:
+        direct.pom.expectGet()
+        direct.moduleMetadata.expectGet()
+        transitive.pom.expectGet()
+        transitive.moduleMetadata.expectGet()
+        direct.artifact(classifier: "javadoc").expectGet()
+        transitive.artifact(classifier: "javadoc").expectGet()
+
+        succeeds( "resolveJavadoc")
+    }
+
+    def "direct has GMM and has both sources and javadoc jars"() {
+        transitive.adhocVariants().variant("jar", [
+            "org.gradle.category": "library",
+            "org.gradle.dependency.bundling": "external",
+            "org.gradle.usage": "java-runtime"
+        ]) {
+            artifact("transitive-1.0.jar")
+        }
+            .variant("sources", [
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "sources",
+                "org.gradle.usage": "java-runtime"
+            ]) {
+                artifact("transitive-1.0-sources.jar")
+            }
+            .variant("javadoc", [
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "javadoc",
+                "org.gradle.usage": "java-runtime"
+            ]) {
+                artifact("transitive-1.0-javadoc.jar")
+            }
+        transitive.withModuleMetadata()
+        transitive.publish()
+
+        direct.adhocVariants().variant("jar", [
+            "org.gradle.category": "library",
+            "org.gradle.dependency.bundling": "external",
+            "org.gradle.usage": "java-runtime"
+        ]) {
+            artifact("direct-1.0.jar")
+        }
+            .variant("sources", [
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "sources",
+                "org.gradle.usage": "java-runtime"
+            ]) {
+                artifact("direct-1.0-sources.jar")
+            }
+            .variant("javadoc", [
+                "org.gradle.category": "documentation",
+                "org.gradle.dependency.bundling": "external",
+                "org.gradle.docstype": "javadoc",
+                "org.gradle.usage": "java-runtime"
+            ]) {
+                artifact("direct-1.0-javadoc.jar")
+            }
+        direct.withModuleMetadata()
+        direct.publish()
+
+        buildFile << """
+            resolveJavadoc {
+                expectedFiles = ['direct-1.0-javadoc.jar', 'transitive-1.0-javadoc.jar']
+                expectedVariants = ['test:direct:1.0 variant javadoc', 'test:transitive:1.0 variant javadoc']
+            }
+        """
+        expect:
+        direct.pom.expectGet()
+        direct.moduleMetadata.expectGet()
+        transitive.pom.expectGet()
+        transitive.moduleMetadata.expectGet()
+        direct.artifact(classifier: 'javadoc').expectGet()
+        transitive.artifact(classifier: 'javadoc').expectGet()
+
+        succeeds( 'resolveJavadoc')
+
+        and:
+        buildFile << """
+            resolveSources {
+                expectedFiles = ['direct-1.0-sources.jar', 'transitive-1.0-sources.jar']
+                expectedVariants = ['test:direct:1.0 variant sources', 'test:transitive:1.0 variant sources']
+            }
+        """
+
+        // POMs and GMM are already cached; querying for sources should do minimal additional work to fetch sources jars
+        direct.artifact(classifier: 'sources').expectGet()
+        transitive.artifact(classifier: 'sources').expectGet()
+
+        succeeds( 'resolveSources')
     }
 
     def "direct has GMM and no sources jar and transitive has GMM and has sources jar"() {
@@ -181,7 +339,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.publish()
 
         buildFile << """
-            resolve {
+            resolveSources {
                 expectedFiles = ['transitive-1.0-sources.jar']
                 expectedVariants = ['test:transitive:1.0 variant sources']
             }
@@ -193,17 +351,21 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         transitive.moduleMetadata.expectGet()
         transitive.artifact(classifier: "sources").expectGet()
 
-        succeeds( "resolve")
+        succeeds( "resolveSources")
     }
     // endregion
 
     // region Without Gradle Module Metadata
-    def "direct has no GMM and no sources jar"() {
+    def "direct has no GMM and no sources or javadoc jars"() {
         transitive.publish()
         direct.publish()
 
         buildFile << """
-            resolve {
+            resolveSources {
+                expectedFiles = []
+                expectedVariants = []
+            }
+            resolveJavadoc {
                 expectedFiles = []
                 expectedVariants = []
             }
@@ -213,8 +375,10 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         transitive.pom.expectGet()
         direct.artifact(classifier: "sources").expectGetMissing()
         transitive.artifact(classifier: "sources").expectGetMissing()
+        direct.artifact(classifier: "javadoc").expectGetMissing()
+        transitive.artifact(classifier: "javadoc").expectGetMissing()
 
-        succeeds( "resolve")
+        succeeds( 'resolveSources', 'resolveJavadoc')
     }
 
     def "direct has no GMM and has sources jar"() {
@@ -225,7 +389,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.publish()
 
         buildFile << """
-            resolve {
+            resolveSources {
                 expectedFiles = ['direct-1.0-sources.jar', 'transitive-1.0-sources.jar']
                 expectedVariants = ['test:direct:1.0 configuration sources', 'test:transitive:1.0 configuration sources']
             }
@@ -236,7 +400,65 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.artifact(classifier: "sources").expectGet()
         transitive.artifact(classifier: "sources").expectGet()
 
-        succeeds("resolve")
+        succeeds("resolveSources")
+    }
+
+    def "direct has no GMM and has javadoc jar"() {
+        direct.withSourceAndJavadoc()
+        transitive.withSourceAndJavadoc()
+
+        transitive.publish()
+        direct.publish()
+
+        buildFile << """
+            resolveJavadoc {
+                expectedFiles = ['direct-1.0-javadoc.jar', 'transitive-1.0-javadoc.jar']
+                expectedVariants = ['test:direct:1.0 configuration javadoc', 'test:transitive:1.0 configuration javadoc']
+            }
+        """
+        expect:
+        direct.pom.expectGet()
+        transitive.pom.expectGet()
+        direct.artifact(classifier: "javadoc").expectGet()
+        transitive.artifact(classifier: "javadoc").expectGet()
+
+        succeeds("resolveJavadoc")
+    }
+
+    def "direct has no GMM and has both sources and javadoc jars"() {
+        direct.withSourceAndJavadoc()
+        transitive.withSourceAndJavadoc()
+
+        transitive.publish()
+        direct.publish()
+
+        buildFile << """
+            resolveSources {
+                expectedFiles = ['direct-1.0-sources.jar', 'transitive-1.0-sources.jar']
+                expectedVariants = ['test:direct:1.0 configuration sources', 'test:transitive:1.0 configuration sources']
+            }
+        """
+        expect:
+        direct.pom.expectGet()
+        transitive.pom.expectGet()
+        direct.artifact(classifier: "sources").expectGet()
+        transitive.artifact(classifier: "sources").expectGet()
+
+        succeeds("resolveSources")
+
+        and:
+        buildFile << """
+            resolveJavadoc {
+                expectedFiles = ['direct-1.0-javadoc.jar', 'transitive-1.0-javadoc.jar']
+                expectedVariants = ['test:direct:1.0 configuration javadoc', 'test:transitive:1.0 configuration javadoc']
+            }
+        """
+
+        // POMs and GMM are already cached; querying for javadoc should do minimal additional work to fetch javadoc jars
+        direct.artifact(classifier: 'javadoc').expectGet()
+        transitive.artifact(classifier: 'javadoc').expectGet()
+
+        succeeds( 'resolveJavadoc')
     }
 
     def "direct has no GMM and no sources jar and transitive has no GMM and has sources jar"() {
@@ -245,7 +467,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.publish()
 
         buildFile << """
-            resolve {
+            resolveSources {
                 expectedFiles = ['transitive-1.0-sources.jar']
                 expectedVariants = ['test:transitive:1.0 configuration sources']
             }
@@ -256,7 +478,7 @@ class DerivedVariantsResolutionIntegrationTest extends AbstractHttpDependencyRes
         direct.artifact(classifier: "sources").expectGetMissing()
         transitive.artifact(classifier: "sources").expectGet()
 
-        succeeds( "resolve")
+        succeeds( "resolveSources")
     }
     // endregion
 }
