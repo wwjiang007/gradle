@@ -93,7 +93,7 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
     private static DefaultConfigurationMetadata libraryWithJavadocVariant(DefaultConfigurationMetadata runtimeConfiguration, ImmutableAttributes originAttributes, MavenImmutableAttributesFactory attributesFactory, ModuleComponentResolveMetadata metadata) {
         return runtimeConfiguration.mutate()
             .withName("javadoc")
-            .withAttributes(attributesFactory.sourcesVariant(originAttributes))
+            .withAttributes(attributesFactory.javadocVariant(originAttributes))
             .withArtifacts(ImmutableList.of(metadata.artifact("javadoc", "jar", "javadoc")))
             .withoutConstraints()
             .requiresMavenArtifactDiscovery()
