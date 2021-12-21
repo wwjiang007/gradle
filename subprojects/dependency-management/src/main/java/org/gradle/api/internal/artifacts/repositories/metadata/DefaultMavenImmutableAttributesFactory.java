@@ -106,10 +106,20 @@ public class DefaultMavenImmutableAttributesFactory implements MavenImmutableAtt
     @Override
     public ImmutableAttributes sourcesVariant(ImmutableAttributes original) {
         ImmutableAttributes result = original;
-        result = concat(result, USAGE_ATTRIBUTE, new CoercingStringValueSnapshot("java-runtime", objectInstantiator));
         result = concat(result, CATEGORY_ATTRIBUTE, new CoercingStringValueSnapshot(Category.DOCUMENTATION, objectInstantiator));
         result = concat(result, Bundling.BUNDLING_ATTRIBUTE, objectInstantiator.named(Bundling.class, Bundling.EXTERNAL));
         result = concat(result, DocsType.DOCS_TYPE_ATTRIBUTE, objectInstantiator.named(DocsType.class, DocsType.SOURCES));
+        result = concat(result, USAGE_ATTRIBUTE, new CoercingStringValueSnapshot("java-runtime", objectInstantiator));
+        return result;
+    }
+
+    @Override
+    public ImmutableAttributes javadocVariant(ImmutableAttributes original) {
+        ImmutableAttributes result = original;
+        result = concat(result, CATEGORY_ATTRIBUTE, new CoercingStringValueSnapshot(Category.DOCUMENTATION, objectInstantiator));
+        result = concat(result, Bundling.BUNDLING_ATTRIBUTE, objectInstantiator.named(Bundling.class, Bundling.EXTERNAL));
+        result = concat(result, DocsType.DOCS_TYPE_ATTRIBUTE, objectInstantiator.named(DocsType.class, DocsType.JAVADOC));
+        result = concat(result, USAGE_ATTRIBUTE, new CoercingStringValueSnapshot("java-runtime", objectInstantiator));
         return result;
     }
 

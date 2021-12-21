@@ -136,7 +136,7 @@ class DefaultMavenModuleResolveMetadataTest extends AbstractLazyModuleComponentR
         assertHasOnlyStatusAttribute(compileConf.attributes)
         assertHasOnlyStatusAttribute(runtimeConf.attributes)
 
-        variantsForGraphTraversal.size() == 7
+        variantsForGraphTraversal.size() == 8
         variantsForGraphTraversal[0].name == "compile"
         variantsForGraphTraversal[0].attributes.getAttribute(stringUsageAttribute) == "java-api"
         variantsForGraphTraversal[1].name == "runtime"
@@ -144,18 +144,21 @@ class DefaultMavenModuleResolveMetadataTest extends AbstractLazyModuleComponentR
         variantsForGraphTraversal[2].name == "sources"
         variantsForGraphTraversal[2].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
         variantsForGraphTraversal[2].attributes.getAttribute(componentTypeAttribute) == "documentation"
-        variantsForGraphTraversal[3].name == "platform-compile"
-        variantsForGraphTraversal[3].attributes.getAttribute(stringUsageAttribute) == "java-api"
-        variantsForGraphTraversal[3].attributes.getAttribute(componentTypeAttribute) == "platform"
-        variantsForGraphTraversal[4].name == "platform-runtime"
-        variantsForGraphTraversal[4].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
+        variantsForGraphTraversal[3].name == "javadoc"
+        variantsForGraphTraversal[3].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
+        variantsForGraphTraversal[3].attributes.getAttribute(componentTypeAttribute) == "documentation"
+        variantsForGraphTraversal[4].name == "platform-compile"
+        variantsForGraphTraversal[4].attributes.getAttribute(stringUsageAttribute) == "java-api"
         variantsForGraphTraversal[4].attributes.getAttribute(componentTypeAttribute) == "platform"
-        variantsForGraphTraversal[5].name == "enforced-platform-compile"
-        variantsForGraphTraversal[5].attributes.getAttribute(stringUsageAttribute) == "java-api"
+        variantsForGraphTraversal[5].name == "platform-runtime"
+        variantsForGraphTraversal[5].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
+        variantsForGraphTraversal[5].attributes.getAttribute(componentTypeAttribute) == "platform"
+        variantsForGraphTraversal[6].name == "enforced-platform-compile"
+        variantsForGraphTraversal[6].attributes.getAttribute(stringUsageAttribute) == "java-api"
         variantsForGraphTraversal[6].attributes.getAttribute(componentTypeAttribute) == "enforced-platform"
-        variantsForGraphTraversal[6].name == "enforced-platform-runtime"
-        variantsForGraphTraversal[6].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
-        variantsForGraphTraversal[6].attributes.getAttribute(componentTypeAttribute) == "enforced-platform"
+        variantsForGraphTraversal[7].name == "enforced-platform-runtime"
+        variantsForGraphTraversal[7].attributes.getAttribute(stringUsageAttribute) == "java-runtime"
+        variantsForGraphTraversal[7].attributes.getAttribute(componentTypeAttribute) == "enforced-platform"
 
         where:
         packaging << ["pom", "jar", "maven-plugin", "war", "aar"]

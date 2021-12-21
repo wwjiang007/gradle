@@ -61,6 +61,7 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
                 libraryWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API),
                 libraryWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME),
                 libraryWithSourcesVariant(runtimeConfiguration, attributes, attributesFactory, metadata),
+                libraryWithJavadocVariant(runtimeConfiguration, attributes, attributesFactory, metadata),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(runtimeConfiguration, attributes, attributesFactory, Usage.JAVA_RUNTIME, false, shadowedPlatformCapability),
                 platformWithUsageAttribute(compileConfiguration, attributes, attributesFactory, Usage.JAVA_API, true, shadowedEnforcedPlatformCapability),
@@ -79,6 +80,21 @@ public class JavaEcosystemVariantDerivationStrategy extends AbstractStatelessDer
             .withName("sources")
             .withAttributes(attributesFactory.sourcesVariant(originAttributes))
             .withArtifacts(ImmutableList.of(metadata.artifact("source", "jar", "sources")))
+            .withoutConstraints()
+            .requiresMavenArtifactDiscovery()
+            .build();
+    }
+
+    /**
+     * Synthesizes a "javadoc" variant since maven metadata cannot represent it
+     *
+     * @return synthetic metadata for the javadoc-classifier jar
+     */
+    private static DefaultConfigurationMetadata libraryWithJavadocVariant(DefaultConfigurationMetadata runtimeConfiguration, ImmutableAttributes originAttributes, MavenImmutableAttributesFactory attributesFactory, ModuleComponentResolveMetadata metadata) {
+        return runtimeConfiguration.mutate()
+            .withName("javadoc")
+            .withAttributes(attributesFactory.sourcesVariant(originAttributes))
+            .withArtifacts(ImmutableList.of(metadata.artifact("javadoc", "jar", "javadoc")))
             .withoutConstraints()
             .requiresMavenArtifactDiscovery()
             .build();
