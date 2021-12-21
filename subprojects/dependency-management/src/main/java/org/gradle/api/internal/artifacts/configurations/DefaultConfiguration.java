@@ -48,7 +48,6 @@ import org.gradle.api.artifacts.ResolvedConfiguration;
 import org.gradle.api.artifacts.component.ComponentIdentifier;
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
-import org.gradle.api.artifacts.result.ComponentResult;
 import org.gradle.api.artifacts.result.DependencyResult;
 import org.gradle.api.artifacts.result.ResolutionResult;
 import org.gradle.api.artifacts.result.ResolvedArtifactResult;
@@ -137,7 +136,6 @@ import org.gradle.util.internal.WrapUtil;
 
 import javax.annotation.Nullable;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -1825,7 +1823,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             boolean allowNoMatchingVariants = config.attributesUsed;
             ArtifactView view;
             if (config.reselectVariant) {
-                view = new ReselectingArtifactView(this, viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
+                view = new ReselectingArtifactView(viewAttributes, config.lockComponentFilter(), this);
             } else {
                 view = new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
             }
@@ -1877,18 +1875,14 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
         }
 
         private class ReselectingArtifactView implements ArtifactView {
-            private final ConfigurationResolvableDependencies underlyingConfiguration;
             private final ImmutableAttributes viewAttributes;
             private final Spec<? super ComponentIdentifier> componentFilter;
-            private final boolean lenient;
-            private final boolean allowNoMatchingVariants;
+            private final ArtifactView delegatingArtifactView;
 
-            ReselectingArtifactView(ConfigurationResolvableDependencies underlyingConfiguration, ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, boolean lenient, boolean allowNoMatchingVariants) {
-                this.underlyingConfiguration = underlyingConfiguration;
+            ReselectingArtifactView(ImmutableAttributes viewAttributes, Spec<? super ComponentIdentifier> componentFilter, ConfigurationResolvableDependencies underlyingConfiguration) {
                 this.viewAttributes = viewAttributes;
                 this.componentFilter = componentFilter;
-                this.lenient = lenient;
-                this.allowNoMatchingVariants = allowNoMatchingVariants;
+                this.delegatingArtifactView = createDelegate(underlyingConfiguration);
             }
 
             @Override
@@ -1898,22 +1892,20 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
 
             @Override
             public ArtifactCollection getArtifacts() {
-                return artifactCollection(viewAttributes, componentFilter, lenient, allowNoMatchingVariants);
+                return delegatingArtifactView.getArtifacts();
             }
 
             @Override
             public FileCollection getFiles() {
+                return delegatingArtifactView.getFiles();
+            }
+
+            private ArtifactView createDelegate(ConfigurationResolvableDependencies underlyingConfiguration) {
                 ProjectInternal project = domainObjectContext.getProject();
                 Configuration detached = project.getConfigurations().detachedConfiguration();
-                detached.setTransitive(false);
-                detached.setVisible(false);
-
-                detached.withDependencies(d -> {
-                    List<ComponentIdentifier> componentIds = underlyingConfiguration.getResolutionResult().getAllComponents().stream()
-                        .map(ComponentResult::getId)
-                        .collect(Collectors.toList());
-                    List<Dependency> dependencies = new ArrayList<>();
-                    for (ComponentIdentifier componentIdentifier : componentIds) {
+                detached.withDependencies(dependencies -> {
+                    for (ResolvedComponentResult component :  underlyingConfiguration.getResolutionResult().getAllComponents()) {
+                        ComponentIdentifier componentIdentifier = component.getId();
                         // TODO are the two implementations (ProjectComponentIdentifier, ModuleComponentIdentifier) sufficient?
                         if (componentIdentifier instanceof ProjectComponentIdentifier) {
                             dependencies.add(project.getDependencies().project(Collections.singletonMap("path", ((ProjectComponentIdentifier) componentIdentifier).getProjectPath())));
@@ -1921,15 +1913,18 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
                             dependencies.add(project.getDependencies().create(componentIdentifier.toString()));
                         }
                     }
-                    d.addAll(dependencies);
                 });
-
-                for (Attribute attribute: getAttributes().keySet()) {
+                detached.setTransitive(false);
+                detached.setVisible(false);
+                for (Attribute attribute : getAttributes().keySet()) {
                     @SuppressWarnings("unchecked") Attribute<Object> key = (Attribute<Object>) attribute;
                     Object value = getAttributes().getAttribute(key);
                     detached.getAttributes().attribute(key, value);
                 }
-                return detached.getIncoming().artifactView(view -> view.lenient(true)).getFiles();
+                return detached.getIncoming().artifactView(view -> {
+                    view.lenient(true);
+                    view.componentFilter(componentFilter);
+                });
             }
         }
 
