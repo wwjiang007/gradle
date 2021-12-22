@@ -27,28 +27,31 @@ import org.gradle.api.attributes.Bundling;
 import org.gradle.api.attributes.Category;
 import org.gradle.api.attributes.TestSuiteType;
 import org.gradle.api.attributes.VerificationType;
-import org.gradle.api.file.FileCollection;
 import org.gradle.api.model.ObjectFactory;
 import org.gradle.api.plugins.jvm.JvmTestSuite;
+import org.gradle.api.plugins.jvm.internal.JvmEcosystemUtilities;
 import org.gradle.api.reporting.ReportingExtension;
 import org.gradle.internal.jacoco.DefaultJacocoCoverageReport;
 import org.gradle.testing.base.TestSuite;
 import org.gradle.testing.base.TestingExtension;
 import org.gradle.testing.jacoco.tasks.JacocoReport;
 
-import java.util.concurrent.Callable;
+import javax.inject.Inject;
 
 /**
  * Adds configurations to for resolving variants containing JaCoCo code coverage results, which may span multiple subprojects.  Reacts to the presence of the jvm-test-suite plugin and creates
  * tasks to collect code coverage results for each named test-suite.
  *
- * @since 7.4
  * @see <a href="https://docs.gradle.org/current/userguide/jacoco_report_aggregation_plugin.html">JaCoCo Report Aggregation Plugin reference</a>
+ * @since 7.4
  */
 @Incubating
 public abstract class JacocoReportAggregationPlugin implements Plugin<Project> {
 
     public static final String JACOCO_AGGREGATION_CONFIGURATION_NAME = "jacocoAggregation";
+
+    @Inject
+    protected abstract JvmEcosystemUtilities getJvmEcosystemUtilities();
 
     @Override
     public void apply(Project project) {
@@ -59,34 +62,22 @@ public abstract class JacocoReportAggregationPlugin implements Plugin<Project> {
         jacocoAggregation.setDescription("Collects project dependencies for purposes of JaCoCo coverage report aggregation");
         jacocoAggregation.setVisible(false);
         jacocoAggregation.setCanBeConsumed(false);
-        jacocoAggregation.setCanBeResolved(false);
+        jacocoAggregation.setCanBeResolved(true);
+        getJvmEcosystemUtilities().configureAsRuntimeClasspath(jacocoAggregation);
 
         ObjectFactory objects = project.getObjects();
-        Configuration sourceDirectoriesConf = project.getConfigurations().create("allCodeCoverageReportSourceDirectories");
-        sourceDirectoriesConf.setDescription("Supplies the source directories used to produce all aggregated JaCoCo coverage data reports");
-        sourceDirectoriesConf.extendsFrom(jacocoAggregation);
-        sourceDirectoriesConf.setVisible(false);
-        sourceDirectoriesConf.setCanBeConsumed(false);
-        sourceDirectoriesConf.setCanBeResolved(true);
-        sourceDirectoriesConf.attributes(attributes -> {
-            attributes.attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.class, Bundling.EXTERNAL));
-            attributes.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.class, Category.VERIFICATION));
-            attributes.attribute(VerificationType.VERIFICATION_TYPE_ATTRIBUTE, objects.named(VerificationType.class, VerificationType.MAIN_SOURCES));
-        });
-
-        ArtifactView sourceDirectories = sourceDirectoriesConf.getIncoming().artifactView(view -> {
+        ArtifactView sourceDirectories = jacocoAggregation.getIncoming().artifactView(view -> {
             view.componentFilter(id -> id instanceof ProjectComponentIdentifier);
             view.lenient(true);
+            view.withVariantReselection();
+            view.attributes(attributes -> {
+                attributes.attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.class, Bundling.EXTERNAL));
+                attributes.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.class, Category.VERIFICATION));
+                attributes.attribute(VerificationType.VERIFICATION_TYPE_ATTRIBUTE, objects.named(VerificationType.class, VerificationType.MAIN_SOURCES));
+            });
         });
 
-        Configuration classDirectoriesConf = project.getConfigurations().create("allCodeCoverageReportClassDirectories");
-        classDirectoriesConf.extendsFrom(jacocoAggregation);
-        classDirectoriesConf.setDescription("Supplies the class directories used to produce all aggregated JaCoCo coverage data reports");
-        classDirectoriesConf.setVisible(false);
-        classDirectoriesConf.setCanBeConsumed(false);
-        classDirectoriesConf.setCanBeResolved(true);
-
-        ArtifactView classDirectories = classDirectoriesConf.getIncoming().artifactView(view -> {
+        ArtifactView classDirectories = jacocoAggregation.getIncoming().artifactView(view -> {
             view.componentFilter(id -> id instanceof ProjectComponentIdentifier);
         });
 
@@ -95,25 +86,17 @@ public abstract class JacocoReportAggregationPlugin implements Plugin<Project> {
 
         // iterate and configure each user-specified report, creating a <reportName>ExecutionData configuration for each
         reporting.getReports().withType(JacocoCoverageReport.class).configureEach(report -> {
-            // A resolvable configuration to collect JaCoCo coverage data; typically named "testCodeCoverageReportExecutionData"
-            Configuration executionDataConf = project.getConfigurations().create(report.getName() + "ExecutionData");
-            executionDataConf.extendsFrom(jacocoAggregation);
-            executionDataConf.setDescription(String.format("Supplies JaCoCo coverage data to the %s.  External library dependencies may appear as resolution failures, but this is expected behavior.", report.getName()));
-            executionDataConf.setVisible(false);
-            executionDataConf.setCanBeConsumed(false);
-            executionDataConf.setCanBeResolved(true);
-            executionDataConf.attributes(attributes -> {
-                attributes.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.class, Category.VERIFICATION));
-                attributes.attributeProvider(TestSuiteType.TEST_SUITE_TYPE_ATTRIBUTE, report.getTestType().map(tt -> objects.named(TestSuiteType.class, tt)));
-                attributes.attribute(VerificationType.VERIFICATION_TYPE_ATTRIBUTE, objects.named(VerificationType.class, VerificationType.JACOCO_RESULTS));
-            });
-
             report.getReportTask().configure(task -> {
-                Callable<FileCollection> executionData = () ->
-                    executionDataConf.getIncoming().artifactView(view -> {
-                        view.componentFilter(id -> id instanceof ProjectComponentIdentifier);
-                        view.lenient(true);
-                    }).getFiles();
+                ArtifactView executionData = jacocoAggregation.getIncoming().artifactView(view -> {
+                    view.componentFilter(id -> id instanceof ProjectComponentIdentifier);
+                    view.lenient(true);
+                    view.withVariantReselection();
+                    view.attributes(attributes -> {
+                        attributes.attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.class, Category.VERIFICATION));
+                        attributes.attributeProvider(TestSuiteType.TEST_SUITE_TYPE_ATTRIBUTE, report.getTestType().map(tt -> objects.named(TestSuiteType.class, "test")));
+                        attributes.attribute(VerificationType.VERIFICATION_TYPE_ATTRIBUTE, objects.named(VerificationType.class, VerificationType.JACOCO_RESULTS));
+                    });
+                });
 
                 configureReportTaskInputs(task, classDirectories, sourceDirectories, executionData);
             });
@@ -134,8 +117,8 @@ public abstract class JacocoReportAggregationPlugin implements Plugin<Project> {
         });
     }
 
-    private void configureReportTaskInputs(JacocoReport task, ArtifactView classDirectories, ArtifactView sourceDirectories, Callable<FileCollection> executionData) {
-        task.getExecutionData().from(executionData);
+    private void configureReportTaskInputs(JacocoReport task, ArtifactView classDirectories, ArtifactView sourceDirectories, ArtifactView executionData) {
+        task.getExecutionData().from(executionData.getFiles());
         task.getClassDirectories().from(classDirectories.getFiles());
         task.getSourceDirectories().from(sourceDirectories.getFiles());
     }

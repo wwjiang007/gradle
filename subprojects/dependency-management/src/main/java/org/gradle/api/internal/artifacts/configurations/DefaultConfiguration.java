@@ -1819,13 +1819,7 @@ public class DefaultConfiguration extends AbstractFileCollection implements Conf
             ImmutableAttributes viewAttributes = config.lockViewAttributes();
             // This is a little coincidental: if view attributes have not been accessed, don't allow no matching variants
             boolean allowNoMatchingVariants = config.attributesUsed;
-            ArtifactView view;
-            if (config.reselectVariant) {
-                view = new ReselectingArtifactView(viewAttributes, config.lockComponentFilter(), this);
-            } else {
-                view = new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
-            }
-            return view;
+            return new ConfigurationArtifactView(viewAttributes, config.lockComponentFilter(), config.lenient, allowNoMatchingVariants);
         }
 
         private DefaultConfiguration.ArtifactViewConfiguration createArtifactViewConfiguration() {
