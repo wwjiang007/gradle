@@ -58,6 +58,7 @@ dependencies {
     implementation(libs.jettySecurity)
 
     implementation(libs.littleproxy)
+    implementation(libs.socksProxy)
     implementation(libs.gcs)
     implementation(libs.inject)
     implementation(libs.commonsHttpclient)
