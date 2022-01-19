@@ -28,8 +28,6 @@ import org.gradle.initialization.NoOpBuildEventConsumer
 import org.gradle.integtests.fixtures.RedirectStdIn
 import org.gradle.internal.buildevents.BuildStartedTime
 import org.gradle.internal.event.DefaultListenerManager
-import org.gradle.internal.filewatch.FileSystemChangeWaiter
-import org.gradle.internal.filewatch.FileSystemChangeWaiterFactory
 import org.gradle.internal.invocation.BuildAction
 import org.gradle.internal.logging.text.TestStyledTextOutputFactory
 import org.gradle.internal.service.scopes.Scope
@@ -55,8 +53,6 @@ class ContinuousBuildActionExecutorTest extends ConcurrentSpec {
     def requestMetadata = Stub(BuildRequestMetaData)
     def requestContext = new DefaultBuildRequestContext(requestMetadata, cancellationToken, new NoOpBuildEventConsumer())
     def startParameter = new StartParameterInternal()
-    def waiterFactory = Mock(FileSystemChangeWaiterFactory)
-    def waiter = Mock(FileSystemChangeWaiter)
     def listenerManager = new DefaultListenerManager(Scope.Global)
     def inputsListeners = new DefaultTaskInputsListeners(listenerManager)
     def deploymentRegistry = Mock(DeploymentRegistryInternal)

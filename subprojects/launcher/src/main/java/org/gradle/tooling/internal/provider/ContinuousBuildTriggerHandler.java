@@ -45,9 +45,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.gradle.internal.filewatch.DefaultFileSystemChangeWaiterFactory.QUIET_PERIOD_SYSPROP;
-
 public class ContinuousBuildTriggerHandler implements FileChangeListener, TaskInputsListener {
+    // TODO: Change the package name of this
+    public static final String QUIET_PERIOD_SYSPROP = "org.gradle.internal.filewatch.quietperiod";
+    public static final int SHOW_INDIVIDUAL_CHANGES_LIMIT = 3;
     private static final boolean IS_MAC_OSX = OperatingSystem.current().isMacOsX();
 
     private final BuildInputHierarchy buildInputHierarchy;
