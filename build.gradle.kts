@@ -10,4 +10,12 @@ plugins {
     id("gradlebuild.quick-check")                // Local development: Convenience task `quickCheck` for running checkstyle/codenarc only on changed files before commit
 }
 
+subprojects {
+    repositories {
+        maven {
+            url = uri("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev/")
+        }
+    }
+}
+
 description = "Adaptable, fast automation for all"

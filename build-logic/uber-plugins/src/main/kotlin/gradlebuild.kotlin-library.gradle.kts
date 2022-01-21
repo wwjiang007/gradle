@@ -65,7 +65,7 @@ tasks {
 fun KotlinCompile.configureKotlinCompilerForGradleBuild() {
     kotlinOptions {
         incremental = true
-        allWarningsAsErrors = true
+//        allWarningsAsErrors = true
         apiVersion = "1.4"
         languageVersion = "1.4"
         freeCompilerArgs += listOf(
@@ -74,7 +74,8 @@ fun KotlinCompile.configureKotlinCompilerForGradleBuild() {
             "-Xskip-runtime-version-check",
             "-Xskip-metadata-version-check",
             // TODO can be removed once we build against language version >= 1.5
-            "-Xsuppress-version-warnings",
+            "-Xskip-runtime-version-check",
+            "-Xskip-metadata-version-check"
         )
         jvmTarget = "1.8"
     }

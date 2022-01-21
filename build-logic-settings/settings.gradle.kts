@@ -19,8 +19,21 @@ rootProject.name = "build-logic-settings"
 dependencyResolutionManagement {
     repositories {
         gradlePluginPortal()
+        maven {
+            url = uri("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev/")
+        }
     }
 }
+
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        maven {
+            url = uri("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev/")
+        }
+    }
+}
+
 
 include("allprojects-plugin")
 include("testfiltering-plugin")

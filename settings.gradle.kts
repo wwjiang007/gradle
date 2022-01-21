@@ -1,5 +1,14 @@
 import org.gradle.api.internal.FeaturePreviews
 
+dependencyResolutionManagement {
+    repositories {
+        gradlePluginPortal()
+        maven {
+            url = uri("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev/")
+        }
+    }
+}
+
 pluginManagement {
     includeBuild("build-logic-settings")
     repositories {
@@ -15,6 +24,9 @@ pluginManagement {
             }
         }
         gradlePluginPortal()
+        maven {
+            url = uri("https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev/")
+        }
     }
 }
 
